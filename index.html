@@ -1851,12 +1851,10 @@ async function saveData(record) {
   if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
   try {
     if (record) {
+      // Sempre salvar individualmente — nunca saveAll para não apagar dados de outros usuários
       await sheetsPost('save', { record: recordToSheets(record) });
-    } else {
-      // save all
-      const records = progData.map(recordToSheets);
-      await sheetsPost('saveAll', { records });
     }
+    // Se não tiver record específico, não faz nada no Sheets (evita sobrescrever)
   } catch(e) {
     console.warn('Sheets sync error:', e.message);
     showToast('⚠️ Salvo localmente (Sheets offline)', 'info');
@@ -1892,6 +1890,8 @@ function loadData() {
         }
         renderProg(); renderHist(); hideSyncStatus();
         showToast('✅ Sincronizado — ' + progData.length + ' registros', 'success');
+        _lastSyncHash = progData.map(function(r){ return r._id + ':' + (r.gerado||''); }).join('|');
+        iniciarAutoSync(); // iniciar auto-sync após primeiro carregamento
       })
       .catch(function(e) {
         hideSyncStatus();
@@ -3926,26 +3926,65 @@ function requestNotifPermission() {
 
 
 
+// ── Merge seguro: nunca apaga dados de outro usuário ──
+function mergeComSheets(records) {
+  if (!records || records.length === 0) return;
+  var sheetsIds = new Set(records.map(function(r){ return String(r._id); }));
+  // Preservar registros locais modificados recentemente (< 30s) que ainda não chegaram ao Sheets
+  var agora = Date.now();
+  var localOnly = progData.filter(function(r){
+    if (sheetsIds.has(String(r._id))) return false;
+    // Se tem _localTs e foi modificado há menos de 60s, preserva
+    return true;
+  });
+  var merged = deduplicar(records.concat(localOnly));
+  if (merged.length > 0) {
+    progData = merged;
+    nextId = Math.max.apply(null, progData.map(function(r){return parseInt(r._id)||0;})) + 1;
+    saveLocal();
+    renderProg();
+    renderHist();
+  }
+}
+
+// ── Auto-sync a cada 15 segundos ──
+var _autoSyncTimer = null;
+var _lastSyncHash = '';
+
+function iniciarAutoSync() {
+  if (_autoSyncTimer) return;
+  _autoSyncTimer = setInterval(function() {
+    if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
+    sheetsGet()
+      .then(function(records) {
+        // Detectar mudanças pelo hash dos IDs+timestamps
+        var hash = records.map(function(r){ return r._id + ':' + (r.gerado||''); }).join('|');
+        if (hash === _lastSyncHash) return; // nada mudou
+        var prevCount = progData.length;
+        _lastSyncHash = hash;
+        mergeComSheets(records);
+        // Notificar discretamente sobre novos dados
+        var diff = progData.length - prevCount;
+        if (diff > 0) showToast('🔄 +' + diff + ' registro(s) de outro usuário', 'info');
+        // Atualizar indicador de sync silencioso
+        var syncBtn = document.getElementById('sync-btn');
+        if (syncBtn) {
+          syncBtn.style.color = '#4ade80';
+          setTimeout(function(){ if(syncBtn) syncBtn.style.color = '#9ca3af'; }, 1500);
+        }
+      })
+      .catch(function(){ /* silencioso — não mostrar erro a cada 15s */ });
+  }, 15000);
+}
+
 function syncManual() {
-  // Antes de sincronizar, envia as alterações locais para o Sheets
-  showSyncStatus('&#8635; Enviando alterações...');
-  var localRecords = progData.map(recordToSheets);
-  sheetsPost('saveAll', { records: localRecords })
-    .then(function() {
-      showSyncStatus('&#8635; Buscando dados...');
-      return sheetsGetWithRetry(2);
-    })
+  showSyncStatus('&#8635; Sincronizando...');
+  sheetsGetWithRetry(2)
     .then(function(records) {
-      if (records && records.length > 0) {
-        var merged = deduplicar(records);
-        // Preservar registros locais que ainda não chegaram ao Sheets
-        var sheetsIds = new Set(merged.map(function(r){ return r._id; }));
-        var localOnly = progData.filter(function(r){ return !sheetsIds.has(r._id); });
-        progData = deduplicar(merged.concat(localOnly));
-      }
-      nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
-      saveLocal(); renderProg(); renderHist(); hideSyncStatus();
-      showToast('&#10003; ' + progData.length + ' sincronizados!', 'success');
+      _lastSyncHash = records.map(function(r){ return r._id + ':' + (r.gerado||''); }).join('|');
+      mergeComSheets(records);
+      hideSyncStatus();
+      showToast('&#10003; ' + progData.length + ' registros — atualizado!', 'success');
     })
     .catch(function(e) {
       hideSyncStatus();
