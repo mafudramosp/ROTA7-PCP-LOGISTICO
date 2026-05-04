@@ -1723,13 +1723,69 @@ let sortKey = 'ocup';
 let sortDir = -1;
 let nextId = 3646;
 
+// ===== TRACKING MULTI-USUÁRIO =====
+// Timestamps por campo (qual usuário editou qual campo e quando)
+var _camposTs = {};
+
+function registrarEdicaoCampo(recordId, campo) {
+  if (!recordId) return;
+  var rid = String(recordId);
+  if (!_camposTs[rid]) _camposTs[rid] = {};
+  _camposTs[rid][campo] = Date.now();
+}
+
+function getCamposTsParaEnvio(recordId) {
+  if (!recordId) return '{}';
+  return JSON.stringify(_camposTs[String(recordId)] || {});
+}
+
+// IDs excluídos — nunca voltam no sync
+var _deletedIds = new Set(JSON.parse(localStorage.getItem('prog_deleted_v4') || '[]'));
+
+// Auto-sync 20s
+var _autoSyncActive = false;
+var _lastAutoSyncHash = '';
+
+function autoSync() {
+  if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
+  sheetsGet()
+    .then(function(records) {
+      if (!records || records.length === 0) return;
+      var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+      var hash = filtered.map(function(r){ return r._id+':'+(r.gerado||''); }).join('|');
+      if (hash === _lastAutoSyncHash) return;
+      _lastAutoSyncHash = hash;
+      var sheetsIds = new Set(filtered.map(function(r){ return String(r._id); }));
+      var localOnly = progData.filter(function(r){
+        return !sheetsIds.has(String(r._id)) && !_deletedIds.has(String(r._id));
+      });
+      var novos = deduplicar(filtered.concat(localOnly));
+      var diff = novos.length - progData.length;
+      progData = novos;
+      nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
+      saveLocal(); renderProg(); renderHist();
+      var btn = document.getElementById('sync-btn');
+      if (btn) { btn.style.color = '#4ade80'; setTimeout(function(){ if(btn) btn.style.color='#9ca3af'; },2000); }
+      if (diff !== 0) showToast('🔄 Sync: ' + (diff>0?'+':'')+diff+' registro(s)', 'info');
+    })
+    .catch(function(){});
+}
+
+function iniciarAutoSync() {
+  if (_autoSyncActive) return;
+  _autoSyncActive = true;
+  setInterval(autoSync, 20000);
+}
+
 // ===== LOCAL STORAGE =====
 // ===== LOCAL STORAGE (fallback) =====
 function saveLocal() {
   localStorage.setItem('prog_veiculo_v4', JSON.stringify(progData));
   localStorage.setItem('prog_nextid_v4', nextId);
+  localStorage.setItem('prog_deleted_v4', JSON.stringify(Array.from(_deletedIds).slice(-200)));
 }
 function loadLocal() {
+  _deletedIds = new Set(JSON.parse(localStorage.getItem('prog_deleted_v4') || '[]'));
   const stored = localStorage.getItem('prog_veiculo_v4');
   if (stored) {
     var all = JSON.parse(stored);
@@ -1851,10 +1907,11 @@ async function saveData(record) {
   if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
   try {
     if (record) {
-      // Sempre salvar individualmente — nunca saveAll para não apagar dados de outros usuários
-      await sheetsPost('save', { record: recordToSheets(record) });
+      await sheetsPost('save', {
+        record: recordToSheets(record),
+        campos_ts: getCamposTsParaEnvio(record._id)
+      });
     }
-    // Se não tiver record específico, não faz nada no Sheets (evita sobrescrever)
   } catch(e) {
     console.warn('Sheets sync error:', e.message);
     showToast('⚠️ Salvo localmente (Sheets offline)', 'info');
@@ -1880,18 +1937,20 @@ function loadData() {
         // Only overwrite local data if Sheets returned something
         // Prevents wiping local cache when Sheets is temporarily empty
         if (records && records.length > 0) {
-          var merged = deduplicar(records);
-          // Keep local records not yet in Sheets (gerado today, not in response)
-          var sheetsIds = new Set(merged.map(function(r){return r._id;}));
-          var localOnly = progData.filter(function(r){ return !sheetsIds.has(r._id); });
+          var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+          var merged = deduplicar(filtered);
+          var sheetsIds = new Set(merged.map(function(r){ return String(r._id); }));
+          var localOnly = progData.filter(function(r){
+            return !sheetsIds.has(String(r._id)) && !_deletedIds.has(String(r._id));
+          });
           progData = deduplicar(merged.concat(localOnly));
-          nextId = Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1;
+          nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
           saveLocal();
         }
         renderProg(); renderHist(); hideSyncStatus();
         showToast('✅ Sincronizado — ' + progData.length + ' registros', 'success');
-        _lastSyncHash = progData.map(function(r){ return r._id + ':' + (r.gerado||''); }).join('|');
-        iniciarAutoSync(); // iniciar auto-sync após primeiro carregamento
+        _lastAutoSyncHash = progData.map(function(r){ return r._id+':'+(r.gerado||''); }).join('|');
+        iniciarAutoSync();
       })
       .catch(function(e) {
         hideSyncStatus();
@@ -2326,6 +2385,12 @@ function autoSalvarLinha(rowId, destino, saida, dia, existingId) {
   var frota = (document.getElementById('frota_' + rowId)?.value || '').trim();
   var ocupPct = parseInt(document.getElementById('ocup_' + rowId)?.value) || 0;
   var obs = (document.getElementById('obs_' + rowId)?.value || '').trim();
+  // Registrar apenas campos preenchidos
+  if (existingId !== null && existingId !== undefined && existingId !== 'null') {
+    if (frota)   registrarEdicaoCampo(existingId, 'FROTA');
+    if (ocupPct) registrarEdicaoCampo(existingId, 'OCUPACAO');
+    if (obs)     registrarEdicaoCampo(existingId, 'OBS');
+  }
 
   // If all main fields are empty AND record exists → delete it
   if (!frota && !ocupPct && !obs) {
@@ -2389,6 +2454,15 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
     progData.push(rec);
   }
   const savedRec = progData.find(p => p._id === (existingId !== null ? existingId : nextId - 1));
+  if (savedRec) {
+    registrarEdicaoCampo(savedRec._id, 'TIPO');
+    if (frota)      registrarEdicaoCampo(savedRec._id, 'FROTA');
+    if (ocupPct)    registrarEdicaoCampo(savedRec._id, 'OCUPACAO');
+    if (prev_fech)  registrarEdicaoCampo(savedRec._id, 'PREV_FECH');
+    if (obs)        registrarEdicaoCampo(savedRec._id, 'OBS');
+    if (tipo_prior) registrarEdicaoCampo(savedRec._id, 'TIPO_PRIOR');
+    if (data_crit)  registrarEdicaoCampo(savedRec._id, 'DATA_CRIT');
+  }
   saveData(savedRec);
   renderProg();
   renderHist();
@@ -2582,14 +2656,15 @@ function excluirSelecionados() {
   var toDelete = [];
   _selectedIds.forEach(function(id) { toDelete.push(parseInt(String(id), 10)); });
 
-  // Filter progData removing only the selected IDs
+  toDelete.forEach(function(id){ _deletedIds.add(String(id)); });
+  saveLocal();
+
   var before = progData.length;
   progData = progData.filter(function(r) {
     return toDelete.indexOf(parseInt(String(r._id), 10)) === -1;
   });
   var removed = before - progData.length;
 
-  // Delete from Sheets
   toDelete.forEach(function(id) {
     if (typeof sheetsPost === 'function' && typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS) {
       sheetsPost('delete', { id: String(id) });
@@ -2904,11 +2979,12 @@ function limparForm() {
 // ===== DELETE =====
 function deleteProg(id) {
   if (!confirm('Deseja excluir este registro da programação?')) return;
+  _deletedIds.add(String(id));
+  saveLocal();
   deleteFromSheets(id);
-  progData = progData.filter(r => r._id !== id);
-  saveData();
-  renderProg();
-  showToast('Registro excluído','info');
+  progData = progData.filter(r => String(r._id) !== String(id));
+  saveLocal(); renderProg(); renderHist();
+  showToast('Registro excluído', 'info');
 }
 
 // ===== VIEW DETALHES =====
@@ -3664,6 +3740,18 @@ function updateEpBar() {
 function saveEditProgramado(id) {
   const r = progData.find(x => x._id === id);
   if (!r) return;
+
+  // Capturar estado original ANTES de modificar
+  var _orig = {
+    tipo:       r.tipo,
+    frota:      r.frota,
+    ocup:       Math.round((r.ocup||0)*100),
+    prev_fech:  r.prev_fech || '',
+    obs:        r.obs || '',
+    tipo_prior: r.tipo_prior || '',
+    data_crit:  r.data_crit || ''
+  };
+
   r.destino    = document.getElementById('ep-destino').value.toUpperCase();
   r.regiao     = document.getElementById('ep-regiao').value;
   r.composicao = document.getElementById('ep-composicao').value;
@@ -3677,6 +3765,17 @@ function saveEditProgramado(id) {
   r.data_crit  = document.getElementById('ep-crit').value || '';
   r.obs        = document.getElementById('ep-obs').value;
   r.gerado     = now();
+
+  // Registrar APENAS campos que realmente mudaram
+  var novoPct = Math.round((r.ocup||0)*100);
+  if (r.tipo       !== _orig.tipo)      registrarEdicaoCampo(id, 'TIPO');
+  if (r.frota      !== _orig.frota)     registrarEdicaoCampo(id, 'FROTA');
+  if (novoPct      !== _orig.ocup)      registrarEdicaoCampo(id, 'OCUPACAO');
+  if (r.prev_fech  !== _orig.prev_fech) registrarEdicaoCampo(id, 'PREV_FECH');
+  if (r.obs        !== _orig.obs)       registrarEdicaoCampo(id, 'OBS');
+  if (r.tipo_prior !== _orig.tipo_prior)registrarEdicaoCampo(id, 'TIPO_PRIOR');
+  if (r.data_crit  !== _orig.data_crit) registrarEdicaoCampo(id, 'DATA_CRIT');
+
   saveData(r);
   closeEditModal();
   renderHist();
@@ -3926,65 +4025,26 @@ function requestNotifPermission() {
 
 
 
-// ── Merge seguro: nunca apaga dados de outro usuário ──
-function mergeComSheets(records) {
-  if (!records || records.length === 0) return;
-  var sheetsIds = new Set(records.map(function(r){ return String(r._id); }));
-  // Preservar registros locais modificados recentemente (< 30s) que ainda não chegaram ao Sheets
-  var agora = Date.now();
-  var localOnly = progData.filter(function(r){
-    if (sheetsIds.has(String(r._id))) return false;
-    // Se tem _localTs e foi modificado há menos de 60s, preserva
-    return true;
-  });
-  var merged = deduplicar(records.concat(localOnly));
-  if (merged.length > 0) {
-    progData = merged;
-    nextId = Math.max.apply(null, progData.map(function(r){return parseInt(r._id)||0;})) + 1;
-    saveLocal();
-    renderProg();
-    renderHist();
-  }
-}
-
-// ── Auto-sync a cada 15 segundos ──
-var _autoSyncTimer = null;
-var _lastSyncHash = '';
-
-function iniciarAutoSync() {
-  if (_autoSyncTimer) return;
-  _autoSyncTimer = setInterval(function() {
-    if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
-    sheetsGet()
-      .then(function(records) {
-        // Detectar mudanças pelo hash dos IDs+timestamps
-        var hash = records.map(function(r){ return r._id + ':' + (r.gerado||''); }).join('|');
-        if (hash === _lastSyncHash) return; // nada mudou
-        var prevCount = progData.length;
-        _lastSyncHash = hash;
-        mergeComSheets(records);
-        // Notificar discretamente sobre novos dados
-        var diff = progData.length - prevCount;
-        if (diff > 0) showToast('🔄 +' + diff + ' registro(s) de outro usuário', 'info');
-        // Atualizar indicador de sync silencioso
-        var syncBtn = document.getElementById('sync-btn');
-        if (syncBtn) {
-          syncBtn.style.color = '#4ade80';
-          setTimeout(function(){ if(syncBtn) syncBtn.style.color = '#9ca3af'; }, 1500);
-        }
-      })
-      .catch(function(){ /* silencioso — não mostrar erro a cada 15s */ });
-  }, 15000);
-}
-
 function syncManual() {
-  showSyncStatus('&#8635; Sincronizando...');
-  sheetsGetWithRetry(2)
+  // Antes de sincronizar, envia as alterações locais para o Sheets
+  showSyncStatus('&#8635; Enviando alterações...');
+  var localRecords = progData.map(recordToSheets);
+  sheetsPost('saveAll', { records: localRecords })
+    .then(function() {
+      showSyncStatus('&#8635; Buscando dados...');
+      return sheetsGetWithRetry(2);
+    })
     .then(function(records) {
-      _lastSyncHash = records.map(function(r){ return r._id + ':' + (r.gerado||''); }).join('|');
-      mergeComSheets(records);
-      hideSyncStatus();
-      showToast('&#10003; ' + progData.length + ' registros — atualizado!', 'success');
+      if (records && records.length > 0) {
+        var merged = deduplicar(records);
+        // Preservar registros locais que ainda não chegaram ao Sheets
+        var sheetsIds = new Set(merged.map(function(r){ return r._id; }));
+        var localOnly = progData.filter(function(r){ return !sheetsIds.has(r._id); });
+        progData = deduplicar(merged.concat(localOnly));
+      }
+      nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
+      saveLocal(); renderProg(); renderHist(); hideSyncStatus();
+      showToast('&#10003; ' + progData.length + ' sincronizados!', 'success');
     })
     .catch(function(e) {
       hideSyncStatus();
