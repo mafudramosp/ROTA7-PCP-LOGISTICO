@@ -1196,16 +1196,16 @@
   <div class="sb-section">
     <div class="sb-label">Principal</div>
     <button class="sb-item active" id="tab-programacao" onclick="showTab('programacao')" data-tip="Programação">
-      <span class="sb-text">Programação</span><span class="sb-badge" id="badge-prog">0</span>
+      <span class="sb-text">Programação</span><span class="sb-badge" id="badge-prog" style="display:none"></span>
     </button>
     <button class="sb-item" id="tab-nova" onclick="showTab('nova')" data-tip="Adicionar">
       <span class="sb-text">Adicionar</span>
     </button>
     <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Programados">
-      <span class="sb-text">Programados</span><span class="sb-badge" id="badge-hist">0</span>
+      <span class="sb-text">Programados</span><span class="sb-badge" id="badge-hist" style="display:none"></span>
     </button>
     <button class="sb-item" id="tab-grade" onclick="showTab('grade')" data-tip="Grade">
-      <span class="sb-text">Grade</span><span class="sb-badge" id="badge-grade">0</span>
+      <span class="sb-text">Grade</span><span class="sb-badge" id="badge-grade" style="display:none"></span>
     </button>
   </div>
   <div class="sb-section">
@@ -2869,7 +2869,7 @@ function renderGrade() {
     filteredData = data.filter(r => r.destino === _selectedDestino);
   }
 
-  document.getElementById('badge-grade').textContent = data.length;
+  var _bge=document.getElementById('badge-grade'); if(_bge){var _gcv=data.length; _bge.textContent=_gcv; _bge.style.display=_gcv>0?'':'none';}
   const tbody = document.getElementById('tbody-grade');
   if (!filteredData.length) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Nenhuma rota encontrada</div></div></td></tr>';
