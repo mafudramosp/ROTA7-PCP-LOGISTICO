@@ -1950,16 +1950,22 @@ function loadData() {
   fbGetAll()
     .then(function(records) {
       if (records && records.length > 0) {
+        // Firebase tem dados — usar como fonte da verdade
         var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
         progData = deduplicar(filtered);
         nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
         saveLocal();
         renderProg();
         renderHist();
+        hideSyncStatus();
+        showToast('✅ ' + progData.length + ' registros carregados!', 'success');
+      } else if (progData.length > 0) {
+        // Firebase vazio mas tem dados locais — oferecer envio
+        hideSyncStatus();
+        showToast('⚠️ Firebase vazio — clique em "Salvar Tudo" para sincronizar', 'info');
+      } else {
+        hideSyncStatus();
       }
-      hideSyncStatus();
-      showToast('✅ ' + progData.length + ' registros carregados!', 'success');
-      // Iniciar escuta em tempo real
       iniciarEscutaRealtime();
     })
     .catch(function(e) {
@@ -2085,7 +2091,7 @@ function syncManual() {
 
 // ── Salvar tudo no Firebase ──
 async function salvarTudoSheets() {
-  var registros = progData.filter(function(r){ return r.frota || r.ocup; });
+  var registros = progData.filter(function(r){ return r.destino; }); // enviar todos que têm destino
   if (!registros.length) { showToast('Nenhum dado para salvar', 'info'); return; }
   showSyncStatus('&#8635; Salvando ' + registros.length + ' registros...');
   try {
@@ -3275,7 +3281,7 @@ function salvarProg() {
     data_crit: formatDTLocal(data_crit), id: ''
   };
   progData.unshift(rec);
-  saveData();
+  saveData(rec); // salva no Firebase imediatamente
   showToast('Programação salva com sucesso!','success');
   limparForm();
   showTab('programacao');
