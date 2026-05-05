@@ -999,9 +999,60 @@
   .cf-cancel { background: #374151; color: #9ca3af; }
 
   @media (max-width: 768px) {
-    .nav { display: flex !important; }
-    .sidebar { display: none; }
+    /* Sidebar vira nav horizontal no mobile */
     .app-layout { display: block; }
+    .sidebar {
+      position: fixed;
+      bottom: 0; top: auto;
+      left: 0; right: 0;
+      width: 100% !important;
+      min-width: 100% !important;
+      height: auto;
+      flex-direction: row;
+      border-right: none;
+      border-top: 1px solid #1e1e1e;
+      z-index: 100;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    .sb-toggle { display: none; }
+    .sb-section {
+      display: flex;
+      flex-direction: row;
+      border-bottom: none;
+      border-right: 1px solid #1a1a1a;
+      padding: 0;
+    }
+    .sb-label { display: none; }
+    .sb-item {
+      padding: 8px 10px;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 10px;
+      border-left: none;
+      border-top: 3px solid transparent;
+      min-width: 60px;
+      justify-content: center;
+      text-align: center;
+    }
+    .sb-item.active {
+      border-left-color: transparent;
+      border-top-color: #00B200;
+    }
+    .sb-text { font-size: 10px; width: auto; opacity: 1 !important; }
+    .sb-badge { margin-left: 2px; font-size: 9px; }
+    .sidebar.collapsed .sb-text { opacity: 1 !important; width: auto !important; }
+    .sidebar.collapsed .sb-badge { opacity: 1 !important; width: auto !important; padding: 1px 6px !important; margin-left: 2px !important; }
+    .sb-content { padding-bottom: 60px; }
+    /* Rodapé do sidebar — ocultar no mobile */
+    .sidebar > div:last-child { display: none; }
+    /* Nav horizontal original continua oculta */
+    .nav { display: none !important; }
+  }
+
+  @media (max-width: 480px) {
+    .sb-item { padding: 6px 8px; min-width: 52px; }
+    .sb-text { font-size: 9px; }
   }
 
   </style>
@@ -1014,7 +1065,7 @@
 </div>
 
 <!-- MOBILE ROLE SELECTOR -->
-<div class="role-screen" id="role-screen">
+<div class="role-screen" id="role-screen" style="display:none!important">
   <div class="role-logo">
     
     <div class="role-logo-title">Programação de Veículos OPL</div>
@@ -1050,7 +1101,7 @@
 </div>
 
 <!-- MOBILE BOTTOM NAV (shown after role selection) -->
-<div class="mobile-bottom-nav" id="mobile-bottom-nav">
+<div class="mobile-bottom-nav" id="mobile-bottom-nav" style="display:none!important">
   <div class="mobile-nav-row">
     <button class="mobile-nav-item active" id="mnav-programacao" onclick="mobileGoTo('programacao')">
       <span class="mobile-nav-icon">📋</span>
@@ -1087,7 +1138,7 @@
   <div class="header-divider"></div>
 
   <button id="install-btn" onclick="instalarApp()" style="display:flex;align-items:center;gap:6px;background:rgba(0,178,0,.15);color:#4ade80;border:1px solid rgba(0,178,0,.3);border-radius:20px;padding:5px 13px;font-size:11px;font-weight:700;font-family:'Poppins',sans-serif;cursor:pointer;white-space:nowrap">&#8615; Instalar App</button>
-  <button onclick="trocarPapel()" id="trocar-btn" title="Trocar perfil" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:11px;font-family:'Poppins',sans-serif;padding:4px 8px;border-radius:6px;transition:all .15s;white-space:nowrap;display:none" onmouseover="this.style.color='#9ca3af'" onmouseout="this.style.color='#6b7280'">
+  <button onclick="trocarPapel()" id="trocar-btn" style="display:none!important" title="Trocar perfil" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:11px;font-family:'Poppins',sans-serif;padding:4px 8px;border-radius:6px;transition:all .15s;white-space:nowrap;display:none" onmouseover="this.style.color='#9ca3af'" onmouseout="this.style.color='#6b7280'">
     ⇄ Trocar perfil
   </button>
   <button id="sync-btn" onclick="syncManual()" title="Sincronizar com Google Sheets"
@@ -3790,6 +3841,12 @@ function aplicarFiltrosColuna(data) {
   });
 }
 // ===== INIT =====
+// Ir direto para planejamento — sem tela de seleção
+_papelAtual = 'planejamento';
+var _trocarBtn = document.getElementById('trocar-btn');
+if (_trocarBtn) _trocarBtn.style.display = 'none';
+var _roleScreen = document.getElementById('role-screen');
+if (_roleScreen) _roleScreen.style.display = 'none';
 loadData();
 populateFilters();
 renderProg();
