@@ -2052,6 +2052,13 @@ async function salvarTudoSheets() {
 // IDs deletados localmente
 var _deletedIds = new Set(JSON.parse(localStorage.getItem('prog_deleted_v4') || '[]'));
 
+let gradeData = INITIAL_DATA.grade;
+let progData = [];
+let histData = [];
+let sortKey = 'ocup';
+let sortDir = -1;
+let nextId = 3646;
+
 // ===== LOCAL STORAGE =====
 // ===== LOCAL STORAGE (fallback) =====
 function saveLocal() {
