@@ -2272,31 +2272,7 @@ function loadData() {
   renderProg();
   renderHist();
 
-  if (USAR_SHEETS && APPS_SCRIPT_URL) {
-    showSyncStatus('&#8635; Sincronizando...');
-    sheetsGetWithRetry(3)
-      .then(function(records) {
-        // Only overwrite local data if Sheets returned something
-        // Prevents wiping local cache when Sheets is temporarily empty
-        if (records && records.length > 0) {
-          var merged = deduplicar(records);
-          // Keep local records not yet in Sheets (gerado today, not in response)
-          var sheetsIds = new Set(merged.map(function(r){return r._id;}));
-          var localOnly = progData.filter(function(r){ return !sheetsIds.has(r._id); });
-          progData = deduplicar(merged.concat(localOnly));
-          nextId = Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1;
-          saveLocal();
-        }
-        renderProg(); renderHist(); hideSyncStatus();
-        showToast('✅ Sincronizado — ' + progData.length + ' registros', 'success');
-      })
-      .catch(function(e) {
-        hideSyncStatus();
-        // Don't clear data on error - keep local cache
-        console.warn('Sheets offline:', e.message);
-        showToast('📡 Sem conexão com Sheets — usando dados locais', 'info');
-      });
-  }
+
 }
 
 function sheetsGetWithRetry(n) {
@@ -4368,6 +4344,7 @@ function triggerAlertToast(alerta) {
 function updateNotifBadge() {
   const count = notifications.length;
   const badge = document.getElementById('notif-count');
+  if (!badge) return;
   if (count > 0) {
     badge.textContent = count > 9 ? '9+' : count;
     badge.style.display = 'flex';
@@ -5021,34 +4998,19 @@ document.addEventListener('touchstart', ativarAudio, { once: false });
 
 // ===== ENVIAR ALERTA VIA GET (JSONP - funciona em todos os protocolos) =====
 function enviarAlertaViaGet(de, mensagem) {
-  if (!USAR_SHEETS || !APPS_SCRIPT_URL) {
-    if (de === 'planejamento') showPlatAlert(mensagem, new Date().toLocaleString('pt-BR'));
-    if (de === 'plataforma') addMsgPlataforma(mensagem, new Date().toLocaleString('pt-BR'));
-    return;
-  }
-  var cbName = 'saveCb_' + Date.now();
-  var timeout = setTimeout(function() {
-    delete window[cbName];
-    enviarAlertaViaPost(de, mensagem);
-  }, 5000);
-  window[cbName] = function(json) {
-    clearTimeout(timeout); delete window[cbName];
-    if (json && json.status === 'ok') {
-      showToast('Enviado! Aguardando entrega...', 'success');
-    } else {
-      enviarAlertaViaPost(de, mensagem);
-    }
-  };
-  var url = APPS_SCRIPT_URL
-    + '?action=salvarAlerta'
-    + '&de=' + encodeURIComponent(de)
-    + '&msg=' + encodeURIComponent(mensagem)
-    + '&callback=' + cbName
-    + '&t=' + Date.now();
-  var s = document.createElement('script');
-  s.src = url;
-  s.onerror = function() { clearTimeout(timeout); delete window[cbName]; enviarAlertaViaPost(de, mensagem); };
-  document.head.appendChild(s);
+  // Salvar alerta no Firebase
+  var id = String(Date.now());
+  var ts = new Date().toLocaleString('pt-BR');
+  var alerta = { id: id, ts: ts, de: de, msg: mensagem };
+
+  fetch('https://tragetta-opl-default-rtdb.firebaseio.com/alertas/' + id + '.json', {
+    method: 'PUT',
+    body: JSON.stringify(alerta)
+  }).catch(function(e) { console.warn('Alerta Firebase error:', e); });
+
+  // Mostrar localmente também
+  if (de === 'planejamento') showPlatAlert(mensagem, ts);
+  if (de === 'plataforma') addMsgPlataforma(mensagem, ts);
 }
 
 
@@ -5204,12 +5166,12 @@ document.addEventListener('click', e => {
   if (p && p.style.transform === 'translateY(0px)' && !p.contains(e.target) && !e.target.closest('[onclick*="abrirAlertPanel"]')) fecharAlertPanel();
 });
 
-// Poll alerts every 30s if Sheets configured
-if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
-  setInterval(platPollAlertas, 7000);
-  setInterval(planPollAlertas, 7000);
-  setTimeout(platPollAlertas, 1500);
-  setTimeout(planPollAlertas, 1500);
+// Poll alertas via Firebase (sempre ativo)
+setInterval(platPollAlertas, 7000);
+setInterval(planPollAlertas, 7000);
+setTimeout(platPollAlertas, 1500);
+setTimeout(planPollAlertas, 1500);
+if (false) { // bloco antigo mantido por compatibilidade
   // Trim localStorage IDs every 2h to prevent bloat
   setInterval(saveShownIds, 7200000);
 }
