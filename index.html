@@ -1827,7 +1827,9 @@ function loadData() {
       saveLocal(); renderProg(); renderHist();
       showToast('✅ ' + progData.length + ' registros carregados!', 'success');
     } else if (progData.length > 0) {
-      showToast('💾 Dados locais — use "Salvar Tudo" para sincronizar', 'info');
+      showToast('💾 Supabase conectado — clique "Salvar Tudo" para enviar dados', 'success');
+    } else {
+      showToast('✅ Supabase conectado!', 'success');
     }
     iniciarEscutaRealtime();
   }).catch(function() {
@@ -2795,7 +2797,7 @@ function renderHist() {
     return true;
   });
   // Sort by saida ascending
-  data = aplicarFiltrosColuna(data);
+  data = (typeof aplicarFiltrosColuna === 'function') ? aplicarFiltrosColuna(data) : data;
 
   data.sort(function(a, b) {
     var col = _histSortCol;
@@ -3049,8 +3051,8 @@ function limparForm() {
   });
   document.getElementById('f-dia').value = '';
   var _fill = document.getElementById('f-ocup-bar-fill'); if(_fill) _fill.style.width = '0%';
-  document.getElementById('f-ocup-bar-fill').style.background = '#9ca3af';
-  document.getElementById('grade-info').classList.remove('visible');
+  var _fill2 = document.getElementById('f-ocup-bar-fill'); if(_fill2) _fill2.style.background = '#9ca3af';
+  var _gi = document.getElementById('grade-info'); if(_gi) _gi.classList.remove('visible');
 }
 
 // ===== DELETE =====
@@ -4092,6 +4094,7 @@ function triggerAlertToast(alerta) {
 function updateNotifBadge() {
   const count = notifications.length;
   const badge = document.getElementById('notif-count');
+  if (!badge) return;
   if (count > 0) {
     badge.textContent = count > 9 ? '9+' : count;
     badge.style.display = 'flex';
