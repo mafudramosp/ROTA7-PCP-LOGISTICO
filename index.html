@@ -1784,7 +1784,8 @@ function recToSb(r) {
     destino: r.destino||'', regiao: r.regiao||'', composicao: r.composicao||'',
     saida: r.saida||'', dia: r.dia||'', tipo: r.tipo||'', frota: r.frota||'',
     ocup: Math.round((r.ocup||0)*100), prev_fech: r.prev_fech||'',
-    obs: r.obs||'', tipo_prior: r.tipo_prior||'', data_crit: r.data_crit||''
+    obs: r.obs||'', tipo_prior: r.tipo_prior||'', data_crit: r.data_crit||'',
+    deletado: false
   };
 }
 // Converte Supabase → registro interno
@@ -1817,23 +1818,21 @@ async function fbSave(r) {
 
 // Deletar um registro
 function deleteFromSheets(id) {
-  var headers = {
-    'apikey': SB_KEY,
-    'Authorization': 'Bearer ' + SB_KEY,
-    'Prefer': 'return=minimal'
-  };
+  // Soft delete: marca deletado=true no Supabase (nunca apaga fisicamente)
+  // Assim todos os dispositivos veem a marcação e o registro nunca volta
   fetch(SB_URL + '/programados?id=eq.' + id, {
-    method: 'DELETE',
-    headers: headers
+    method: 'PATCH',
+    headers: Object.assign({}, SB_HEADERS, {'Prefer': 'return=minimal'}),
+    body: JSON.stringify({ deletado: true })
   }).then(function(res) {
-    if (!res.ok) console.warn('Delete falhou para id=' + id + ' status=' + res.status);
-  }).catch(function(e) { console.warn('Delete erro:', e); });
+    if (!res.ok) console.warn('Soft delete falhou id=' + id + ' status=' + res.status);
+  }).catch(function(e) { console.warn('Soft delete erro:', e); });
 }
 
 // Buscar todos os registros
 async function fbGetAll() {
   try {
-    var res = await fetch(SB_URL + '/programados?select=*&limit=1000', { headers: SB_HEADERS });
+    var res = await fetch(SB_URL + '/programados?select=*&or=(deletado.eq.false,deletado.is.null)&limit=1000', { headers: SB_HEADERS });
     if (!res.ok) {
       var errText = await res.text();
       console.warn('Supabase GET status:', res.status, errText);
@@ -1842,8 +1841,10 @@ async function fbGetAll() {
     }
     var data = await res.json();
     if (!data || !Array.isArray(data)) return [];
-    console.log('[Supabase] Carregados:', data.length, 'registros');
-    return data.map(sbToRec).filter(function(r){ return r._id > 0; });
+    // Filtrar registros marcados como deletados no Supabase
+    var ativos = data.filter(function(r){ return !r.deletado; });
+    console.log('[Supabase] Carregados:', ativos.length, 'registros');
+    return ativos.map(sbToRec).filter(function(r){ return r._id > 0; });
   } catch(e) {
     console.warn('sbGetAll erro:', e.message);
     return [];
@@ -2984,7 +2985,7 @@ function selectGradeSugg(idx) {
   document.getElementById('f-composicao').value = r.composicao;
   document.getElementById('f-saida').value = r.saida;
   document.getElementById('f-dia').value = r.dia;
-  document.getElementById('dest-suggestions').style.display = 'none';
+  var _ds2 = document.getElementById('dest-suggestions'); if(_ds2) _ds2.style.display = 'none';
   
   // Show info box
   const box = document.getElementById('grade-info');
@@ -3017,7 +3018,7 @@ function useGrade(idx) {
 }
 document.addEventListener('click', e => {
   if (!e.target.closest('.autocomplete-wrap')) {
-    document.getElementById('dest-suggestions').style.display = 'none';
+    var _ds = document.getElementById('dest-suggestions'); if(_ds) _ds.style.display = 'none';
   }
 });
 
