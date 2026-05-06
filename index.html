@@ -1817,10 +1817,17 @@ async function fbSave(r) {
 
 // Deletar um registro
 function deleteFromSheets(id) {
+  var headers = {
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Prefer': 'return=minimal'
+  };
   fetch(SB_URL + '/programados?id=eq.' + id, {
     method: 'DELETE',
-    headers: SB_HEADERS
-  }).catch(function(){});
+    headers: headers
+  }).then(function(res) {
+    if (!res.ok) console.warn('Delete falhou para id=' + id + ' status=' + res.status);
+  }).catch(function(e) { console.warn('Delete erro:', e); });
 }
 
 // Buscar todos os registros
@@ -2766,12 +2773,12 @@ function excluirSelecionados() {
   });
   var removed = before - progData.length;
 
-  // Delete from Sheets
+  // Marcar como deletados localmente (nunca voltam no sync)
   toDelete.forEach(function(id) {
-    if (typeof sheetsPost === 'function' && typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS) {
-      sheetsPost('delete', { id: String(id) });
-    }
+    _deletedIds.add(String(id));
+    deleteFromSheets(id);
   });
+  saveLocal(); // persiste _deletedIds
 
   _selectedIds.clear();
   // Reset select-all checkbox
