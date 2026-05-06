@@ -930,133 +930,145 @@
   #alert-debug .dbg-err { color: #f66; }
   #alert-debug .dbg-info { color: #fc0; }
 
-  /* ===== SIDEBAR ===== */
-  .nav { display: none !important; }
-  .app-layout { display: flex; min-height: calc(100vh - 52px); }
-  .sidebar {
-    width: 210px; min-width: 210px; background: #111;
-    display: flex; flex-direction: column;
-    position: sticky; top: 52px;
-    height: calc(100vh - 52px);
-    overflow-y: auto; flex-shrink: 0;
-    border-right: 1px solid #1e1e1e;
-    transition: width 0.2s;
-  }
-  .sidebar.collapsed { width: 44px; min-width: 44px; }
-  .sb-toggle { display: flex; justify-content: flex-end; padding: 8px 10px; border-bottom: 1px solid #1e1e1e; }
-  .sb-toggle button { background: none; border: none; color: #6b7280; cursor: pointer; font-size: 15px; padding: 3px 6px; border-radius: 5px; }
-  .sb-toggle button:hover { color: #fff; background: rgba(255,255,255,0.07); }
-  .sb-section { padding: 6px 0; border-bottom: 1px solid #1a1a1a; }
-  .sb-label { font-size: 9px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing:.1em; padding: 5px 14px 3px; white-space: nowrap; overflow: hidden; }
-  .sidebar.collapsed .sb-label { opacity: 0; }
-  .sb-item {
-    display: flex; align-items: center; padding: 9px 14px;
-    cursor: pointer; border: none; background: none; width: 100%;
-    text-align: left; font-family: 'Poppins', sans-serif;
-    font-size: 12px; font-weight: 500; color: #9ca3af;
-    border-left: 3px solid transparent;
-    white-space: nowrap; overflow: hidden;
-    transition: all 0.12s; position: relative;
-  }
-  .sb-item:hover { background: rgba(255,255,255,0.04); color: #e5e7eb; }
-  .sb-item.active { color: #00B200; border-left-color: #00B200; background: rgba(0,178,0,0.07); font-weight: 600; }
-  .sb-text { flex: 1; overflow: hidden; text-overflow: ellipsis; transition: opacity 0.15s, width 0.2s; }
-  .sidebar.collapsed .sb-text { opacity: 0; width: 0; }
-  .sb-badge { background: rgba(255,255,255,0.08); color: #9ca3af; border-radius: 20px; padding: 1px 6px; font-size: 10px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; margin-left: 6px; transition: opacity 0.15s; flex-shrink: 0; }
-  .sb-item.active .sb-badge { background: rgba(0,178,0,0.18); color: #00B200; }
-  .sidebar.collapsed .sb-badge { opacity: 0; width: 0; overflow: hidden; padding: 0; margin: 0; }
-  .sidebar.collapsed .sb-item:hover::after {
-    content: attr(data-tip); position: fixed; left: 50px;
-    background: #1f2937; color: #f3f4f6; padding: 4px 10px;
-    border-radius: 6px; font-size: 11px; white-space: nowrap;
-    z-index: 9999; border: 1px solid #374151;
-    box-shadow: 0 4px 12px rgba(0,0,0,.4); pointer-events: none;
-  }
-  .sb-content { flex: 1; overflow: auto; min-width: 0; }
-
-  /* ===== FILTROS COLUNA ESTILO EXCEL ===== */
-  .col-filter-wrap { position: relative; display: inline-flex; align-items: center; gap: 4px; width: 100%; }
-  .col-filter-wrap .col-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cf-btn { background: none; border: none; cursor: pointer; padding: 1px 3px; border-radius: 3px; font-size: 10px; color: #6b7280; line-height: 1; flex-shrink: 0; }
-  .cf-btn:hover { color: #fff; }
-  .cf-btn.active { color: #00B200; }
-  .cf-dropdown { position: fixed; background: #1e1e2e; border: 1px solid #374151; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,.6); z-index: 9999; min-width: 200px; max-width: 280px; display: none; flex-direction: column; overflow: hidden; }
-  .cf-dropdown.open { display: flex; }
-  .cf-search { padding: 8px 10px 4px; border-bottom: 1px solid #2d3748; }
-  .cf-search input { width: 100%; background: #111; border: 1px solid #374151; border-radius: 5px; color: #f3f4f6; font-size: 11px; padding: 4px 8px; box-sizing: border-box; outline: none; }
-  .cf-search input:focus { border-color: #00B200; }
-  .cf-actions { display: flex; gap: 6px; padding: 5px 10px; border-bottom: 1px solid #2d3748; }
-  .cf-actions button { flex: 1; background: none; border: 1px solid #374151; border-radius: 4px; color: #9ca3af; font-size: 10px; padding: 3px 6px; cursor: pointer; font-family: 'Poppins', sans-serif; }
-  .cf-actions button:hover { color: #fff; border-color: #6b7280; }
-  .cf-list { max-height: 220px; overflow-y: auto; padding: 4px 0; }
-  .cf-item { display: flex; align-items: center; gap: 8px; padding: 5px 12px; cursor: pointer; font-size: 11px; color: #d1d5db; }
-  .cf-item:hover { background: rgba(255,255,255,0.06); }
-  .cf-item input[type=checkbox] { width: 13px; height: 13px; accent-color: #00B200; flex-shrink: 0; }
-  .cf-item span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cf-footer { padding: 7px 10px; border-top: 1px solid #2d3748; display: flex; justify-content: flex-end; gap: 6px; }
-  .cf-footer button { font-size: 11px; padding: 4px 12px; border-radius: 5px; border: none; cursor: pointer; font-family: 'Poppins', sans-serif; font-weight: 600; }
-  .cf-ok { background: #00B200; color: #fff; }
-  .cf-cancel { background: #374151; color: #9ca3af; }
-
-  @media (max-width: 768px) {
-    /* Sidebar vira nav horizontal no mobile */
-    .app-layout { display: block; }
-    .sidebar {
-      position: fixed;
-      bottom: 0; top: auto;
-      left: 0; right: 0;
-      width: 100% !important;
-      min-width: 100% !important;
-      height: auto;
-      flex-direction: row;
-      border-right: none;
-      border-top: 1px solid #1e1e1e;
-      z-index: 100;
-      overflow-x: auto;
-      overflow-y: hidden;
-    }
-    .sb-toggle { display: none; }
-    .sb-section {
-      display: flex;
-      flex-direction: row;
-      border-bottom: none;
-      border-right: 1px solid #1a1a1a;
-      padding: 0;
-    }
-    .sb-label { display: none; }
-    .sb-item {
-      padding: 8px 10px;
-      flex-direction: column;
-      gap: 2px;
-      font-size: 10px;
-      border-left: none;
-      border-top: 3px solid transparent;
-      min-width: 60px;
-      justify-content: center;
-      text-align: center;
-    }
-    .sb-item.active {
-      border-left-color: transparent;
-      border-top-color: #00B200;
-    }
-    .sb-text { font-size: 10px; width: auto; opacity: 1 !important; }
-    .sb-badge { margin-left: 2px; font-size: 9px; }
-    .sidebar.collapsed .sb-text { opacity: 1 !important; width: auto !important; }
-    .sidebar.collapsed .sb-badge { opacity: 1 !important; width: auto !important; padding: 1px 6px !important; margin-left: 2px !important; }
-    .sb-content { padding-bottom: 60px; }
-    /* Rodapé do sidebar — ocultar no mobile */
-    .sidebar > div:last-child { display: none; }
-    /* Nav horizontal original continua oculta */
-    .nav { display: none !important; }
-  }
-
-  @media (max-width: 480px) {
-    .sb-item { padding: 6px 8px; min-width: 52px; }
-    .sb-text { font-size: 9px; }
+  /* ── SIDEBAR ── */
+  .nav{display:none!important}
+  .app-layout{display:flex;min-height:calc(100vh - 52px)}
+  .sidebar{width:210px;min-width:210px;background:#111;display:flex;flex-direction:column;position:sticky;top:52px;height:calc(100vh - 52px);overflow-y:auto;flex-shrink:0;border-right:1px solid #1e1e1e;transition:width .2s}
+  .sidebar.collapsed{width:44px;min-width:44px}
+  .sb-toggle{display:flex;justify-content:flex-end;padding:8px 10px;border-bottom:1px solid #1e1e1e}
+  .sb-toggle button{background:none;border:none;color:#6b7280;cursor:pointer;font-size:15px;padding:3px 6px;border-radius:5px}
+  .sb-toggle button:hover{color:#fff;background:rgba(255,255,255,.07)}
+  .sb-section{padding:6px 0;border-bottom:1px solid #1a1a1a}
+  .sb-label{font-size:9px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.1em;padding:5px 14px 3px;white-space:nowrap;overflow:hidden}
+  .sidebar.collapsed .sb-label{opacity:0}
+  .sb-item{display:flex;align-items:center;padding:9px 14px;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:'Poppins',sans-serif;font-size:12px;font-weight:500;color:#9ca3af;border-left:3px solid transparent;white-space:nowrap;overflow:hidden;transition:all .12s;position:relative}
+  .sb-item:hover{background:rgba(255,255,255,.04);color:#e5e7eb}
+  .sb-item.active{color:#00B200;border-left-color:#00B200;background:rgba(0,178,0,.07);font-weight:600}
+  .sb-text{flex:1;overflow:hidden;text-overflow:ellipsis;transition:opacity .15s,width .2s}
+  .sidebar.collapsed .sb-text{opacity:0;width:0}
+  .sb-badge{background:rgba(255,255,255,.08);color:#9ca3af;border-radius:20px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px;transition:opacity .15s;flex-shrink:0}
+  .sb-item.active .sb-badge{background:rgba(0,178,0,.18);color:#00B200}
+  .sidebar.collapsed .sb-badge{opacity:0;width:0;overflow:hidden;padding:0;margin:0}
+  .sidebar.collapsed .sb-item:hover::after{content:attr(data-tip);position:fixed;left:50px;background:#1f2937;color:#f3f4f6;padding:4px 10px;border-radius:6px;font-size:11px;white-space:nowrap;z-index:9999;border:1px solid #374151;box-shadow:0 4px 12px rgba(0,0,0,.4);pointer-events:none}
+  .sb-content{flex:1;overflow:auto;min-width:0}
+  /* ── FILTROS COLUNA ── */
+  .col-filter-wrap{position:relative;display:inline-flex;align-items:center;gap:4px;width:100%}
+  .col-filter-wrap .col-label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cf-btn{background:none;border:none;cursor:pointer;padding:1px 3px;border-radius:3px;font-size:10px;color:#6b7280;line-height:1;flex-shrink:0}
+  .cf-btn:hover{color:#fff}.cf-btn.active{color:#00B200}
+  .cf-dropdown{position:fixed;background:#1e1e2e;border:1px solid #374151;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:9999;min-width:200px;max-width:280px;display:none;flex-direction:column;overflow:hidden}
+  .cf-dropdown.open{display:flex}
+  .cf-search{padding:8px 10px 4px;border-bottom:1px solid #2d3748}
+  .cf-search input{width:100%;background:#111;border:1px solid #374151;border-radius:5px;color:#f3f4f6;font-size:11px;padding:4px 8px;box-sizing:border-box;outline:none}
+  .cf-search input:focus{border-color:#00B200}
+  .cf-actions{display:flex;gap:6px;padding:5px 10px;border-bottom:1px solid #2d3748}
+  .cf-actions button{flex:1;background:none;border:1px solid #374151;border-radius:4px;color:#9ca3af;font-size:10px;padding:3px 6px;cursor:pointer;font-family:'Poppins',sans-serif}
+  .cf-actions button:hover{color:#fff;border-color:#6b7280}
+  .cf-list{max-height:220px;overflow-y:auto;padding:4px 0}
+  .cf-item{display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;font-size:11px;color:#d1d5db}
+  .cf-item:hover{background:rgba(255,255,255,.06)}
+  .cf-item input[type=checkbox]{width:13px;height:13px;accent-color:#00B200;flex-shrink:0}
+  .cf-item span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cf-footer{padding:7px 10px;border-top:1px solid #2d3748;display:flex;justify-content:flex-end;gap:6px}
+  .cf-footer button{font-size:11px;padding:4px 12px;border-radius:5px;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-weight:600}
+  .cf-ok{background:#00B200;color:#fff}.cf-cancel{background:#374151;color:#9ca3af}
+  @media(max-width:768px){
+    .app-layout{display:block}
+    .sidebar{position:fixed;bottom:0;top:auto;left:0;right:0;width:100%!important;min-width:100%!important;height:auto;flex-direction:row;border-right:none;border-top:1px solid #1e1e1e;z-index:100;overflow-x:auto;overflow-y:hidden}
+    .sb-toggle{display:none}
+    .sb-section{display:flex;flex-direction:row;border-bottom:none;border-right:1px solid #1a1a1a;padding:0}
+    .sb-label{display:none}
+    .sb-item{padding:8px 10px;font-size:10px;border-left:none;border-top:3px solid transparent;min-width:60px;justify-content:center;text-align:center;flex-direction:column;gap:2px}
+    .sb-item.active{border-left-color:transparent;border-top-color:#00B200}
+    .sb-text{font-size:10px;opacity:1!important;width:auto!important}
+    .sb-badge{margin-left:2px;font-size:9px;opacity:1!important;width:auto!important;padding:1px 6px!important}
+    .sb-content{padding-bottom:60px}
+    .sidebar>div:last-child{display:none}
+    .nav{display:none!important}
   }
 
   </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+
+// ═══ SIDEBAR ═══
+function toggleSidebar() {
+  var sb = document.getElementById('sidebar');
+  if (!sb) return;
+  sb.classList.toggle('collapsed');
+  localStorage.setItem('sb_c', sb.classList.contains('collapsed') ? '1' : '0');
+}
+setTimeout(function() {
+  var sb = document.getElementById('sidebar');
+  if (sb && localStorage.getItem('sb_c') === '1') sb.classList.add('collapsed');
+}, 50);
+
+// ═══ FILTROS DE COLUNA ═══
+var _cfF = {}, _cfCol = null, _cfVals = {};
+function cfVal(r, c) {
+  if (c==='gerado') return (r.gerado||'').slice(0,10);
+  if (c==='tipo') return r.tipo||'';
+  if (c==='destino') return r.destino||'';
+  if (c==='regiao') return r.regiao||'';
+  if (c==='saida') return r.saida||'';
+  if (c==='dia') return r.dia||'';
+  if (c==='frota') return r.frota||'';
+  if (c==='ocup') { var p=Math.round((r.ocup||0)*100); return p>=100?'Finalizado':p>1?'Carregando':'Vazio'; }
+  if (c==='prev_fech') return (r.prev_fech||'').slice(0,10)||'(sem data)';
+  if (c==='data_crit') return (r.data_crit||'').slice(0,10)||'(sem data)';
+  if (c==='prioridade') return calcPrioridade(r)||'';
+  return '';
+}
+function cfOpen(campo, btn) {
+  var dd = document.getElementById('cf-dropdown');
+  var same = dd.classList.contains('open') && _cfCol===campo;
+  cfClose(); if (same) return;
+  _cfCol = campo;
+  var base = progData.filter(function(r){ return r.frota||r.ocup; });
+  var map = {}; base.forEach(function(r){ var v=cfVal(r,campo); if(v) map[v]=true; });
+  var vals = Object.keys(map).sort(); _cfVals[campo] = vals;
+  var sel = _cfF[campo] || new Set(vals);
+  document.getElementById('cf-search-input').value = '';
+  cfDraw(vals, sel);
+  var rect = btn.getBoundingClientRect();
+  dd.style.top=(rect.bottom+4)+'px'; dd.style.left=Math.max(4,Math.min(rect.left,window.innerWidth-290))+'px';
+  dd.classList.add('open'); btn.classList.add('active');
+}
+function cfDraw(vals, sel) {
+  var s=(document.getElementById('cf-search-input')?.value||'').toLowerCase();
+  var f=s?vals.filter(function(v){return v.toLowerCase().includes(s);}):vals;
+  document.getElementById('cf-list').innerHTML=f.map(function(v){
+    var chk=sel&&sel.has?sel.has(v):true;
+    return '<label class="cf-item"><input type="checkbox" value="'+v.replace(/"/g,'&quot;')+'" '+(chk?'checked':'')+'>​<span>'+(v||'(vazio)')+'</span></label>';
+  }).join('');
+}
+function cfSearchFilter() { if(!_cfCol)return; cfDraw(_cfVals[_cfCol]||[], _cfF[_cfCol]||new Set(_cfVals[_cfCol]||[])); }
+function cfSelectAll() { document.querySelectorAll('#cf-list input').forEach(function(c){c.checked=true;}); }
+function cfClearAll()  { document.querySelectorAll('#cf-list input').forEach(function(c){c.checked=false;}); }
+function cfApply() {
+  if(!_cfCol) return;
+  var m=new Set(); document.querySelectorAll('#cf-list input').forEach(function(c){if(c.checked)m.add(c.value);});
+  var all=new Set(_cfVals[_cfCol]||[]);
+  if(m.size===all.size) delete _cfF[_cfCol]; else _cfF[_cfCol]=m;
+  var btn=document.getElementById('cfb-'+_cfCol); if(btn) btn.classList.toggle('active',!!_cfF[_cfCol]);
+  cfClose(); renderHist();
+}
+function cfClose() {
+  document.getElementById('cf-dropdown').classList.remove('open');
+  if(_cfCol) { var btn=document.getElementById('cfb-'+_cfCol); if(btn&&!_cfF[_cfCol]) btn.classList.remove('active'); }
+  _cfCol=null;
+}
+document.addEventListener('click', function(e) {
+  var dd=document.getElementById('cf-dropdown');
+  if(dd&&dd.classList.contains('open')&&!dd.contains(e.target)&&!e.target.classList.contains('cf-btn')) cfClose();
+});
+function aplicarFiltrosColuna(data) {
+  var cols=Object.keys(_cfF); if(!cols.length) return data;
+  return data.filter(function(r){return cols.every(function(c){return _cfF[c].has(cfVal(r,c));});});
+}
+// Aplicar filtros + badges no renderHist
+var _origRenderHist = null;
+
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -1065,7 +1077,7 @@
 </div>
 
 <!-- MOBILE ROLE SELECTOR -->
-<div class="role-screen" id="role-screen" style="display:none!important">
+<div class="role-screen" id="role-screen" style="display:none">
   <div class="role-logo">
     
     <div class="role-logo-title">Programação de Veículos OPL</div>
@@ -1101,7 +1113,7 @@
 </div>
 
 <!-- MOBILE BOTTOM NAV (shown after role selection) -->
-<div class="mobile-bottom-nav" id="mobile-bottom-nav" style="display:none!important">
+<div class="mobile-bottom-nav" id="mobile-bottom-nav">
   <div class="mobile-nav-row">
     <button class="mobile-nav-item active" id="mnav-programacao" onclick="mobileGoTo('programacao')">
       <span class="mobile-nav-icon">📋</span>
@@ -1138,7 +1150,7 @@
   <div class="header-divider"></div>
 
   <button id="install-btn" onclick="instalarApp()" style="display:flex;align-items:center;gap:6px;background:rgba(0,178,0,.15);color:#4ade80;border:1px solid rgba(0,178,0,.3);border-radius:20px;padding:5px 13px;font-size:11px;font-weight:700;font-family:'Poppins',sans-serif;cursor:pointer;white-space:nowrap">&#8615; Instalar App</button>
-  <button onclick="trocarPapel()" id="trocar-btn" style="display:none!important" title="Trocar perfil" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:11px;font-family:'Poppins',sans-serif;padding:4px 8px;border-radius:6px;transition:all .15s;white-space:nowrap;display:none" onmouseover="this.style.color='#9ca3af'" onmouseout="this.style.color='#6b7280'">
+  <button onclick="trocarPapel()" id="trocar-btn" style="display:none" title="Trocar perfil" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:11px;font-family:'Poppins',sans-serif;padding:4px 8px;border-radius:6px;transition:all .15s;white-space:nowrap;display:none" onmouseover="this.style.color='#9ca3af'" onmouseout="this.style.color='#6b7280'">
     ⇄ Trocar perfil
   </button>
   <button id="sync-btn" onclick="syncManual()" title="Sincronizar com Google Sheets"
@@ -1192,39 +1204,23 @@
 </div>
 <div class="app-layout">
 <nav class="sidebar" id="sidebar">
-  <div class="sb-toggle"><button onclick="toggleSidebar()" title="Recolher">☰</button></div>
+  <div class="sb-toggle"><button onclick="toggleSidebar()">☰</button></div>
   <div class="sb-section">
     <div class="sb-label">Principal</div>
-    <button class="sb-item active" id="tab-programacao" onclick="showTab('programacao')" data-tip="Programação">
-      <span class="sb-text">Programação</span><span class="sb-badge" id="badge-prog" style="display:none"></span>
-    </button>
-    <button class="sb-item" id="tab-nova" onclick="showTab('nova')" data-tip="Adicionar">
-      <span class="sb-text">Adicionar</span>
-    </button>
-    <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Programados">
-      <span class="sb-text">Programados</span><span class="sb-badge" id="badge-hist" style="display:none"></span>
-    </button>
-    <button class="sb-item" id="tab-grade" onclick="showTab('grade')" data-tip="Grade">
-      <span class="sb-text">Grade</span><span class="sb-badge" id="badge-grade" style="display:none"></span>
-    </button>
+    <button class="sb-item active" id="tab-programacao" onclick="showTab('programacao')" data-tip="Programação"><span class="sb-text">Programação</span><span class="sb-badge" id="badge-prog" style="display:none"></span></button>
+    <button class="sb-item" id="tab-nova" onclick="showTab('nova')" data-tip="Adicionar"><span class="sb-text">Adicionar</span></button>
+    <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Programados"><span class="sb-text">Programados</span><span class="sb-badge" id="badge-hist" style="display:none"></span></button>
+    <button class="sb-item" id="tab-grade" onclick="showTab('grade')" data-tip="Grade"><span class="sb-text">Grade</span><span class="sb-badge" id="badge-grade" style="display:none"></span></button>
   </div>
   <div class="sb-section">
     <div class="sb-label">Operações</div>
-    <button class="sb-item" id="tab-plataforma" onclick="showTab('plataforma')" data-tip="Plataforma" style="color:#00B200">
-      <span class="sb-text">Plataforma</span>
-    </button>
-    <button class="sb-item" id="tab-dashboard" onclick="showTab('dashboard')" data-tip="Dashboard" style="color:#6366f1">
-      <span class="sb-text">Dashboard</span>
-    </button>
+    <button class="sb-item" id="tab-plataforma" onclick="showTab('plataforma')" data-tip="Plataforma" style="color:#00B200"><span class="sb-text">Plataforma</span></button>
+    <button class="sb-item" id="tab-dashboard" onclick="showTab('dashboard')" data-tip="Dashboard" style="color:#6366f1"><span class="sb-text">Dashboard</span></button>
   </div>
   <div class="sb-section">
     <div class="sb-label">Sincronização</div>
-    <button class="sb-item" onclick="syncManual()" data-tip="Atualizar">
-      <span class="sb-text">Atualizar</span>
-    </button>
-    <button class="sb-item" onclick="salvarTudoSheets()" data-tip="Salvar Tudo">
-      <span class="sb-text">Salvar Tudo</span>
-    </button>
+    <button class="sb-item" onclick="syncManual()" data-tip="Atualizar"><span class="sb-text">Atualizar</span></button>
+    <button class="sb-item" onclick="salvarTudoFirebase()" data-tip="Salvar Tudo"><span class="sb-text">Salvar Tudo</span></button>
   </div>
   <div style="flex:1"></div>
   <div style="padding:10px 14px;font-size:9px;color:#2d3748;white-space:nowrap;overflow:hidden">GRU · Tragetta</div>
@@ -1501,47 +1497,22 @@
       <table>
         <thead>
           <tr id="hist-thead-row">
-            <th style="width:36px"><input type="checkbox" id="sel-all" onclick="selecionarTodos(this)"></th>
+            <th style="width:36px"><input type="checkbox" id="sel-all" onclick="selecionarTodos(this)" title="Selecionar todos"></th>
             <th>#</th>
-            <th onclick="sortHist('gerado')" style="cursor:pointer">
-              <div class="col-filter-wrap"><span class="col-label">Gerado em <span id="sh-gerado">↕</span></span>
-              <button class="cf-btn" id="cfb-gerado" onclick="event.stopPropagation();cfOpen('gerado',this)">▼</button></div>
-            </th>
-            <th><div class="col-filter-wrap"><span class="col-label">Tipo</span>
-              <button class="cf-btn" id="cfb-tipo" onclick="cfOpen('tipo',this)">▼</button></div></th>
-            <th onclick="sortHist('destino')" style="cursor:pointer">
-              <div class="col-filter-wrap"><span class="col-label">Destino <span id="sh-destino">↕</span></span>
-              <button class="cf-btn" id="cfb-destino" onclick="event.stopPropagation();cfOpen('destino',this)">▼</button></div>
-            </th>
-            <th><div class="col-filter-wrap"><span class="col-label">Região</span>
-              <button class="cf-btn" id="cfb-regiao" onclick="cfOpen('regiao',this)">▼</button></div></th>
+            <th onclick="sortHist('gerado')" style="cursor:pointer" title="Ordenar">Gerado em <span id="sh-gerado">↕</span></th>
+            <th>Tipo</th>
+            <th onclick="sortHist('destino')" style="cursor:pointer" title="Ordenar">Destino <span id="sh-destino">↕</span></th>
+            <th>Região</th>
             <th>Composição</th>
-            <th onclick="sortHist('saida')" style="cursor:pointer">
-              <div class="col-filter-wrap"><span class="col-label">Saída <span id="sh-saida">↕</span></span>
-              <button class="cf-btn" id="cfb-saida" onclick="event.stopPropagation();cfOpen('saida',this)">▼</button></div>
-            </th>
-            <th><div class="col-filter-wrap"><span class="col-label">Dia</span>
-              <button class="cf-btn" id="cfb-dia" onclick="cfOpen('dia',this)">▼</button></div></th>
-            <th onclick="sortHist('frota')" style="cursor:pointer">
-              <div class="col-filter-wrap"><span class="col-label">Frota <span id="sh-frota">↕</span></span>
-              <button class="cf-btn" id="cfb-frota" onclick="event.stopPropagation();cfOpen('frota',this)">▼</button></div>
-            </th>
-            <th onclick="sortHist('ocup')" style="cursor:pointer">
-              <div class="col-filter-wrap"><span class="col-label">Status Carregamento <span id="sh-ocup">↕</span></span>
-              <button class="cf-btn" id="cfb-ocup" onclick="event.stopPropagation();cfOpen('ocup',this)">▼</button></div>
-            </th>
-            <th onclick="sortHist('prev_fech')" style="cursor:pointer;color:#00B200">
-              <div class="col-filter-wrap"><span class="col-label">Prev. Fechamento <span id="sh-prev_fech">↑</span></span>
-              <button class="cf-btn" id="cfb-prev_fech" onclick="event.stopPropagation();cfOpen('prev_fech',this)">▼</button></div>
-            </th>
+            <th onclick="sortHist('saida')" style="cursor:pointer" title="Ordenar">Saída <span id="sh-saida">↕</span></th>
+            <th>Dia</th>
+            <th onclick="sortHist('frota')" style="cursor:pointer" title="Ordenar">Frota <span id="sh-frota">↕</span></th>
+            <th onclick="sortHist('ocup')" style="cursor:pointer" title="Ordenar">Status Carregamento <span id="sh-ocup">↕</span></th>
+            <th onclick="sortHist('prev_fech')" style="cursor:pointer;color:#00B200" title="Ordenar — itens com data aparecem primeiro">Prev. Fechamento <span id="sh-prev_fech">↑</span></th>
             <th>Obs.</th>
-            <th onclick="sortHist('data_crit')" style="cursor:pointer">
-              <div class="col-filter-wrap"><span class="col-label">Data Crítica <span id="sh-data_crit">↕</span></span>
-              <button class="cf-btn" id="cfb-data_crit" onclick="event.stopPropagation();cfOpen('data_crit',this)">▼</button></div>
-            </th>
-            <th><div class="col-filter-wrap"><span class="col-label">Prioridade</span>
-              <button class="cf-btn" id="cfb-prioridade" onclick="cfOpen('prioridade',this)">▼</button></div></th>
-            <th style="width:90px">Ações</th>
+          <th onclick="sortHist('data_crit')" style="cursor:pointer" title="Ordenar">Data Crítica <span id="sh-data_crit">↕</span></th>
+          <th>Prioridade</th>
+          <th style="width:90px">Ações</th>
           </tr>
         </thead>
         <tbody id="tbody-hist"></tbody>
@@ -1830,18 +1801,8 @@
 </div><!-- /app-layout -->
 
 <!-- FILTRO COLUNA -->
-<div class="cf-dropdown" id="cf-dropdown">
-  <div class="cf-search"><input type="text" id="cf-search-input" placeholder="Buscar..." oninput="cfSearchFilter()"></div>
-  <div class="cf-actions">
-    <button onclick="cfSelectAll()">Marcar todos</button>
-    <button onclick="cfClearAll()">Desmarcar todos</button>
-  </div>
-  <div class="cf-list" id="cf-list"></div>
-  <div class="cf-footer">
-    <button class="cf-cancel" onclick="cfClose()">Cancelar</button>
-    <button class="cf-ok" onclick="cfApply()">OK</button>
-  </div>
-</div>
+<div class="cf-dropdown" id="cf-dropdown"><div class="cf-search"><input type="text" id="cf-search-input" placeholder="Buscar..." oninput="cfSearchFilter()"></div><div class="cf-actions"><button onclick="cfSelectAll()">Marcar todos</button><button onclick="cfClearAll()">Desmarcar todos</button></div><div class="cf-list" id="cf-list"></div><div class="cf-footer"><button class="cf-cancel" onclick="cfClose()">Cancelar</button><button class="cf-ok" onclick="cfApply()">OK</button></div></div>
+
 <div class="toast" id="toast"></div>
 <div id="sync-status" style="display:none;position:fixed;bottom:70px;right:24px;z-index:9000;background:#1a1a2e;color:#94a3b8;font-size:12px;font-family:Poppins,sans-serif;padding:8px 14px;border-radius:8px;border:1px solid #2d2d4e"></div>
 
@@ -1849,219 +1810,130 @@
 // ============================================================
 // CONFIGURAÇÃO DO GOOGLE SHEETS (preencha após implantar o Apps Script)
 // ============================================================
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztb45wzjjBY24Ep_GJysK6DyjeEOSf_zMa0xREBJjZomBmYRSL4SlsOTZ9JOOJdY_1Pg/exec';
-// ============================================================
-// FIREBASE REALTIME DATABASE — substitui Google Sheets
-// URL: https://tragetta-opl-default-rtdb.firebaseio.com
-// ============================================================
+// ═══════════════════════════════════════════════
+// FIREBASE — substitui Google Sheets
+// ═══════════════════════════════════════════════
+var USAR_SHEETS = false;
+var APPS_SCRIPT_URL = '';
 var FB_URL = 'https://tragetta-opl-default-rtdb.firebaseio.com/programados';
+var FB_ALERT_URL = 'https://tragetta-opl-default-rtdb.firebaseio.com/alertas';
 
-// ── Converter registro interno → objeto Firebase ──
+// Converte registro interno → Firebase
 function recToFb(r) {
   return {
-    id:         String(r._id || ''),
-    gerado:     r.gerado     || '',
-    origem:     r.origem     || 'GRU',
-    destino:    r.destino    || '',
-    regiao:     r.regiao     || '',
-    composicao: r.composicao || '',
-    saida:      r.saida      || '',
-    dia:        r.dia        || '',
-    tipo:       r.tipo       || '',
-    frota:      r.frota      || '',
-    ocup:       Math.round((r.ocup || 0) * 100),
-    prev_fech:  r.prev_fech  || '',
-    obs:        r.obs        || '',
-    tipo_prior: r.tipo_prior || '',
-    data_crit:  r.data_crit  || ''
+    id: String(r._id||''), gerado: r.gerado||'', origem: r.origem||'GRU',
+    destino: r.destino||'', regiao: r.regiao||'', composicao: r.composicao||'',
+    saida: r.saida||'', dia: r.dia||'', tipo: r.tipo||'', frota: r.frota||'',
+    ocup: Math.round((r.ocup||0)*100), prev_fech: r.prev_fech||'',
+    obs: r.obs||'', tipo_prior: r.tipo_prior||'', data_crit: r.data_crit||''
   };
 }
-
-// ── Converter objeto Firebase → registro interno ──
-function fbToRec(obj) {
+// Converte Firebase → registro interno
+function fbToRec(o) {
   return {
-    _id:        parseInt(obj.id) || 0,
-    gerado:     obj.gerado     || '',
-    origem:     obj.origem     || 'GRU',
-    destino:    obj.destino    || '',
-    regiao:     obj.regiao     || '',
-    composicao: obj.composicao || '',
-    saida:      obj.saida      || '',
-    dia:        obj.dia        || '',
-    tipo:       obj.tipo       || '',
-    frota:      obj.frota      || '',
-    ocup:       (parseInt(obj.ocup) || 0) / 100,
-    prev_fech:  obj.prev_fech  || '',
-    obs:        obj.obs        || '',
-    tipo_prior: obj.tipo_prior || '',
-    data_crit:  obj.data_crit  || ''
+    _id: parseInt(o.id)||0, gerado: o.gerado||'', origem: o.origem||'GRU',
+    destino: o.destino||'', regiao: o.regiao||'', composicao: o.composicao||'',
+    saida: o.saida||'', dia: o.dia||'', tipo: o.tipo||'', frota: o.frota||'',
+    ocup: (parseInt(o.ocup)||0)/100, prev_fech: o.prev_fech||'',
+    obs: o.obs||'', tipo_prior: o.tipo_prior||'', data_crit: o.data_crit||''
   };
 }
 
-// ── Salvar um registro no Firebase ──
-async function fbSave(record) {
-  var key = 'id_' + record._id;
+// Salvar um registro
+async function fbSave(r) {
+  if (!r || !r._id) return;
   try {
-    await fetch(FB_URL + '/' + key + '.json', {
-      method: 'PUT',
-      body: JSON.stringify(recToFb(record))
-    });
-  } catch(e) {
-    console.warn('Firebase save error:', e.message);
-  }
+    await fetch(FB_URL + '/id_' + r._id + '.json', {method:'PUT', body:JSON.stringify(recToFb(r))});
+  } catch(e) { console.warn('fbSave:', e); }
 }
-
-// ── Deletar um registro do Firebase ──
-async function fbDelete(id) {
-  var key = 'id_' + id;
-  try {
-    await fetch(FB_URL + '/' + key + '.json', { method: 'DELETE' });
-  } catch(e) {
-    console.warn('Firebase delete error:', e.message);
-  }
-}
-
-// ── Buscar todos os registros do Firebase ──
-async function fbGetAll() {
-  var res = await fetch(FB_URL + '.json');
-  var data = await res.json();
-  if (!data) return [];
-  return Object.values(data).map(fbToRec).filter(function(r){ return r._id > 0; });
-}
-
-// ── Salvar / Deletar (wrappers usados pelo sistema) ──
-function saveData(record) {
-  saveLocal();
-  if (record) fbSave(record).catch(function(){});
-}
-
+// Deletar um registro
 function deleteFromSheets(id) {
-  fbDelete(id).catch(function(){});
+  fetch(FB_URL + '/id_' + id + '.json', {method:'DELETE'}).catch(function(){});
+}
+// Buscar todos os registros
+async function fbGetAll() {
+  try {
+    var res = await fetch(FB_URL + '.json');
+    var data = await res.json();
+    if (!data) return [];
+    return Object.values(data).map(fbToRec).filter(function(r){ return r._id > 0; });
+  } catch(e) { return []; }
 }
 
-// ── loadData: carrega do Firebase + inicia escuta em tempo real ──
+// Carregar dados do Firebase
 function loadData() {
   loadLocal();
   renderProg();
   renderHist();
-
-  showSyncStatus('&#8635; Conectando...');
-
-  fbGetAll()
-    .then(function(records) {
-      if (records && records.length > 0) {
-        // Firebase tem dados — usar como fonte da verdade
-        var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
-        progData = deduplicar(filtered);
-        nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
-        saveLocal();
-        renderProg();
-        renderHist();
-        hideSyncStatus();
-        showToast('✅ ' + progData.length + ' registros carregados!', 'success');
-      } else if (progData.length > 0) {
-        // Firebase vazio mas tem dados locais — oferecer envio
-        hideSyncStatus();
-        showToast('⚠️ Firebase vazio — clique em "Salvar Tudo" para sincronizar', 'info');
-      } else {
-        hideSyncStatus();
-      }
-      iniciarEscutaRealtime();
-    })
-    .catch(function(e) {
-      hideSyncStatus();
-      showToast('⚠️ Firebase offline — usando cache local', 'info');
-    });
+  showSyncStatus('&#8635; Conectando ao Firebase...');
+  fbGetAll().then(function(records) {
+    hideSyncStatus();
+    if (records && records.length > 0) {
+      var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+      progData = deduplicar(filtered);
+      nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
+      saveLocal(); renderProg(); renderHist();
+      showToast('✅ ' + progData.length + ' registros carregados!', 'success');
+    } else if (progData.length > 0) {
+      showToast('💾 Dados locais — use "Salvar Tudo" para sincronizar', 'info');
+    }
+    iniciarEscutaRealtime();
+  }).catch(function() {
+    hideSyncStatus();
+    showToast('⚠️ Firebase offline — usando cache local', 'info');
+  });
 }
 
-// ── Escuta em tempo real via Firebase Streaming (SSE) ──
+// Escuta em tempo real (streaming)
 var _fbStream = null;
-var _fbReconnectTimer = null;
-
 function iniciarEscutaRealtime() {
-  if (_fbStream) _fbStream.close();
-
+  if (_fbStream) { _fbStream.close(); _fbStream = null; }
   try {
     _fbStream = new EventSource(FB_URL + '.json?stream');
-
     _fbStream.addEventListener('put', function(e) {
       try {
         var msg = JSON.parse(e.data);
-        if (!msg || !msg.data) return;
-
-        // Se mudou o nó raiz (load inicial)
+        if (!msg || msg.data === undefined) return;
         if (msg.path === '/') {
-          var todos = Object.values(msg.data).map(fbToRec).filter(function(r){ return r._id > 0; });
+          if (!msg.data) return;
+          var todos = Object.values(msg.data).map(fbToRec).filter(function(r){ return r._id>0; });
           var filtered = todos.filter(function(r){ return !_deletedIds.has(String(r._id)); });
-          var hash = filtered.map(function(r){ return r._id + ':' + r.gerado; }).join('|');
-          var hashLocal = progData.map(function(r){ return r._id + ':' + r.gerado; }).join('|');
-          if (hash === hashLocal) return;
           progData = deduplicar(filtered);
           nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
-          saveLocal(); renderProg(); renderHist();
-          return;
+          saveLocal(); renderProg(); renderHist(); return;
         }
-
-        // Mudança num registro específico
-        var keyMatch = msg.path.match(/^\/id_(\d+)$/);
-        if (!keyMatch) return;
-        var changedId = parseInt(keyMatch[1]);
-
-        if (!msg.data) {
-          // Registro deletado por outro usuário
-          if (!_deletedIds.has(String(changedId))) {
-            progData = progData.filter(function(r){ return r._id !== changedId; });
+        var km = msg.path.match(/^\/id_(\d+)$/);
+        if (!km) return;
+        var cid = parseInt(km[1]);
+        if (msg.data === null) {
+          if (!_deletedIds.has(String(cid))) {
+            progData = progData.filter(function(r){ return r._id !== cid; });
             saveLocal(); renderProg(); renderHist();
-            showToast('🔄 Registro ' + changedId + ' removido por outro usuário', 'info');
           }
         } else {
-          // Registro criado/atualizado por outro usuário
-          if (_deletedIds.has(String(changedId))) return;
+          if (_deletedIds.has(String(cid))) return;
           var novo = fbToRec(msg.data);
-          var idx = progData.findIndex(function(r){ return r._id === changedId; });
-          if (idx >= 0) {
-            // Só atualiza se realmente mudou
-            var antigo = JSON.stringify(progData[idx]);
-            var novoStr = JSON.stringify(novo);
-            if (antigo === novoStr) return;
-            progData[idx] = novo;
-          } else {
-            progData.push(novo);
-            if (novo._id >= nextId) nextId = novo._id + 1;
-          }
+          var ix = progData.findIndex(function(r){ return r._id === cid; });
+          if (ix >= 0) progData[ix] = novo;
+          else { progData.push(novo); if (novo._id >= nextId) nextId = novo._id + 1; }
           saveLocal(); renderProg(); renderHist();
-          showToast('🔄 Atualizado: ' + (novo.destino || 'registro'), 'info');
         }
-      } catch(err) { console.warn('Stream parse error:', err); }
+      } catch(err) { console.warn('stream:', err); }
     });
-
-    _fbStream.addEventListener('patch', function(e) {
-      // patch = atualização parcial — recarregar tudo
-      fbGetAll().then(function(records) {
-        if (!records) return;
-        var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
-        progData = deduplicar(filtered);
-        saveLocal(); renderProg(); renderHist();
-      });
-    });
-
     _fbStream.onerror = function() {
-      _fbStream.close();
-      // Reconectar em 5 segundos
-      clearTimeout(_fbReconnectTimer);
-      _fbReconnectTimer = setTimeout(iniciarEscutaRealtime, 5000);
+      _fbStream.close(); _fbStream = null;
+      setTimeout(iniciarEscutaRealtime, 5000);
     };
-
   } catch(e) {
-    // SSE não suportado — fallback para polling a cada 15s
+    // Fallback polling 15s
     setInterval(function() {
-      fbGetAll().then(function(records) {
-        if (!records || !records.length) return;
-        var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
-        var hash = filtered.map(function(r){ return r._id+':'+r.gerado; }).join('|');
-        var hashLocal = progData.map(function(r){ return r._id+':'+r.gerado; }).join('|');
-        if (hash === hashLocal) return;
-        progData = deduplicar(filtered);
+      fbGetAll().then(function(recs) {
+        if (!recs||!recs.length) return;
+        var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+        var h1 = f.map(function(r){ return r._id+':'+r.gerado; }).join('|');
+        var h2 = progData.map(function(r){ return r._id+':'+r.gerado; }).join('|');
+        if (h1===h2) return;
+        progData = deduplicar(f);
         nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
         saveLocal(); renderProg(); renderHist();
       });
@@ -2069,54 +1941,66 @@ function iniciarEscutaRealtime() {
   }
 }
 
-// ── Atualizar manualmente (botão ⟳) ──
+// Sincronizar manualmente
 function syncManual() {
   showSyncStatus('&#8635; Buscando dados...');
-  fbGetAll()
-    .then(function(records) {
-      if (records && records.length > 0) {
-        var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
-        progData = deduplicar(filtered);
-        nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
-        saveLocal();
-      }
-      renderProg(); renderHist(); hideSyncStatus();
-      showToast('&#10003; ' + progData.length + ' registros atualizados!', 'success');
-    })
-    .catch(function() {
-      hideSyncStatus();
-      showToast('&#9888; Firebase offline', 'info');
-    });
-}
-
-// ── Salvar tudo no Firebase ──
-async function salvarTudoSheets() {
-  var registros = progData.filter(function(r){ return r.destino; }); // enviar todos que têm destino
-  if (!registros.length) { showToast('Nenhum dado para salvar', 'info'); return; }
-  showSyncStatus('&#8635; Salvando ' + registros.length + ' registros...');
-  try {
-    for (var i = 0; i < registros.length; i++) {
-      await fbSave(registros[i]);
+  fbGetAll().then(function(recs) {
+    if (recs && recs.length > 0) {
+      var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+      progData = deduplicar(f);
+      nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
+      saveLocal();
     }
-    hideSyncStatus();
-    showToast('✅ ' + registros.length + ' registros salvos!', 'success');
-  } catch(e) {
-    hideSyncStatus();
-    showToast('❌ Erro: ' + e.message, 'error');
-  }
+    renderProg(); renderHist(); hideSyncStatus();
+    showToast('✅ ' + progData.length + ' registros atualizados!', 'success');
+  }).catch(function() { hideSyncStatus(); showToast('⚠️ Firebase offline', 'info'); });
 }
 
-// IDs deletados localmente
+// Salvar tudo no Firebase
+async function salvarTudoFirebase() {
+  var lista = progData.filter(function(r){ return r.destino; });
+  if (!lista.length) { showToast('Nenhum dado para salvar', 'info'); return; }
+  showSyncStatus('&#8635; Salvando ' + lista.length + ' registros...');
+  try {
+    for (var i = 0; i < lista.length; i++) { await fbSave(lista[i]); }
+    hideSyncStatus();
+    showToast('✅ ' + lista.length + ' registros salvos!', 'success');
+  } catch(e) { hideSyncStatus(); showToast('❌ Erro: ' + e.message, 'error'); }
+}
+
+// saveData — salva local + Firebase
+function saveData(record) {
+  saveLocal();
+  if (record) fbSave(record);
+}
+
+// Alertas via Firebase
+function sheetsGetAlertas(callback) {
+  fetch(FB_ALERT_URL + '.json')
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (!data) { callback([]); return; }
+      callback(Object.values(data).sort(function(a,b){ return (b.ts||'').localeCompare(a.ts||''); }).slice(0,20));
+    })
+    .catch(function(){ callback([]); });
+}
+function enviarAlertaViaGet(de, mensagem) {
+  var id = String(Date.now()), ts = new Date().toLocaleString('pt-BR');
+  fetch(FB_ALERT_URL + '/' + id + '.json', {method:'PUT', body:JSON.stringify({id,ts,de,msg:mensagem})}).catch(function(){});
+  if (de === 'planejamento') showPlatAlert(mensagem, ts);
+  if (de === 'plataforma') addMsgPlataforma(mensagem, ts);
+}
+
+// IDs deletados (nunca voltam no sync)
 var _deletedIds = new Set(JSON.parse(localStorage.getItem('prog_deleted_v4') || '[]'));
 
 const INITIAL_DATA = {"grade": [{"origem": "GRU", "destino": "AJU", "regiao": "NORDESTE", "composicao": "AJU", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "AJU", "regiao": "NORDESTE", "composicao": "AJU", "saida": "17:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "AJU", "regiao": "NORDESTE", "composicao": "AJU", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "09:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "09:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "09:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "09:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "09:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "09:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "16:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "16:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "16:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "16:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "16:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "16:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "CGR", "regiao": "NORTE CO", "composicao": "CGR,MSI,TLG", "saida": "14:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "CGR", "regiao": "NORTE CO", "composicao": "CGR,MSI,TLG", "saida": "14:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "CGR", "regiao": "NORTE CO", "composicao": "CGR,MSI,TLG", "saida": "14:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "NORTE CO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "06:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "NORTE CO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "06:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "NORTE CO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "06:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "NORTE CO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "06:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "NORTE CO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "06:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "15:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "15:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "15:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "15:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "JDF", "regiao": "SUDESTE", "composicao": "JDF", "saida": "02:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "JDF", "regiao": "SUDESTE", "composicao": "JDF", "saida": "02:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "JDF", "regiao": "SUDESTE", "composicao": "JDF", "saida": "02:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "JDF", "regiao": "SUDESTE", "composicao": "JDF", "saida": "02:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "11:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "11:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "11:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "11:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "22:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ", "saida": "17:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ", "saida": "17:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ", "saida": "17:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "RAO", "regiao": "SÃO PAULO", "composicao": "RAO", "saida": "14:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "RAO", "regiao": "SÃO PAULO", "composicao": "RAO", "saida": "14:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "RAO", "regiao": "SÃO PAULO", "composicao": "RAO", "saida": "14:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "06:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "06:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "06:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "06:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "06:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "17:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "17:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "17:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "17:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "06:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "06:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "06:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "06:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "11:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SLZ", "regiao": "NORTE CO", "composicao": "SLZ", "saida": "14:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SLZ", "regiao": "NORTE CO", "composicao": "SLZ", "saida": "14:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "SLZ", "regiao": "NORTE CO", "composicao": "SLZ", "saida": "14:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Domingo", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Quinta-feira", "freq": 1}, {"origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Sábado", "freq": 1}, {"origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Terça-feira", "freq": 1}, {"origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Quarta-feira", "freq": 1}, {"origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Segunda-feira", "freq": 1}, {"origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Sexta-feira", "freq": 1}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha"}, {"origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Segunda-feira", "tipo": "Carro da Malha"}], "prog": [{"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC", "saida": "06:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "1° 2406 100%  2° 2360 100%", "ocup": 1.0, "prev_fech": "11/04/2026 17:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT, JPA", "saida": "17:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "1° 2418 100%  2° 2416 100%", "ocup": 1.0, "prev_fech": "11/04/2026 17:00", "obs": "JPA X NAT", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "BSB", "regiao": "", "composicao": "BSB", "saida": "19:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "1580", "ocup": 1.0, "prev_fech": "11/04/2026 17:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "2380", "ocup": 1.0, "prev_fech": "11/04/2026 17:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:13:13", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "1930", "ocup": 1.0, "prev_fech": "11/04/2026 17:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:14:38", "origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Sábado", "tipo": "Carro Extra", "frota": "2180", "ocup": 1.0, "prev_fech": "11/04/2026 17:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "TWY5B78", "ocup": 1.0, "prev_fech": "11/04/2026 17:00", "obs": "CV. OLI3D61 3.0K", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "9924", "ocup": 1.0, "prev_fech": "11/04/2026 17:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "MAO", "regiao": "NORTE CO", "composicao": "MAO, BVB", "saida": "09:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "9774", "ocup": 0.71, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "9684", "ocup": 0.51, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:22:57", "origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "4037", "ocup": 0.51, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:25:52", "origem": "GRU", "destino": "CAU", "regiao": "NORDESTE", "composicao": "CAU", "saida": "17:00", "dia": "Sábado", "tipo": "Carro Extra", "frota": "FNV0H93", "ocup": 0.51, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC", "saida": "17:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "2030", "ocup": 0.31, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:24:41", "origem": "GRU", "destino": "SLZ", "regiao": "NORTE CO", "composicao": "SLZ", "saida": "14:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "9561", "ocup": 0.31, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 16:28:08", "origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Sábado", "tipo": "Carro Extra", "frota": "9558", "ocup": 0.3, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "SWT3B15", "ocup": 0.3, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Domingo", "tipo": "Carro da Malha", "frota": "IVC3400", "ocup": 0.3, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:23:39", "origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "22:00", "dia": "Domingo", "tipo": "Carro Extra", "frota": "1078", "ocup": 0.21, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:26:16", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Domingo", "tipo": "Carro Extra", "frota": "1065", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "5704", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 16:26:44", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Domingo", "tipo": "Carro Extra", "frota": "9608", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:26:16", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Domingo", "tipo": "Carro Extra", "frota": "1776", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "9558", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "1° 2338 0%  2° 2276 0%", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "3643"}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "884", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:23:15", "origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Domingo", "tipo": "Carro Extra", "frota": "1688", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:24:01", "origem": "GRU", "destino": "AJU", "regiao": "NORDESTE", "composicao": "AJU", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "QJQ6J80", "ocup": 0.0, "prev_fech": "", "obs": "CV. QJF-3C73 3.0K", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:24:59", "origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "9747", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:25:20", "origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "9920", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 16:25:40", "origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Domingo", "tipo": "Carro Extra", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "CPQ", "regiao": "NORTE CO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "06:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "16:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "3644"}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:11:30", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Sábado", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": ""}, {"gerado": "11/04/2026 14:26:30", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "9594", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "3645"}, {"gerado": "14/04/2026 07:38:30", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro Extra", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "3646"}], "hist": [{"gerado": "GERADO EM", "origem": "ORIGEM", "destino": "DESTINO", "regiao": "REGIÃO", "composicao": "COMPOSIÇÃO", "saida": "SAÍDA", "dia": "DIA DA SEMANA", "tipo": "TIPO", "frota": "Frota", "ocup": 0, "prev_fech": "Data Previsão de Fechamento", "obs": "Observação", "tipo_prior": "Tipo de Prioridade", "data_crit": "Data Crítica", "id": "ID"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "2154", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ,AJU", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "9898", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "MCZ/AJU", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "CGR", "regiao": "NORTE CO", "composicao": "CGR,MSI,TLG", "saida": "14:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "9861", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:59:56", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "TER6C79", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "CV.TEN6G49 - 3,6K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 16:01:05", "origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "9954", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "9225", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "328", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "2120", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "1080", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "2008", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "2122", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "1804", "ocup": 0.71, "prev_fech": "06/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "1°2358 0% 2°2340 100%", "ocup": 0.5, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:53:05", "origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "302", "ocup": 0.5, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "329", "ocup": 0.3, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM", "saida": "16:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "2208", "ocup": 0.3, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "4041", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "MAO", "regiao": "NORTE CO", "composicao": "MAO, BVB, AMI", "saida": "16:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "2186", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:49:22", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "EZU9J08", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "PNZ", "regiao": "NORDESTE", "composicao": "PNZ", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "9925", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "4118", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "343", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:55:07", "origem": "GRU", "destino": "CAU", "regiao": "NORDESTE", "composicao": "CAU", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "9633", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "AJU", "regiao": "NORDESTE", "composicao": "AJU", "saida": "17:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "SLZ", "regiao": "NORTE CO", "composicao": "SLZ", "saida": "14:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "RAO", "regiao": "SÃO PAULO", "composicao": "RAO", "saida": "14:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "JDF", "regiao": "SUDESTE", "composicao": "JDF", "saida": "02:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:46:37", "origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "06/04/2026 15:51:30", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Segunda-feira", "tipo": "Carro Extra", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "CAU", "regiao": "NORDESTE", "composicao": "CAU", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "304", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "4111", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "9537", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "4118", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "1822", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "9262", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB", "saida": "19:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "9745", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "1846", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "9821", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX", "saida": "22:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "TEQ7C29", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CV.QPH4180 - 3,6K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:11:19", "origem": "GRU", "destino": "BSB", "regiao": "SÃO PAULO", "composicao": "BSB", "saida": "19:00", "dia": "Terça-feira", "tipo": "Carro Extra", "frota": "9737", "ocup": 0.71, "prev_fech": "07/04/2026 21:00", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:21:34", "origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro Extra", "frota": "FCN7I38", "ocup": 0.7, "prev_fech": "", "obs": "CV.QRHBI78 - 3,0K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:22:27", "origem": "GRU", "destino": "JDF", "regiao": "SUDESTE", "composicao": "JDF", "saida": "02:00", "dia": "Terça-feira", "tipo": "Carro Extra", "frota": "EZU9J02", "ocup": 0.7, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:17:05", "origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro Extra", "frota": "277", "ocup": 0.4, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "279", "ocup": 0.3, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ,AJU", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "GDY6C48", "ocup": 0.2, "prev_fech": "", "obs": "MCZ/AJU", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "1962", "ocup": 0.2, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "9502", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "TMJ8I06", "ocup": 0.0, "prev_fech": "", "obs": "CV,GJT3I38 - 3,0K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "GAW5704", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "MAO", "regiao": "NORTE CO", "composicao": "MAO, BVB, AMI", "saida": "16:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "9633", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "QIV7D43", "ocup": 0.0, "prev_fech": "", "obs": "CV.MDB8G22 - 3,0K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:14:45", "origem": "GRU", "destino": "CGR", "regiao": "NORTE CO", "composicao": "CGR,MSI,TLG", "saida": "14:00", "dia": "Quarta-feira", "tipo": "Carro Extra", "frota": "1878", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "CPQ", "regiao": "NORTE CO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "06:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "09:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "06:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "11:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "07/04/2026 16:04:16", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "15:00", "dia": "Terça-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "06:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "9883", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "2266", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "FJP6J18", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SLZ", "regiao": "NORTE CO", "composicao": "SLZ,CPQ", "saida": "14:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "9764", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "SLZ VIA CPQ", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "?", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "BSB", "regiao": "SÃO PAULO", "composicao": "BSB,CPQ", "saida": "19:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "9515", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "BSB VIA CPQ", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "1646", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "EZU9I44", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX", "saida": "22:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "9855", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "VIX/SRR", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "876", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:43:23", "origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB", "saida": "19:00", "dia": "Quarta-feira", "tipo": "Carro Extra", "frota": "1112", "ocup": 0.71, "prev_fech": "08/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL,CPQ", "saida": "16:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "2356", "ocup": 0.7, "prev_fech": "", "obs": "BEL VIA CPQ", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "MAO", "regiao": "NORTE CO", "composicao": "MAO, BVB, AMI", "saida": "16:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "9633", "ocup": 0.7, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "9560", "ocup": 0.5, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "279", "ocup": 0.4, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ,AJU", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "4100", "ocup": 0.2, "prev_fech": "", "obs": "MCZ/AJU", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "343", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "9651", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "1°2374 0%  2°? VEM DE JLL", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "9618", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "2256", "ocup": 0.0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "AJU", "regiao": "NORDESTE", "composicao": "AJU", "saida": "17:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "CPQ", "regiao": "NORTE CO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "06:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "CGR", "regiao": "NORTE CO", "composicao": "CGR,MSI,TLG", "saida": "14:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "06:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "RAO", "regiao": "SÃO PAULO", "composicao": "RAO", "saida": "14:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "JDF", "regiao": "SUDESTE", "composicao": "JDF", "saida": "02:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "11:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "08/04/2026 15:40:05", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "15:00", "dia": "Quarta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "5901", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "1°2374 100% 2°2364 0%", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "4100", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "9784", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "1852", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB", "saida": "19:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "2256", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "1764", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "287", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:22:15", "origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "343", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 21:10:08", "origem": "GRU", "destino": "SLZ/CPQ", "regiao": "NORTE CO", "composicao": "SLZ - CPQ", "saida": "14:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9679", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:25:33", "origem": "GRU", "destino": "AJU", "regiao": "NORDESTE", "composicao": "AJU", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "OQR6E40", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CV.RFF0I09 - 3,6K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "TYU3H99", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CV.TYU0G71 - 3,0K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "FCB4722", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CV.CUD3929 - 3,6K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 21:44:17", "origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Quinta-feira", "tipo": "Carro Extra", "frota": "2124", "ocup": 1.0, "prev_fech": "09/04/2026 21H", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM", "saida": "16:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "EOF9012", "ocup": 0.31, "prev_fech": "", "obs": "CV. TKI8163 $3.6K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "SID6D31", "ocup": 0.31, "prev_fech": "", "obs": "CV.OQS1574 - 3,6K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "TCR9B81", "ocup": 0.31, "prev_fech": "", "obs": "CV.TDB0I71 - 3,6K", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:28:01", "origem": "GRU", "destino": "JDF", "regiao": "SUDESTE", "composicao": "JDF", "saida": "02:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "280", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "MAO/GYN", "regiao": "NORTE CO", "composicao": "MAO/GYN", "saida": "16:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "352", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": " CAU", "regiao": "NORDESTE", "composicao": "CAU", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "FNV0H93", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "9695", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ", "saida": "17:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "9546", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "2168", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 21:14:33", "origem": "GRU", "destino": "BSB", "regiao": "NORTE CO", "composicao": "BSB", "saida": "19:00", "dia": "Sexta-feira", "tipo": "Carro Extra", "frota": "9242", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 21:15:46", "origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro Extra", "frota": "9781", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 21:16:21", "origem": "GRU", "destino": "CGR", "regiao": "NORTE CO", "composicao": "CGR,MSI,TLG", "saida": "14:00", "dia": "Sexta-feira", "tipo": "Carro Extra", "frota": "9656", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 21:17:10", "origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, JDO", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro Extra", "frota": "9887", "ocup": 0.3, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 21:11:41", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC", "saida": "06:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "2118", "ocup": 0.29, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "1648", "ocup": 0.1, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "FNR9B82", "ocup": 0.1, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "CPQ", "regiao": "NORTE CO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "06:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "1700", "ocup": 0.1, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "9566", "ocup": 0.1, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "2094", "ocup": 0.1, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "9778", "ocup": 0.1, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "15:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "1133", "ocup": 0.1, "prev_fech": "", "obs": "CONVENCIONAL", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "06:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "09/04/2026 16:19:10", "origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "11:00", "dia": "Quinta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC - Boticario", "saida": "06:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "RTC6J09", "ocup": 1.0, "prev_fech": "10/04/2026 21:00", "obs": "CV.HJF7025", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "1º 2346 100%  2° 2420 100%", "ocup": 1.0, "prev_fech": "10/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9887", "ocup": 1.0, "prev_fech": "10/04/2026 17:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "MCZ/AJU", "regiao": "NORDESTE", "composicao": "MCZ/AJU", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9546", "ocup": 1.0, "prev_fech": "10/04/2026 21H", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "EZU9I30", "ocup": 1.0, "prev_fech": "10/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9576", "ocup": 1.0, "prev_fech": "10/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9781", "ocup": 1.0, "prev_fech": "10/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "1758", "ocup": 1.0, "prev_fech": "10/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "2120", "ocup": 1.0, "prev_fech": "10/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT - Boticario", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "5103", "ocup": 1.0, "prev_fech": "10/04/2026 21:00", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "CAU", "regiao": "NORDESTE", "composicao": "CAU", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "FNV0H93", "ocup": 0.73, "prev_fech": "", "obs": "2026-04-06 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA - Boticario", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9955", "ocup": 0.72, "prev_fech": "", "obs": "2026-04-07 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": " MTN, MTS", "saida": "15:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "4037", "ocup": 0.7, "prev_fech": "", "obs": "2026-04-08 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:26:55", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA - CV. PUS9540", "saida": "06:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "SIP3J77", "ocup": 0.41, "prev_fech": "", "obs": "2026-04-09 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Segunda-feira", "tipo": "Carro da Malha", "frota": "2168", "ocup": 0.41, "prev_fech": "", "obs": "2026-04-09 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "FEC", "regiao": "NORDESTE", "composicao": "BAR, FEC, PNZ, ENP, JDO", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9924", "ocup": 0.41, "prev_fech": "", "obs": "2026-04-09 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "MCZ", "regiao": "NORDESTE", "composicao": "MCZ", "saida": "17:00", "dia": "Sabado", "tipo": "Carro da Malha", "frota": "9747", "ocup": 0.41, "prev_fech": "", "obs": "2026-04-09 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "VDC", "regiao": "NORDESTE", "composicao": "VDC", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9561", "ocup": 0.41, "prev_fech": "", "obs": "2026-04-09 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE - CV.OLI3D61", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "TWY5B78", "ocup": 0.41, "prev_fech": "", "obs": "2026-04-09 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "06:00", "dia": "Sabado", "tipo": "Carro da Malha", "frota": "9550", "ocup": 0.41, "prev_fech": "", "obs": "2026-04-09 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "CGR", "regiao": "NORTE CO", "composicao": "CGR,MSI,TLG", "saida": "14:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9656", "ocup": 0.41, "prev_fech": "", "obs": "2026-04-09 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC", "saida": "06:00", "dia": "Sabado", "tipo": "Carro da Malha", "frota": "2030", "ocup": 0.29, "prev_fech": "", "obs": "2026-04-10 00:00:00", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "1644", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "PVH", "regiao": "NORTE CO", "composicao": "PVH, RBR - JPR", "saida": "06:00", "dia": "Sabado", "tipo": "Carro da Malha", "frota": "SWT3B15", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "GYN", "regiao": "NORTE CO", "composicao": "GYN", "saida": "14:00", "dia": "Sabado", "tipo": "Carro da Malha", "frota": "884", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "00:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "7035", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "05:00", "dia": "Sabado", "tipo": "Carro da Malha", "frota": "1213", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "04:00", "dia": "Sabado", "tipo": "Carro da Malha", "frota": "9745", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "FLN", "regiao": "SUL", "composicao": "FLN, CCM", "saida": "04:00", "dia": "Sabado", "tipo": "Carro da Malha", "frota": "1846", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "JLL", "regiao": "SUL", "composicao": "BNU, JLL, XAP, JCB", "saida": "04:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "EHV0E48", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "POA", "regiao": "SUL", "composicao": "PET, POA, SCZ", "saida": "09:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "9538", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "LDO", "regiao": "SUL", "composicao": "LDO, MGF, UMU", "saida": "11:00", "dia": "Sabado", "tipo": "Carro da Malha", "frota": "1078", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "06:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 16:49:06", "origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL VIA CPQ", "saida": "09:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "2370", "ocup": 0.1, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "AJU", "regiao": "NORDESTE", "composicao": "AJU", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "FOR", "regiao": "NORDESTE", "composicao": "FOR", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "JPA", "regiao": "NORDESTE", "composicao": "JPA", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "NAT", "regiao": "NORDESTE", "composicao": "NAT", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "REC", "regiao": "NORDESTE", "composicao": "REC, CAU", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "SSA", "regiao": "NORDESTE", "composicao": "SSA", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "THE", "regiao": "NORDESTE", "composicao": "THE", "saida": "17:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "09:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "CGR", "regiao": "NORTE CO", "composicao": "CGR,MSI,TLG", "saida": "14:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "SLZ", "regiao": "NORTE CO", "composicao": "SLZ", "saida": "14:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "CGB", "regiao": "NORTE CO", "composicao": "CGB, MTN, MTS", "saida": "15:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "BEL", "regiao": "NORTE CO", "composicao": "BEL, MCP, STM, MAO, BVB, AMI", "saida": "16:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "00:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "06:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "SSZ", "regiao": "SÃO PAULO", "composicao": "SSZ", "saida": "09:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "12:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "RAO", "regiao": "SÃO PAULO", "composicao": "RAO", "saida": "14:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "SAO", "regiao": "SÃO PAULO", "composicao": "SAO", "saida": "15:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "CPQ", "regiao": "SÃO PAULO", "composicao": "RAO, PMW, JPR, CPQ, BAU, SJP, SCA, BGI, ITP, SOD", "saida": "18:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "JDI", "regiao": "SÃO PAULO", "composicao": "JDI, PPB, BSB", "saida": "19:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "SJK", "regiao": "SÃO PAULO", "composicao": "SJK", "saida": "23:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "JDF", "regiao": "SUDESTE", "composicao": "JDF", "saida": "02:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "06:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "RSD", "regiao": "SUDESTE", "composicao": "RSD", "saida": "06:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "PPY", "regiao": "SUDESTE", "composicao": "PPY", "saida": "14:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "BHZ", "regiao": "SUDESTE", "composicao": "BHZ,GVR,  TFL, MOC, IPN, DIV", "saida": "15:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "RIO", "regiao": "SUDESTE", "composicao": "RIO, CAW", "saida": "22:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "SRR", "regiao": "SUDESTE", "composicao": "SRR, VIX, SR2", "saida": "22:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}, {"gerado": "10/04/2026 19:09:11", "origem": "GRU", "destino": "CWB", "regiao": "SUL", "composicao": "CAC, CWB, IGU, FBE, PGZ, PFB, RIA, CXJ. ", "saida": "15:00", "dia": "Sexta-feira", "tipo": "Carro da Malha", "frota": "", "ocup": 0, "prev_fech": "", "obs": "", "tipo_prior": "", "data_crit": "", "id": "#N/A"}]};
 
 let gradeData = INITIAL_DATA.grade;
 let progData = [];
-let histData = [];
+let histData = []; // legacy - Programados tab now uses progData
 let sortKey = 'ocup';
 let sortDir = -1;
-let nextId = 3646;
 
 // ===== LOCAL STORAGE =====
 // ===== LOCAL STORAGE (fallback) =====
@@ -2243,37 +2127,7 @@ function recordToSheets(r) {
 }
 
 // ===== UNIFIED SAVE/LOAD =====
-async function saveData(record) {
-  saveLocal();
-  if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
-  try {
-    if (record) {
-      await sheetsPost('save', { record: recordToSheets(record) });
-    } else {
-      // save all
-      const records = progData.map(recordToSheets);
-      await sheetsPost('saveAll', { records });
-    }
-  } catch(e) {
-    console.warn('Sheets sync error:', e.message);
-    showToast('⚠️ Salvo localmente (Sheets offline)', 'info');
-  }
-}
 
-async function deleteFromSheets(id) {
-  if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
-  try { await sheetsPost('delete', { id: String(id) }); }
-  catch(e) { console.warn('Sheets delete error:', e.message); }
-}
-
-function loadData() {
-  // Always show local cache immediately (fast startup)
-  loadLocal();
-  renderProg();
-  renderHist();
-
-
-}
 
 function sheetsGetWithRetry(n) {
   return sheetsGet().catch(function(e) {
@@ -2412,8 +2266,7 @@ function showTab(tab) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn, .sb-item').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + tab + '-content').classList.add('active');
-  var _btn = document.getElementById('tab-' + tab);
-  if (_btn) _btn.classList.add('active');
+  var _sb = document.getElementById('tab-' + tab); if(_sb) _sb.classList.add('active');
   if (isMobile() && _papelAtual) updateMobileNav(tab);
   if (tab === 'programacao') {
     renderProg();
@@ -2851,7 +2704,7 @@ function renderGrade() {
     filteredData = data.filter(r => r.destino === _selectedDestino);
   }
 
-  var _bge=document.getElementById('badge-grade'); if(_bge){var _gcv=data.length; _bge.textContent=_gcv; _bge.style.display=_gcv>0?'':'none';}
+  document.getElementById('badge-grade').textContent = data.length;
   const tbody = document.getElementById('tbody-grade');
   if (!filteredData.length) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Nenhuma rota encontrada</div></div></td></tr>';
@@ -2956,17 +2809,19 @@ function excluirSelecionados() {
   var toDelete = [];
   _selectedIds.forEach(function(id) { toDelete.push(parseInt(String(id), 10)); });
 
-  toDelete.forEach(function(id) {
-    _deletedIds.add(String(id));
-    deleteFromSheets(id);
-  });
-  saveLocal();
-
+  // Filter progData removing only the selected IDs
   var before = progData.length;
   progData = progData.filter(function(r) {
     return toDelete.indexOf(parseInt(String(r._id), 10)) === -1;
   });
   var removed = before - progData.length;
+
+  // Delete from Sheets
+  toDelete.forEach(function(id) {
+    if (typeof sheetsPost === 'function' && typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS) {
+      sheetsPost('delete', { id: String(id) });
+    }
+  });
 
   _selectedIds.clear();
   // Reset select-all checkbox
@@ -3257,7 +3112,7 @@ function salvarProg() {
     data_crit: formatDTLocal(data_crit), id: ''
   };
   progData.unshift(rec);
-  saveData(rec); // salva no Firebase imediatamente
+  saveData(rec);
   showToast('Programação salva com sucesso!','success');
   limparForm();
   showTab('programacao');
@@ -3719,116 +3574,9 @@ function renderDashboard() {
     '</div>';
 }
 
-
-// ===== SIDEBAR =====
-function toggleSidebar() {
-  var sb = document.getElementById('sidebar');
-  if (!sb) return;
-  sb.classList.toggle('collapsed');
-  localStorage.setItem('sb_collapsed', sb.classList.contains('collapsed') ? '1' : '0');
-}
-setTimeout(function() {
-  var sb = document.getElementById('sidebar');
-  if (sb && localStorage.getItem('sb_collapsed') === '1') sb.classList.add('collapsed');
-}, 50);
-
-// ===== FILTROS DE COLUNA =====
-var _cfFilters = {}, _cfCurrentCol = null, _cfAllValues = {};
-
-function cfGetValue(r, campo) {
-  if (campo === 'gerado')     return (r.gerado || '').substring(0, 10);
-  if (campo === 'tipo')       return r.tipo || '';
-  if (campo === 'destino')    return r.destino || '';
-  if (campo === 'regiao')     return r.regiao || '';
-  if (campo === 'saida')      return r.saida || '';
-  if (campo === 'dia')        return r.dia || '';
-  if (campo === 'frota')      return r.frota || '';
-  if (campo === 'ocup') { var p = Math.round((r.ocup||0)*100); return p>=100?'Finalizado':p>1?'Carregando':'Vazio'; }
-  if (campo === 'prev_fech')  return (r.prev_fech||'').substring(0,10)||'(sem data)';
-  if (campo === 'data_crit')  return (r.data_crit||'').substring(0,10)||'(sem data)';
-  if (campo === 'prioridade') return calcPrioridade(r)||'';
-  return '';
-}
-
-function cfOpen(campo, btn) {
-  var dd = document.getElementById('cf-dropdown');
-  var jaMesmo = dd.classList.contains('open') && _cfCurrentCol === campo;
-  cfClose();
-  if (jaMesmo) return;
-  _cfCurrentCol = campo;
-  var base = progData.filter(function(r){ return r.frota || r.ocup; });
-  var todos = {};
-  base.forEach(function(r){ var v = cfGetValue(r,campo); if(v) todos[v]=true; });
-  var valores = Object.keys(todos).sort();
-  _cfAllValues[campo] = valores;
-  var sel = _cfFilters[campo] || new Set(valores);
-  document.getElementById('cf-search-input').value = '';
-  cfRenderList(valores, sel);
-  var rect = btn.getBoundingClientRect();
-  dd.style.top  = (rect.bottom + 4) + 'px';
-  dd.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 290)) + 'px';
-  dd.classList.add('open');
-  btn.classList.add('active');
-}
-
-function cfRenderList(valores, sel) {
-  var s = (document.getElementById('cf-search-input')?.value||'').toLowerCase();
-  var f = s ? valores.filter(function(v){ return v.toLowerCase().includes(s); }) : valores;
-  document.getElementById('cf-list').innerHTML = f.map(function(v) {
-    var chk = sel && sel.has ? sel.has(v) : true;
-    return '<label class="cf-item"><input type="checkbox" value="'+v.replace(/"/g,'&quot;')+'" '+(chk?'checked':'')+
-           '><span>'+(v||'(vazio)')+'</span></label>';
-  }).join('');
-}
-
-function cfSearchFilter() {
-  if (!_cfCurrentCol) return;
-  cfRenderList(_cfAllValues[_cfCurrentCol]||[], _cfFilters[_cfCurrentCol]||new Set(_cfAllValues[_cfCurrentCol]||[]));
-}
-
-function cfSelectAll() { document.querySelectorAll('#cf-list input').forEach(function(c){ c.checked=true; }); }
-function cfClearAll()  { document.querySelectorAll('#cf-list input').forEach(function(c){ c.checked=false; }); }
-
-function cfApply() {
-  if (!_cfCurrentCol) return;
-  var marcados = new Set();
-  document.querySelectorAll('#cf-list input').forEach(function(c){ if(c.checked) marcados.add(c.value); });
-  var todos = new Set(_cfAllValues[_cfCurrentCol]||[]);
-  if (marcados.size === todos.size) delete _cfFilters[_cfCurrentCol];
-  else _cfFilters[_cfCurrentCol] = marcados;
-  var btn = document.getElementById('cfb-'+_cfCurrentCol);
-  if (btn) btn.classList.toggle('active', !!_cfFilters[_cfCurrentCol]);
-  cfClose(); renderHist();
-}
-
-function cfClose() {
-  document.getElementById('cf-dropdown').classList.remove('open');
-  if (_cfCurrentCol) {
-    var btn = document.getElementById('cfb-'+_cfCurrentCol);
-    if (btn && !_cfFilters[_cfCurrentCol]) btn.classList.remove('active');
-  }
-  _cfCurrentCol = null;
-}
-
-document.addEventListener('click', function(e) {
-  var dd = document.getElementById('cf-dropdown');
-  if (dd && dd.classList.contains('open') && !dd.contains(e.target) && !e.target.classList.contains('cf-btn')) cfClose();
-});
-
-function aplicarFiltrosColuna(data) {
-  var campos = Object.keys(_cfFilters);
-  if (!campos.length) return data;
-  return data.filter(function(r) {
-    return campos.every(function(c){ return _cfFilters[c].has(cfGetValue(r,c)); });
-  });
-}
 // ===== INIT =====
-// Ir direto para planejamento — sem tela de seleção
 _papelAtual = 'planejamento';
-var _trocarBtn = document.getElementById('trocar-btn');
-if (_trocarBtn) _trocarBtn.style.display = 'none';
-var _roleScreen = document.getElementById('role-screen');
-if (_roleScreen) _roleScreen.style.display = 'none';
+try { document.getElementById('role-screen').style.display = 'none'; } catch(e){}
 loadData();
 populateFilters();
 renderProg();
@@ -4344,7 +4092,6 @@ function triggerAlertToast(alerta) {
 function updateNotifBadge() {
   const count = notifications.length;
   const badge = document.getElementById('notif-count');
-  if (!badge) return;
   if (count > 0) {
     badge.textContent = count > 9 ? '9+' : count;
     badge.style.display = 'flex';
@@ -4405,37 +4152,6 @@ function requestNotifPermission() {
   if (Notification.permission === 'default') {
     Notification.requestPermission();
   }
-}
-
-
-
-
-
-function syncManual() {
-  // Antes de sincronizar, envia as alterações locais para o Sheets
-  showSyncStatus('&#8635; Enviando alterações...');
-  var localRecords = progData.map(recordToSheets);
-  sheetsPost('saveAll', { records: localRecords })
-    .then(function() {
-      showSyncStatus('&#8635; Buscando dados...');
-      return sheetsGetWithRetry(2);
-    })
-    .then(function(records) {
-      if (records && records.length > 0) {
-        var merged = deduplicar(records);
-        // Preservar registros locais que ainda não chegaram ao Sheets
-        var sheetsIds = new Set(merged.map(function(r){ return r._id; }));
-        var localOnly = progData.filter(function(r){ return !sheetsIds.has(r._id); });
-        progData = deduplicar(merged.concat(localOnly));
-      }
-      nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
-      saveLocal(); renderProg(); renderHist(); hideSyncStatus();
-      showToast('&#10003; ' + progData.length + ' sincronizados!', 'success');
-    })
-    .catch(function(e) {
-      hideSyncStatus();
-      showToast('&#9888; Sheets offline — usando cache local', 'info');
-    });
 }
 
 
@@ -4647,29 +4363,6 @@ function salvarPlatCard(rowId, destino, saida, dia) {
 }
 
 // ===== ALERTAS BIDIRECIONAIS =====
-function sheetsGetAlertas(callback) {
-  if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
-  var cbName = 'alertasCb_' + Date.now();
-  var timeout = setTimeout(function() {
-    delete window[cbName];
-    // Don't call callback on timeout - just silently fail
-  }, 12000);
-  window[cbName] = function(json) {
-    clearTimeout(timeout);
-    delete window[cbName];
-    if (json && json.status === 'ok' && json.alertas) {
-      callback(json.alertas);
-    }
-  };
-  var script = document.createElement('script');
-  script.src = APPS_SCRIPT_URL + '?action=alertas&callback=' + cbName + '&t=' + Date.now();
-  script.onerror = function() {
-    clearTimeout(timeout);
-    delete window[cbName];
-    // Network error - silently skip this poll cycle
-  };
-  document.head.appendChild(script);
-}
 
 
 // Track shown alert IDs - persisted in localStorage so old alerts don't reappear
@@ -4997,21 +4690,6 @@ document.addEventListener('touchstart', ativarAudio, { once: false });
 
 
 // ===== ENVIAR ALERTA VIA GET (JSONP - funciona em todos os protocolos) =====
-function enviarAlertaViaGet(de, mensagem) {
-  // Salvar alerta no Firebase
-  var id = String(Date.now());
-  var ts = new Date().toLocaleString('pt-BR');
-  var alerta = { id: id, ts: ts, de: de, msg: mensagem };
-
-  fetch('https://tragetta-opl-default-rtdb.firebaseio.com/alertas/' + id + '.json', {
-    method: 'PUT',
-    body: JSON.stringify(alerta)
-  }).catch(function(e) { console.warn('Alerta Firebase error:', e); });
-
-  // Mostrar localmente também
-  if (de === 'planejamento') showPlatAlert(mensagem, ts);
-  if (de === 'plataforma') addMsgPlataforma(mensagem, ts);
-}
 
 
 // Fallback: POST (original method)
@@ -5166,12 +4844,12 @@ document.addEventListener('click', e => {
   if (p && p.style.transform === 'translateY(0px)' && !p.contains(e.target) && !e.target.closest('[onclick*="abrirAlertPanel"]')) fecharAlertPanel();
 });
 
-// Poll alertas via Firebase (sempre ativo)
-setInterval(platPollAlertas, 7000);
-setInterval(planPollAlertas, 7000);
-setTimeout(platPollAlertas, 1500);
-setTimeout(planPollAlertas, 1500);
-if (false) { // bloco antigo mantido por compatibilidade
+// Poll alerts every 30s if Sheets configured
+if (true) { // alertas sempre ativos via Firebase
+  setInterval(platPollAlertas, 7000);
+  setInterval(planPollAlertas, 7000);
+  setTimeout(platPollAlertas, 1500);
+  setTimeout(planPollAlertas, 1500);
   // Trim localStorage IDs every 2h to prevent bloat
   setInterval(saveShownIds, 7200000);
 }
