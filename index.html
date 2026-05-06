@@ -1849,12 +1849,17 @@ function sbToRec(o) {
 async function fbSave(r) {
   if (!r || !r._id) return;
   try {
-    await fetch(SB_URL + '/programados', {
+    var res = await fetch(SB_URL + '/programados', {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
       body: JSON.stringify(recToSb(r))
     });
-  } catch(e) { console.warn('sbSave:', e); }
+    if (!res.ok) {
+      var err = await res.text();
+      console.warn('Supabase SAVE erro:', res.status, err);
+      showToast('⚠️ Erro ao salvar: ' + err.substring(0,60), 'error');
+    }
+  } catch(e) { console.warn('sbSave:', e.message); }
 }
 
 // Deletar um registro
@@ -1869,11 +1874,20 @@ function deleteFromSheets(id) {
 async function fbGetAll() {
   try {
     var res = await fetch(SB_URL + '/programados?select=*&limit=1000', { headers: SB_HEADERS });
-    if (!res.ok) { console.warn('Supabase GET status:', res.status); return []; }
+    if (!res.ok) {
+      var errText = await res.text();
+      console.warn('Supabase GET status:', res.status, errText);
+      showToast('⚠️ Supabase erro ' + res.status + ': ' + errText.substring(0,80), 'error');
+      return [];
+    }
     var data = await res.json();
     if (!data || !Array.isArray(data)) return [];
+    console.log('[Supabase] Carregados:', data.length, 'registros');
     return data.map(sbToRec).filter(function(r){ return r._id > 0; });
-  } catch(e) { console.warn('sbGetAll:', e); return []; }
+  } catch(e) {
+    console.warn('sbGetAll erro:', e.message);
+    return [];
+  }
 }
 
 // Carregar dados do Firebase
