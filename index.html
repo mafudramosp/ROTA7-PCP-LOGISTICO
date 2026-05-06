@@ -973,18 +973,24 @@
   .cf-footer button{font-size:11px;padding:4px 12px;border-radius:5px;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-weight:600}
   .cf-ok{background:#00B200;color:#fff}.cf-cancel{background:#374151;color:#9ca3af}
   @media(max-width:768px){
-    .app-layout{display:block}
-    .sidebar{position:fixed;bottom:0;top:auto;left:0;right:0;width:100%!important;min-width:100%!important;height:auto;flex-direction:row;border-right:none;border-top:1px solid #1e1e1e;z-index:100;overflow-x:auto;overflow-y:hidden}
-    .sb-toggle{display:none}
-    .sb-section{display:flex;flex-direction:row;border-bottom:none;border-right:1px solid #1a1a1a;padding:0}
-    .sb-label{display:none}
-    .sb-item{padding:8px 10px;font-size:10px;border-left:none;border-top:3px solid transparent;min-width:60px;justify-content:center;text-align:center;flex-direction:column;gap:2px}
-    .sb-item.active{border-left-color:transparent;border-top-color:#00B200}
-    .sb-text{font-size:10px;opacity:1!important;width:auto!important}
-    .sb-badge{margin-left:2px;font-size:9px;opacity:1!important;width:auto!important;padding:1px 6px!important}
-    .sb-content{padding-bottom:60px}
-    .sidebar>div:last-child{display:none}
+    .app-layout{display:flex}
+    .sidebar{position:fixed;top:52px;left:0;width:160px!important;min-width:160px!important;height:calc(100vh - 52px);flex-direction:column;border-right:1px solid #1e1e1e;z-index:200;overflow-y:auto;overflow-x:hidden}
+    .sidebar.collapsed{width:44px!important;min-width:44px!important}
+    .sb-toggle{display:flex}
+    .sb-section{display:block;padding:6px 0;border-bottom:1px solid #1a1a1a}
+    .sb-label{display:block;opacity:1}
+    .sidebar.collapsed .sb-label{opacity:0}
+    .sb-item{padding:9px 12px;font-size:12px;border-left:3px solid transparent;flex-direction:row;justify-content:flex-start;text-align:left;min-width:unset;gap:0}
+    .sb-item.active{border-left-color:#00B200;border-top-color:transparent}
+    .sb-text{font-size:12px}
+    .sb-badge{margin-left:6px}
+    .sb-content{margin-left:160px;min-width:0;overflow:auto}
     .nav{display:none!important}
+  }
+  @media(max-width:480px){
+    .sidebar{width:140px!important;min-width:140px!important}
+    .sidebar.collapsed{width:44px!important;min-width:44px!important}
+    .sb-content{margin-left:140px}
   }
 
   </style>
@@ -1419,22 +1425,47 @@
       <table>
         <thead>
           <tr id="hist-thead-row">
-            <th style="width:36px"><input type="checkbox" id="sel-all" onclick="selecionarTodos(this)" title="Selecionar todos"></th>
+            <th style="width:36px"><input type="checkbox" id="sel-all" onclick="selecionarTodos(this)"></th>
             <th>#</th>
-            <th onclick="sortHist('gerado')" style="cursor:pointer" title="Ordenar">Gerado em <span id="sh-gerado">↕</span></th>
-            <th>Tipo</th>
-            <th onclick="sortHist('destino')" style="cursor:pointer" title="Ordenar">Destino <span id="sh-destino">↕</span></th>
-            <th>Região</th>
+            <th onclick="sortHist('gerado')" style="cursor:pointer">
+              <div class="col-filter-wrap"><span class="col-label">Gerado em <span id="sh-gerado">↕</span></span>
+              <button class="cf-btn" id="cfb-gerado" onclick="event.stopPropagation();cfOpen('gerado',this)">▼</button></div>
+            </th>
+            <th><div class="col-filter-wrap"><span class="col-label">Tipo</span>
+              <button class="cf-btn" id="cfb-tipo" onclick="cfOpen('tipo',this)">▼</button></div></th>
+            <th onclick="sortHist('destino')" style="cursor:pointer">
+              <div class="col-filter-wrap"><span class="col-label">Destino <span id="sh-destino">↕</span></span>
+              <button class="cf-btn" id="cfb-destino" onclick="event.stopPropagation();cfOpen('destino',this)">▼</button></div>
+            </th>
+            <th><div class="col-filter-wrap"><span class="col-label">Região</span>
+              <button class="cf-btn" id="cfb-regiao" onclick="cfOpen('regiao',this)">▼</button></div></th>
             <th>Composição</th>
-            <th onclick="sortHist('saida')" style="cursor:pointer" title="Ordenar">Saída <span id="sh-saida">↕</span></th>
-            <th>Dia</th>
-            <th onclick="sortHist('frota')" style="cursor:pointer" title="Ordenar">Frota <span id="sh-frota">↕</span></th>
-            <th onclick="sortHist('ocup')" style="cursor:pointer" title="Ordenar">Status Carregamento <span id="sh-ocup">↕</span></th>
-            <th onclick="sortHist('prev_fech')" style="cursor:pointer;color:#00B200" title="Ordenar — itens com data aparecem primeiro">Prev. Fechamento <span id="sh-prev_fech">↑</span></th>
+            <th onclick="sortHist('saida')" style="cursor:pointer">
+              <div class="col-filter-wrap"><span class="col-label">Saída <span id="sh-saida">↕</span></span>
+              <button class="cf-btn" id="cfb-saida" onclick="event.stopPropagation();cfOpen('saida',this)">▼</button></div>
+            </th>
+            <th><div class="col-filter-wrap"><span class="col-label">Dia</span>
+              <button class="cf-btn" id="cfb-dia" onclick="cfOpen('dia',this)">▼</button></div></th>
+            <th onclick="sortHist('frota')" style="cursor:pointer">
+              <div class="col-filter-wrap"><span class="col-label">Frota <span id="sh-frota">↕</span></span>
+              <button class="cf-btn" id="cfb-frota" onclick="event.stopPropagation();cfOpen('frota',this)">▼</button></div>
+            </th>
+            <th onclick="sortHist('ocup')" style="cursor:pointer">
+              <div class="col-filter-wrap"><span class="col-label">Status Carregamento <span id="sh-ocup">↕</span></span>
+              <button class="cf-btn" id="cfb-ocup" onclick="event.stopPropagation();cfOpen('ocup',this)">▼</button></div>
+            </th>
+            <th onclick="sortHist('prev_fech')" style="cursor:pointer;color:#00B200">
+              <div class="col-filter-wrap"><span class="col-label">Prev. Fechamento <span id="sh-prev_fech">↑</span></span>
+              <button class="cf-btn" id="cfb-prev_fech" onclick="event.stopPropagation();cfOpen('prev_fech',this)">▼</button></div>
+            </th>
             <th>Obs.</th>
-          <th onclick="sortHist('data_crit')" style="cursor:pointer" title="Ordenar">Data Crítica <span id="sh-data_crit">↕</span></th>
-          <th>Prioridade</th>
-          <th style="width:90px">Ações</th>
+            <th onclick="sortHist('data_crit')" style="cursor:pointer">
+              <div class="col-filter-wrap"><span class="col-label">Data Crítica <span id="sh-data_crit">↕</span></span>
+              <button class="cf-btn" id="cfb-data_crit" onclick="event.stopPropagation();cfOpen('data_crit',this)">▼</button></div>
+            </th>
+            <th><div class="col-filter-wrap"><span class="col-label">Prioridade</span>
+              <button class="cf-btn" id="cfb-prioridade" onclick="cfOpen('prioridade',this)">▼</button></div></th>
+            <th style="width:90px">Ações</th>
           </tr>
         </thead>
         <tbody id="tbody-hist"></tbody>
@@ -3503,13 +3534,26 @@ function renderDashboard() {
 // ═══ SIDEBAR ═══
 function toggleSidebar() {
   var sb = document.getElementById('sidebar');
+  var content = document.querySelector('.sb-content');
   if (!sb) return;
   sb.classList.toggle('collapsed');
-  localStorage.setItem('sb_c', sb.classList.contains('collapsed') ? '1' : '0');
+  var isCollapsed = sb.classList.contains('collapsed');
+  localStorage.setItem('sb_c', isCollapsed ? '1' : '0');
+  // Atualizar margin no mobile
+  if (content && window.innerWidth <= 768) {
+    content.style.marginLeft = isCollapsed ? '44px' : (window.innerWidth <= 480 ? '140px' : '160px');
+  }
 }
 setTimeout(function() {
   var sb = document.getElementById('sidebar');
-  if (sb && localStorage.getItem('sb_c') === '1') sb.classList.add('collapsed');
+  var content = document.querySelector('.sb-content');
+  if (!sb) return;
+  var isCollapsed = localStorage.getItem('sb_c') === '1';
+  if (isCollapsed) sb.classList.add('collapsed');
+  // Aplicar margin no mobile
+  if (content && window.innerWidth <= 768) {
+    content.style.marginLeft = isCollapsed ? '44px' : (window.innerWidth <= 480 ? '140px' : '160px');
+  }
 }, 50);
 
 // ═══ FILTROS DE COLUNA ═══
