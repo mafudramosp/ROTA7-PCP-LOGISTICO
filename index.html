@@ -1081,14 +1081,7 @@
   <button onclick="trocarPapel()" id="trocar-btn" style="display:none" title="Trocar perfil" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:11px;font-family:'Poppins',sans-serif;padding:4px 8px;border-radius:6px;transition:all .15s;white-space:nowrap;display:none" onmouseover="this.style.color='#9ca3af'" onmouseout="this.style.color='#6b7280'">
     ⇄ Trocar perfil
   </button>
-  <button id="sync-btn" onclick="syncManual()" title="Sincronizar com Google Sheets"
-    style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:13px;
-    font-family:Poppins,sans-serif;padding:4px 10px;border-radius:6px;
-    transition:all 0.15s;display:inline-flex;align-items:center;gap:4px"
-    onmouseover="this.style.background='rgba(255,255,255,0.1)'"
-    onmouseout="this.style.background='none'">
-    ⟳ Sheets
-  </button>
+  
   <div style="margin-left:auto"></div>
   <button id="notif-bell" onclick="toggleNotifPanel()" title="Alertas de horário" style="
     background:none;border:none;cursor:pointer;position:relative;
@@ -1166,16 +1159,9 @@
       <span class="search-icon">🔍</span>
       <input type="text" id="search-prog" placeholder="Destino, frota, região..." oninput="renderProg()">
     </div>
-    <select id="filter-tipo" onchange="renderProg()">
-      <option value="">Todos os tipos</option>
-      <option>Carro da Malha</option>
-      <option>Carro Extra</option>
-      <option>Fora da Malha</option>
-    </select>
-    <select id="filter-regiao" onchange="renderProg()">
-      <option value="">Todas as regiões</option>
-    </select>
-    <button class="btn btn-ghost btn-sm" onclick="clearFilters()" title="Limpar filtros">Limpar filtros</button>
+    
+    
+    
     <button class="btn btn-danger btn-sm" onclick="limparDadosDia()" title="Limpar todos os dados preenchidos hoje">🗑 Limpar dados do dia</button>
     <div style="margin-left:auto;display:flex;gap:8px">
       <button class="btn btn-success btn-sm" onclick="salvarTodos()">Salvar Todos</button>
@@ -1345,9 +1331,7 @@
       <span class="search-icon">🔍</span>
       <input type="text" id="search-grade" placeholder="Destino, região, composição..." oninput="renderGrade()">
     </div>
-    <select id="filter-grade-regiao" onchange="renderGrade()">
-      <option value="">Todas as regiões</option>
-    </select>
+    
     <select id="filter-grade-dia" onchange="renderGrade()">
       <option value="">Todos os dias</option>
       <option>Segunda-feira</option>
@@ -1393,12 +1377,7 @@
       <span class="search-icon">🔍</span>
       <input type="text" id="search-hist" placeholder="Destino, frota..." oninput="renderHist()">
     </div>
-    <select id="filter-hist-tipo" onchange="renderHist()">
-      <option value="">Todos os tipos</option>
-      <option>Carro da Malha</option>
-      <option>Carro Extra</option>
-      <option>Fora da Malha</option>
-    </select>
+    
     <div class="header-divider" style="height:20px;background:var(--border);margin:0 4px"></div>
     <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Período:</label>
     <input type="text" id="filter-hist-de" placeholder="dd/mm/aaaa" maxlength="10" data-dtfmt="d"
@@ -1768,6 +1747,7 @@
 // ═══════════════════════════════════════════════
 var USAR_SHEETS = false;
 var APPS_SCRIPT_URL = '';
+var EMAIL_TO = 'kaique.souza@tragetta.com.br,patrick.ramos@tragetta.com.br,trafegocentral@tragetta.com.br,francisco.lemos@tragetta.com.br,julio.lemos@tragetta.com.br';
 var SB_URL = 'https://azcthsenafixxxfiikqf.supabase.co/rest/v1';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6Y3Roc2VuYWZpeHh4Zmlpa3FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwNDA4MDksImV4cCI6MjA5MzYxNjgwOX0.3eQgkkIZhbH5h94DVpbFMJd8fiZQyG5h2RUIaie_j4I';
 var SB_HEADERS = {
