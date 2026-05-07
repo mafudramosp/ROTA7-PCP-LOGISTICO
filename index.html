@@ -1132,6 +1132,7 @@
     <button class="sb-item" id="tab-nova" onclick="showTab('nova')" data-tip="Adicionar"><span class="sb-text">Adicionar</span></button>
     <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Programados"><span class="sb-text">Programados</span><span class="sb-badge" id="badge-hist" style="display:none"></span></button>
     <button class="sb-item" id="tab-grade" onclick="showTab('grade')" data-tip="Grade"><span class="sb-text">Grade</span><span class="sb-badge" id="badge-grade" style="display:none"></span></button>
+    <button class="sb-item" id="tab-cargas" onclick="showTab('cargas')" data-tip="Cargas"><span class="sb-text">Cargas</span></button>
   </div>
   <div class="sb-section">
     <div class="sb-label">Operações</div>
@@ -1728,6 +1729,416 @@
   <div class="main" id="dashboard-main" style="padding:16px 20px;background:#f4f6fb;min-height:calc(100vh - 110px)">
   </div>
 </div>
+
+<!-- ABA CARGAS — inserir como tab-content no sistema principal -->
+<div id="tab-cargas-content" class="tab-content" style="background:#f1f5f9;min-height:calc(100vh - 52px);padding:0">
+
+<style>
+/* ── CARGAS ── */
+.cg-wrap { padding:16px 20px; max-width:1400px; }
+.cg-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:10px; }
+.cg-title { font-size:14px; font-weight:700; color:#1e293b; }
+.cg-subtitle { font-size:11px; color:#94a3b8; margin-top:2px; }
+.cg-upload { display:flex; align-items:center; gap:8px; background:#fff; border:1.5px dashed #cbd5e1; border-radius:8px; padding:8px 14px; cursor:pointer; color:#64748b; font-size:12px; font-family:'Poppins',sans-serif; transition:all .2s; }
+.cg-upload:hover { border-color:#00B200; color:#00B200; }
+.cg-upload input { display:none; }
+.cg-lastupdate { font-size:10px; color:#94a3b8; }
+
+/* ── PLANTA DO ARMAZÉM ── */
+.cg-planta-section { margin-bottom:20px; }
+.cg-section-title { font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.1em; margin-bottom:10px; }
+.cg-planta { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+.cg-planta-inner { position:relative; }
+
+/* Estrutura física */
+.planta-container { display:flex; flex-direction:column; gap:0; border:2.5px solid #334155; border-radius:6px; overflow:hidden; background:#f8fafc; }
+.planta-topo { background:#334155; padding:6px 12px; display:flex; align-items:center; justify-content:space-between; }
+.planta-topo-label { font-size:9px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.15em; }
+.planta-corpo { display:flex; gap:0; }
+
+/* Colunas das regiões */
+.planta-regiao-col { flex:1; min-width:0; border-right:2px solid #e2e8f0; display:flex; flex-direction:column; }
+.planta-regiao-col:last-child { border-right:none; }
+.planta-reg-header { padding:8px 10px 6px; border-bottom:2px solid #e2e8f0; text-align:center; }
+.planta-reg-nome { font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.planta-reg-ton { font-size:18px; font-weight:800; line-height:1.1; margin-top:2px; }
+.planta-reg-ton-label { font-size:9px; font-weight:500; opacity:.6; }
+.planta-reg-crit { font-size:10px; font-weight:700; margin-top:2px; }
+.planta-reg-body { flex:1; padding:8px; display:flex; flex-direction:column; gap:4px; min-height:80px; }
+
+/* Paletes/pilhas por destino */
+.palete { border-radius:4px; padding:4px 6px; display:flex; justify-content:space-between; align-items:center; gap:4px; border:1px solid rgba(0,0,0,.08); }
+.palete-sigla { font-size:10px; font-weight:800; }
+.palete-ton { font-size:9px; font-weight:600; opacity:.75; }
+.palete-crit { font-size:8px; font-weight:700; padding:1px 4px; border-radius:3px; background:rgba(0,0,0,.1); }
+
+/* Cores por nível de criticidade */
+.reg-nivel-alto   .planta-reg-header { background:#fef2f2; }
+.reg-nivel-alto   .planta-reg-nome { color:#dc2626; }
+.reg-nivel-alto   .planta-reg-ton  { color:#dc2626; }
+.reg-nivel-alto   .planta-reg-crit { color:#ef4444; }
+.reg-nivel-alto   .palete { background:#fee2e2; border-color:#fca5a5; }
+.reg-nivel-alto   .palete-sigla { color:#b91c1c; }
+
+.reg-nivel-medio  .planta-reg-header { background:#fffbeb; }
+.reg-nivel-medio  .planta-reg-nome { color:#d97706; }
+.reg-nivel-medio  .planta-reg-ton  { color:#d97706; }
+.reg-nivel-medio  .planta-reg-crit { color:#f59e0b; }
+.reg-nivel-medio  .palete { background:#fef3c7; border-color:#fcd34d; }
+.reg-nivel-medio  .palete-sigla { color:#92400e; }
+
+.reg-nivel-baixo  .planta-reg-header { background:#f0fdf4; }
+.reg-nivel-baixo  .planta-reg-nome { color:#16a34a; }
+.reg-nivel-baixo  .planta-reg-ton  { color:#16a34a; }
+.reg-nivel-baixo  .planta-reg-crit { color:#22c55e; }
+.reg-nivel-baixo  .palete { background:#dcfce7; border-color:#86efac; }
+.reg-nivel-baixo  .palete-sigla { color:#15803d; }
+
+.reg-nivel-zero   .planta-reg-header { background:#f8fafc; }
+.reg-nivel-zero   .planta-reg-nome { color:#64748b; }
+.reg-nivel-zero   .planta-reg-ton  { color:#94a3b8; }
+.reg-nivel-zero   .planta-reg-crit { color:#94a3b8; }
+.reg-nivel-zero   .palete { background:#f1f5f9; border-color:#e2e8f0; }
+.reg-nivel-zero   .palete-sigla { color:#64748b; }
+
+/* Rodapé da planta */
+.planta-rodape { background:#f8fafc; border-top:2px solid #e2e8f0; padding:8px 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.planta-legenda { display:flex; gap:16px; flex-wrap:wrap; }
+.planta-leg { display:flex; align-items:center; gap:5px; font-size:10px; color:#64748b; }
+.planta-leg-dot { width:10px; height:10px; border-radius:2px; }
+.planta-totais { font-size:11px; color:#475569; display:flex; gap:16px; }
+.planta-totais strong { color:#1e293b; }
+
+/* ── TABELA DESTINOS ── */
+.cg-tabela-wrap { background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+.cg-tabela-header { padding:12px 16px; border-bottom:1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between; }
+.cg-tabela-header h3 { font-size:12px; font-weight:700; color:#1e293b; margin:0; }
+.cg-tabela-header span { font-size:11px; color:#94a3b8; }
+.cg-table { width:100%; border-collapse:collapse; font-size:12px; }
+.cg-table th { padding:9px 14px; text-align:left; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; border-bottom:1px solid #f1f5f9; background:#f8fafc; white-space:nowrap; }
+.cg-table td { padding:9px 14px; border-bottom:1px solid #f8fafc; color:#374151; vertical-align:middle; }
+.cg-table tr:last-child td { border-bottom:none; }
+.cg-table tr:hover td { background:#f8fafc; }
+.cg-table tbody tr:nth-child(even) td { background:#fafafa; }
+.cg-table tbody tr:nth-child(even):hover td { background:#f1f5f9; }
+
+/* Tags de região */
+.tag-reg { padding:2px 8px; border-radius:20px; font-size:9px; font-weight:700; text-transform:uppercase; }
+.tag-NORDESTE { background:#fef2f2; color:#dc2626; }
+.tag-NORTE-CO { background:#eff6ff; color:#2563eb; }
+.tag-SUDESTE  { background:#f0fdf4; color:#16a34a; }
+.tag-SUL      { background:#f5f3ff; color:#7c3aed; }
+.tag-SAO-PAULO{ background:#fff7ed; color:#ea580c; }
+.tag-OUTROS   { background:#f1f5f9; color:#64748b; }
+
+/* Barra de progresso crítico */
+.crit-bar { display:flex; flex-direction:column; gap:2px; }
+.crit-bar-bg { height:5px; background:#f1f5f9; border-radius:3px; overflow:hidden; width:80px; }
+.crit-bar-fill { height:100%; border-radius:3px; }
+.crit-pct { font-size:9px; color:#94a3b8; }
+
+/* Vazio */
+.cg-empty { text-align:center; padding:60px 20px; }
+.cg-empty-icon { font-size:40px; margin-bottom:12px; }
+.cg-empty p { font-size:13px; color:#64748b; margin:0 0 4px; }
+.cg-empty small { font-size:11px; color:#94a3b8; }
+
+@media(max-width:768px) {
+  .planta-reg-ton { font-size:13px; }
+  .planta-reg-nome { font-size:8px; }
+  .palete { padding:3px 4px; }
+  .palete-sigla { font-size:9px; }
+}
+</style>
+
+<div class="cg-wrap">
+  <!-- HEADER -->
+  <div class="cg-header">
+    <div>
+      <div class="cg-title">📦 Cargas — Estoque OPL · GRU</div>
+      <div class="cg-lastupdate" id="cg-lastupdate">Nenhum arquivo carregado</div>
+    </div>
+    <label class="cg-upload">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      Importar Excel TMS
+      <input type="file" id="cg-file-input" accept=".xlsx,.xlsm,.xls" onchange="cgImportar(this)">
+    </label>
+  </div>
+
+  <!-- VAZIO -->
+  <div id="cg-empty" class="cg-empty">
+    <div class="cg-empty-icon">🏭</div>
+    <p>Nenhum arquivo importado</p>
+    <small>Importe a exportação do TMS para visualizar o estoque do armazém</small>
+  </div>
+
+  <!-- CONTEÚDO -->
+  <div id="cg-conteudo" style="display:none">
+
+    <!-- PLANTA DO ARMAZÉM -->
+    <div class="cg-planta-section">
+      <div class="cg-section-title">🏭 Ton. Distribuída no Armazém — por Região</div>
+      <div class="cg-planta">
+        <div class="planta-container">
+          <div class="planta-topo">
+            <span class="planta-topo-label">⬅ Entrada / Portaria</span>
+            <span class="planta-topo-label">Armazém GRU · Tragetta Transportes</span>
+            <span class="planta-topo-label">Docas de Carregamento ➡</span>
+          </div>
+          <div class="planta-corpo" id="cg-planta-corpo"></div>
+          <div class="planta-rodape">
+            <div class="planta-legenda">
+              <div class="planta-leg"><div class="planta-leg-dot" style="background:#fca5a5"></div>Crítico alto (&gt;30%)</div>
+              <div class="planta-leg"><div class="planta-leg-dot" style="background:#fcd34d"></div>Crítico médio (10–30%)</div>
+              <div class="planta-leg"><div class="planta-leg-dot" style="background:#86efac"></div>Sem crítico (&lt;10%)</div>
+            </div>
+            <div class="planta-totais" id="cg-planta-totais"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABELA DESTINOS -->
+    <div class="cg-section-title">📋 Detalhamento por Destino</div>
+    <div class="cg-tabela-wrap">
+      <div class="cg-tabela-header">
+        <h3>Estoque por Destino</h3>
+        <span id="cg-tabela-resumo"></span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="cg-table">
+          <thead>
+            <tr>
+              <th>Região</th>
+              <th>Destino</th>
+              <th>Ton. Geral</th>
+              <th>Ton. Crítico</th>
+              <th title="Do peso planejado, quanto % é crítico (atrasado)">% Crítico/Plan.</th>
+              <th title="Do peso total, quanto % está planejado">% Plan./Geral</th>
+            </tr>
+          </thead>
+          <tbody id="cg-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── CARGAS MODULE ──
+var _cgData = null;
+
+var CG_FILIAL_REGIAO = {
+  'AJU':'NORDESTE','MCZ':'NORDESTE','THE':'NORDESTE','FOR':'NORDESTE','JPA':'NORDESTE',
+  'NAT':'NORDESTE','REC':'NORDESTE','CAU':'NORDESTE','SSA':'NORDESTE','FEC':'NORDESTE',
+  'BAR':'NORDESTE','JDO':'NORDESTE','PNZ':'NORDESTE','RSD':'NORDESTE','AJU2':'NORDESTE',
+  'BSB':'NORTE CO','BGI':'NORTE CO','CPQ':'NORTE CO','RAO':'NORTE CO','PMW':'NORTE CO',
+  'JPR':'NORTE CO','BAU':'NORTE CO','SJP':'NORTE CO','SCA':'NORTE CO','ITP':'NORTE CO',
+  'SLZ':'NORTE CO','SOD':'NORTE CO','BEL':'NORTE CO','MCP':'NORTE CO','STM':'NORTE CO',
+  'MAO':'NORTE CO','ENP':'NORTE CO','VDC':'NORTE CO','GYN':'NORTE CO','MSI':'NORTE CO',
+  'CGR':'NORTE CO','CGB':'NORTE CO','JDI':'NORTE CO','PPB':'NORTE CO','BVB':'NORTE CO',
+  'AMI':'NORTE CO','PVH':'NORTE CO','RBR':'NORTE CO','UDI':'NORTE CO','GOI':'NORTE CO',
+  'BHZ':'SUDESTE','GVR':'SUDESTE','TFL':'SUDESTE','MOC':'SUDESTE','RIO':'SUDESTE',
+  'CAW':'SUDESTE','JDF':'SUDESTE','SRR':'SUDESTE','VIX':'SUDESTE','MGF':'SUDESTE',
+  'UMU':'SUDESTE','IPN':'SUDESTE','DIV':'SUDESTE','SR2':'SUDESTE','LDO':'SUDESTE',
+  'BNU':'SUL','JLL':'SUL','XAP':'SUL','JCB':'SUL','CAC':'SUL','CWB':'SUL',
+  'IGU':'SUL','FBE':'SUL','PGZ':'SUL','PFB':'SUL','RIA':'SUL','CXJ':'SUL',
+  'FLN':'SUL','CCM':'SUL','SJK':'SUL','SSZ':'SUL','POA':'SUL','PET':'SUL','SCZ':'SUL',
+  'SAO':'SÃO PAULO','GRU':'SÃO PAULO','GR2':'SÃO PAULO','SAO2':'SÃO PAULO'
+};
+
+function cgImportar(input) {
+  var file = input.files[0];
+  if (!file) return;
+  showToast('⏳ Processando...', 'info');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type:'array', cellDates:false });
+      var sheetNames = Object.keys(wb.Sheets);
+      var ws = wb.Sheets['MyTable'] || wb.Sheets[sheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
+
+      // Mapear colunas
+      var hdr = rows[0];
+      var c = {};
+      for (var j=0; j<hdr.length; j++) if(hdr[j]) c[String(hdr[j]).trim()]=j;
+
+      var cDest   = c['SIGLA_FILIAL_DESTINO'];
+      var cEquip  = c['Equipamento'];
+      var cMerc   = c['Mercadoria_Planejada'];
+      var cBP     = c['INICIO_DESCARREGAMENTO'];
+      var cSit    = c['SITUACAO_PREV_EMBARQUE'];
+      var cMotivo = c['Motivo'];
+      var cPeso   = c['P_Operacional']!==undefined ? c['P_Operacional'] : c['P_Calculo'];
+
+      // Agregar por destino
+      var destMap = {};
+      for (var i=1; i<rows.length; i++) {
+        var row = rows[i];
+        var dest  = String(row[cDest]||'').trim();
+        var equip = row[cEquip];
+        var merc  = row[cMerc];
+        var bp    = row[cBP];
+        var sit   = String(row[cSit]||'').trim();
+        var peso  = parseFloat(row[cPeso]||0);
+        var atrasado = sit === 'Atrasado';
+
+        // Ignorar linhas com Motivo = "Ocor.Aberta"
+        var motivo = String(row[cMotivo] || '').trim();
+        if (motivo === 'Ocor.Aberta') continue;
+        if (!dest) continue;
+        if (!destMap[dest]) destMap[dest] = {
+          sigla: dest,
+          regiao: CG_FILIAL_REGIAO[dest] || 'OUTROS',
+          peso_geral: 0, peso_critico: 0, peso_planejado: 0,
+          ctes: 0, atrasados: 0
+        };
+        // Mercadoria_Planejada é string (ex: '0001050') — planejado = qualquer valor não vazio
+        var planejado = row[cMerc] !== null && row[cMerc] !== undefined && String(row[cMerc]).trim() !== '' && String(row[cMerc]).trim() !== '0';
+        destMap[dest].peso_geral += peso;
+        destMap[dest].ctes++;
+        if (atrasado)  { destMap[dest].peso_critico += peso; destMap[dest].atrasados++; }
+        if (planejado) { destMap[dest].peso_planejado += peso; }
+      }
+
+      // Converter para array e arredondar
+      var destinos = Object.values(destMap).map(function(d) {
+        d.peso_geral     = Math.round(d.peso_geral/10)/100;
+        d.peso_critico   = Math.round(d.peso_critico/10)/100;
+        d.peso_planejado = Math.round(d.peso_planejado/10)/100;
+        d.perc_critico   = d.peso_geral > 0 ? Math.round(d.peso_critico/d.peso_geral*1000)/10 : 0;
+        // % Plan./Crítico = do que está planejado, quanto é crítico (nunca passa de 100%)
+        d.perc_plan_crit = d.peso_planejado > 0 ? Math.round(d.peso_critico/d.peso_planejado*1000)/10 : 0;
+        // % Plan./Geral = do total geral, quanto está planejado
+        d.perc_plan_geral= d.peso_geral > 0 ? Math.round(d.peso_planejado/d.peso_geral*1000)/10 : 0;
+        return d;
+      }).sort(function(a,b){ return b.peso_geral - a.peso_geral; });
+
+      _cgData = { destinos: destinos, ts: new Date() };
+      try { localStorage.setItem('cg_data', JSON.stringify(_cgData)); } catch(ex){}
+      cgRenderizar(_cgData);
+      showToast('✅ ' + destinos.length + ' destinos carregados!', 'success');
+    } catch(err) {
+      console.error(err);
+      showToast('❌ Erro: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function cgRenderizar(data) {
+  document.getElementById('cg-empty').style.display = 'none';
+  document.getElementById('cg-conteudo').style.display = 'block';
+  document.getElementById('cg-lastupdate').textContent =
+    'Atualizado: ' + (data.ts instanceof Date ? data.ts : new Date(data.ts)).toLocaleString('pt-BR');
+
+  var destinos = data.destinos;
+
+  // Agregar por região
+  var REGIOES = ['NORDESTE','NORTE CO','SUDESTE','SUL','SÃO PAULO'];
+  var regMap = {};
+  REGIOES.forEach(function(r){ regMap[r] = { regiaoKey:r, peso_geral:0, peso_critico:0, destinos:[] }; });
+
+  destinos.forEach(function(d) {
+    var r = d.regiao.toUpperCase();
+    if (!regMap[r]) regMap[r] = { regiaoKey:r, peso_geral:0, peso_critico:0, destinos:[] };
+    regMap[r].peso_geral   += d.peso_geral;
+    regMap[r].peso_critico += d.peso_critico;
+    regMap[r].destinos.push(d);
+  });
+
+  var totalGeral = destinos.reduce(function(s,d){ return s+d.peso_geral; },0);
+  var totalCrit  = destinos.reduce(function(s,d){ return s+d.peso_critico; },0);
+
+  // ── PLANTA ──
+  var plantaHTML = '';
+  REGIOES.forEach(function(reg) {
+    var rd = regMap[reg];
+    if (!rd) return;
+    var percCrit = rd.peso_geral > 0 ? rd.peso_critico / rd.peso_geral : 0;
+    var nivel = percCrit > 0.3 ? 'alto' : percCrit > 0.1 ? 'medio' : rd.peso_geral > 0 ? 'baixo' : 'zero';
+
+    // Top destinos por peso para mostrar como paletes
+    var topDest = rd.destinos.slice(0,6).sort(function(a,b){ return b.peso_geral - a.peso_geral; });
+
+    var paletesHTML = topDest.map(function(d) {
+      var temCrit = d.peso_critico > 0;
+      var critStr = temCrit ? d.peso_critico.toFixed(1)+'t' : '';
+      var bgCrit  = temCrit ? 'background:#fef2f2;border:1.5px solid #fca5a5;' : '';
+      return '<div class="palete" style="' + bgCrit + '">' +
+        '<span class="palete-sigla" style="' + (temCrit ? 'color:#b91c1c;font-weight:800' : '') + '">' + d.sigla + '</span>' +
+        '<span class="palete-ton">' + d.peso_geral.toFixed(1) + 't</span>' +
+        (critStr ? '<span class="palete-crit" style="background:#fee2e2;color:#dc2626;font-weight:800">⚠ ' + critStr + '</span>' : '') +
+        '</div>';
+    }).join('');
+
+    plantaHTML +=
+      '<div class="planta-regiao-col reg-nivel-' + nivel + '">' +
+        '<div class="planta-reg-header">' +
+          '<div class="planta-reg-nome">' + reg + '</div>' +
+          '<div class="planta-reg-ton">' + rd.peso_geral.toFixed(1) + '<span class="planta-reg-ton-label"> t</span></div>' +
+          (rd.peso_critico > 0 ? '<div class="planta-reg-crit">⚠ ' + rd.peso_critico.toFixed(1) + 't crítico</div>' : '<div class="planta-reg-crit" style="color:#94a3b8">✓ Sem crítico</div>') +
+        '</div>' +
+        '<div class="planta-reg-body">' + (paletesHTML || '<div style="font-size:10px;color:#cbd5e1;text-align:center;padding:10px">Sem dados</div>') + '</div>' +
+      '</div>';
+  });
+  document.getElementById('cg-planta-corpo').innerHTML = plantaHTML;
+  document.getElementById('cg-planta-totais').innerHTML =
+    'Total: <strong>' + totalGeral.toFixed(1) + ' t</strong> &nbsp;|&nbsp; Crítico: <strong style="color:#dc2626">' + totalCrit.toFixed(1) + ' t</strong>';
+
+  // ── TABELA ──
+  document.getElementById('cg-tabela-resumo').textContent = destinos.length + ' destinos · ' + totalGeral.toFixed(1) + 't total';
+
+  var REG_CSS = {
+    'NORDESTE':'NORDESTE','NORTE CO':'NORTE-CO','SUDESTE':'SUDESTE',
+    'SUL':'SUL','SÃO PAULO':'SAO-PAULO','OUTROS':'OUTROS'
+  };
+
+  var tbody = '';
+  destinos.forEach(function(d) {
+    var css = REG_CSS[d.regiao.toUpperCase()] || 'OUTROS';
+    var critPct = d.perc_critico;
+    var barColor = critPct > 30 ? '#ef4444' : critPct > 10 ? '#f59e0b' : '#22c55e';
+
+    var planCritColor  = d.perc_plan_crit >= 80 ? '#16a34a' : d.perc_plan_crit >= 40 ? '#d97706' : '#dc2626';
+    var planGeralColor = d.perc_plan_geral >= 80 ? '#16a34a' : d.perc_plan_geral >= 40 ? '#d97706' : '#dc2626';
+    var rowBg = d.peso_critico > 0 ? 'background:rgba(254,242,242,0.6)' : '';
+
+    tbody +=
+      '<tr style="' + rowBg + '">' +
+      '<td><span class="tag-reg tag-' + css + '">' + d.regiao + '</span></td>' +
+      '<td style="font-weight:700;color:#1e293b">' + d.sigla + '</td>' +
+      '<td style="font-weight:600">' + d.peso_geral.toFixed(2) + ' t</td>' +
+      '<td style="font-weight:700;color:' + (d.peso_critico > 0 ? '#dc2626' : '#94a3b8') + '">' +
+        (d.peso_critico > 0 ? '⚠ ' + d.peso_critico.toFixed(2) + ' t' : '—') + '</td>' +
+      '<td><div class="crit-bar">' +
+        '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + Math.min(100,d.perc_plan_crit) + '%;background:' + planCritColor + '"></div></div>' +
+        '<div class="crit-pct" style="color:' + planCritColor + ';font-weight:600">' + (d.perc_plan_crit > 0 ? d.perc_plan_crit.toFixed(1) + '%' : '0%') + '</div>' +
+      '</div></td>' +
+      '<td><div class="crit-bar">' +
+        '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + Math.min(100,d.perc_plan_geral) + '%;background:' + planGeralColor + '"></div></div>' +
+        '<div class="crit-pct" style="color:' + planGeralColor + ';font-weight:600">' + (d.perc_plan_geral > 0 ? d.perc_plan_geral.toFixed(1) + '%' : '0%') + '</div>' +
+      '</div></td>' +
+      '</tr>';
+  });
+  document.getElementById('cg-tbody').innerHTML = tbody;
+}
+
+// Restaurar do localStorage
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    var saved = localStorage.getItem('cg_data');
+    if (saved) {
+      _cgData = JSON.parse(saved);
+      cgRenderizar(_cgData);
+    }
+  } catch(e) {}
+});
+</script>
+</div>
+
 
 </div><!-- /sb-content -->
 </div><!-- /app-layout -->
@@ -2876,6 +3287,7 @@ function renderHist() {
 function populateFilters() {
   const regioes = [...new Set(progData.map(r => r.regiao).filter(Boolean))].sort();
   const sel = document.getElementById('filter-regiao');
+  if (!sel) return;
   regioes.forEach(r => { const o = new Option(r, r); sel.appendChild(o); });
 
   const regioes2 = [...new Set(gradeData.map(r => r.regiao).filter(Boolean))].sort();
