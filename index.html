@@ -1880,10 +1880,8 @@
       <div class="cg-section-title">🏭 Ton. Distribuída no Armazém — por Região</div>
       <div class="cg-planta">
         <div class="planta-container">
-          <div class="planta-topo">
-            <span class="planta-topo-label">⬅ Entrada / Portaria</span>
+          <div class="planta-topo" style="justify-content:center">
             <span class="planta-topo-label">Armazém GRU · Tragetta Transportes</span>
-            <span class="planta-topo-label">Docas de Carregamento ➡</span>
           </div>
           <div class="planta-corpo" id="cg-planta-corpo"></div>
           <div class="planta-rodape">
@@ -1911,10 +1909,11 @@
             <tr>
               <th>Região</th>
               <th>Destino</th>
-              <th>Ton. Geral</th>
+              <th>Ton. Disponível</th>
+              <th>Ton. Planejado</th>
               <th>Ton. Crítico</th>
-              <th title="Do peso planejado, quanto % é crítico (atrasado)">% Crítico/Plan.</th>
-              <th title="Do peso total, quanto % está planejado">% Plan./Geral</th>
+              <th title="% do crítico que já está planejado">% Crítico Plan.</th>
+              <th title="Ton.Planejado ÷ Ton.Disponível">% Plan./Disp.</th>
             </tr>
           </thead>
           <tbody id="cg-tbody"></tbody>
@@ -1966,53 +1965,84 @@ function cgImportar(input) {
       for (var j=0; j<hdr.length; j++) if(hdr[j]) c[String(hdr[j]).trim()]=j;
 
       var cDest   = c['SIGLA_FILIAL_DESTINO'];
-      var cEquip  = c['Equipamento'];
-      var cMerc   = c['Mercadoria_Planejada'];
+      var cBG     = c['Equipamento'];
+      var cBI     = c['Mercadoria_Planejada'];
       var cBP     = c['INICIO_DESCARREGAMENTO'];
+      var cBQ     = c['FIM_DESCARREGAMENTO'];
       var cSit    = c['SITUACAO_PREV_EMBARQUE'];
       var cMotivo = c['Motivo'];
       var cPeso   = c['P_Operacional']!==undefined ? c['P_Operacional'] : c['P_Calculo'];
 
-      // Agregar por destino
+      // Agregar por destino usando lógica de status
       var destMap = {};
       for (var i=1; i<rows.length; i++) {
-        var row = rows[i];
-        var dest  = String(row[cDest]||'').trim();
-        var equip = row[cEquip];
-        var merc  = row[cMerc];
-        var bp    = row[cBP];
-        var sit   = String(row[cSit]||'').trim();
-        var peso  = parseFloat(row[cPeso]||0);
-        var atrasado = sit === 'Atrasado';
+        var row  = rows[i];
+        var dest = String(row[cDest]||'').trim();
+        var mot  = String(row[cMotivo]||'').trim();
+        var bg   = row[cBG];
+        var biRaw= String(row[cBI]||'').trim();
+        var bi   = biRaw && biRaw !== '0';  // Mercadoria_Planejada preenchida
+        var bp   = row[cBP];
+        var bq   = row[cBQ];
+        var sit  = String(row[cSit]||'').trim();
+        var peso = parseFloat(row[cPeso]||0);
 
-        // Ignorar linhas com Motivo = "Ocor.Aberta"
-        var motivo = String(row[cMotivo] || '').trim();
-        if (motivo === 'Ocor.Aberta') continue;
-        if (!dest) continue;
+        // Ignorar Ocor.Aberta e linhas sem destino
+        if (mot === 'Ocor.Aberta' || !dest) continue;
+
+        // Lógica de status
+        var status;
+        if (bp && !bi && !bg)       status = 'descarregando';
+        else if (!bp && bg && !bi)  status = 'disponivel';
+        else if (bi)                status = 'planejado';
+        else if (!bg && !bi && !bp && !bq) status = 'patio';
+        else                        status = 'outros';
+
         if (!destMap[dest]) destMap[dest] = {
           sigla: dest,
           regiao: CG_FILIAL_REGIAO[dest] || 'OUTROS',
-          peso_geral: 0, peso_critico: 0, peso_planejado: 0,
-          ctes: 0, atrasados: 0
+          peso_geral: 0,          // Disponível (AC > 0)
+          peso_planejado: 0,      // Planejado (BI preenchido)
+          peso_critico_total: 0,  // Crítico total (atrasados)
+          peso_critico_plan: 0,   // Crítico planejado (atrasado + BI preenchido)
+          ctes_disp: 0, atrasados: 0
         };
-        // Mercadoria_Planejada é string (ex: '0001050') — planejado = qualquer valor não vazio
-        var planejado = row[cMerc] !== null && row[cMerc] !== undefined && String(row[cMerc]).trim() !== '' && String(row[cMerc]).trim() !== '0';
-        destMap[dest].peso_geral += peso;
-        destMap[dest].ctes++;
-        if (atrasado)  { destMap[dest].peso_critico += peso; destMap[dest].atrasados++; }
-        if (planejado) { destMap[dest].peso_planejado += peso; }
+
+        // Ton. Disponível = Equipamento (AC) preenchido (> 0)
+        var bgPreench = cBG !== undefined && row[cBG] && String(row[cBG]).trim() !== '' && String(row[cBG]).trim() !== '0';
+        if (bgPreench) {
+          destMap[dest].peso_geral += peso;
+          destMap[dest].ctes_disp++;
+        }
+        // Ton. Planejado = Mercadoria_Planejada preenchida
+        if (bi) {
+          destMap[dest].peso_planejado += peso;
+        }
+        // Ton. Crítico total = todos os atrasados (independente de status)
+        if (sit === 'Atrasado') {
+          destMap[dest].peso_critico_total += peso;
+          destMap[dest].atrasados++;
+          // Crítico planejado = atrasado E Mercadoria_Planejada preenchida
+          if (bi) {
+            destMap[dest].peso_critico_plan += peso;
+          }
+        }
       }
 
       // Converter para array e arredondar
       var destinos = Object.values(destMap).map(function(d) {
-        d.peso_geral     = Math.round(d.peso_geral/10)/100;
-        d.peso_critico   = Math.round(d.peso_critico/10)/100;
-        d.peso_planejado = Math.round(d.peso_planejado/10)/100;
-        d.perc_critico   = d.peso_geral > 0 ? Math.round(d.peso_critico/d.peso_geral*1000)/10 : 0;
-        // % Plan./Crítico = do que está planejado, quanto é crítico (nunca passa de 100%)
-        d.perc_plan_crit = d.peso_planejado > 0 ? Math.round(d.peso_critico/d.peso_planejado*1000)/10 : 0;
-        // % Plan./Geral = do total geral, quanto está planejado
-        d.perc_plan_geral= d.peso_geral > 0 ? Math.round(d.peso_planejado/d.peso_geral*1000)/10 : 0;
+        d.peso_geral          = Math.round(d.peso_geral/10)/100;
+        d.peso_planejado      = Math.round(d.peso_planejado/10)/100;
+        d.peso_critico_total  = Math.round(d.peso_critico_total/10)/100;
+        d.peso_critico_plan   = Math.round(d.peso_critico_plan/10)/100;
+        // % Crítico = Crítico Planejado ÷ Crítico Total × 100
+        // (do total atrasado, quanto % já está planejado na carreta)
+        d.perc_critico    = d.peso_critico_total > 0 ? Math.round(d.peso_critico_plan/d.peso_critico_total*1000)/10 : 0;
+        d.perc_plan_crit  = d.perc_critico;
+        // % Plan./Disp. = Ton.Planejado ÷ Ton.Disponível × 100
+        d.perc_plan_geral = d.peso_geral > 0 ? Math.round(d.peso_planejado/d.peso_geral*1000)/10 : 0;
+        // Expor peso_critico para exibição na tabela
+        d.peso_critico = d.peso_critico_total;
         return d;
       }).sort(function(a,b){ return b.peso_geral - a.peso_geral; });
 
@@ -2100,26 +2130,25 @@ function cgRenderizar(data) {
   destinos.forEach(function(d) {
     var css = REG_CSS[d.regiao.toUpperCase()] || 'OUTROS';
     var critPct = d.perc_critico;
-    var barColor = critPct > 30 ? '#ef4444' : critPct > 10 ? '#f59e0b' : '#22c55e';
+    var barColor = d.perc_critico >= 100 ? '#16a34a' : '#dc2626';
 
-    var planCritColor  = d.perc_plan_crit >= 80 ? '#16a34a' : d.perc_plan_crit >= 40 ? '#d97706' : '#dc2626';
-    var planGeralColor = d.perc_plan_geral >= 80 ? '#16a34a' : d.perc_plan_geral >= 40 ? '#d97706' : '#dc2626';
     var rowBg = d.peso_critico > 0 ? 'background:rgba(254,242,242,0.6)' : '';
 
     tbody +=
       '<tr style="' + rowBg + '">' +
       '<td><span class="tag-reg tag-' + css + '">' + d.regiao + '</span></td>' +
       '<td style="font-weight:700;color:#1e293b">' + d.sigla + '</td>' +
-      '<td style="font-weight:600">' + d.peso_geral.toFixed(2) + ' t</td>' +
+      '<td style="font-weight:600">' + (d.peso_geral > 0 ? d.peso_geral.toFixed(2) + ' t' : '—') + '</td>' +
+      '<td style="font-weight:600;color:#2563eb">' + (d.peso_planejado > 0 ? d.peso_planejado.toFixed(2) + ' t' : '—') + '</td>' +
       '<td style="font-weight:700;color:' + (d.peso_critico > 0 ? '#dc2626' : '#94a3b8') + '">' +
         (d.peso_critico > 0 ? '⚠ ' + d.peso_critico.toFixed(2) + ' t' : '—') + '</td>' +
       '<td><div class="crit-bar">' +
-        '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + Math.min(100,d.perc_plan_crit) + '%;background:' + planCritColor + '"></div></div>' +
-        '<div class="crit-pct" style="color:' + planCritColor + ';font-weight:600">' + (d.perc_plan_crit > 0 ? d.perc_plan_crit.toFixed(1) + '%' : '0%') + '</div>' +
+        '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + Math.min(100,d.perc_critico) + '%;background:' + barColor + '"></div></div>' +
+        '<div class="crit-pct" style="color:' + barColor + ';font-weight:600">' + (d.perc_critico > 0 ? d.perc_critico.toFixed(1) + '%' : '0%') + '</div>' +
       '</div></td>' +
       '<td><div class="crit-bar">' +
-        '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + Math.min(100,d.perc_plan_geral) + '%;background:' + planGeralColor + '"></div></div>' +
-        '<div class="crit-pct" style="color:' + planGeralColor + ';font-weight:600">' + (d.perc_plan_geral > 0 ? d.perc_plan_geral.toFixed(1) + '%' : '0%') + '</div>' +
+        '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + Math.min(100,d.perc_plan_geral) + '%;background:' + barColor + '"></div></div>' +
+        '<div class="crit-pct" style="color:' + barColor + ';font-weight:600">' + (d.perc_plan_geral > 0 ? d.perc_plan_geral.toFixed(1) + '%' : '0%') + '</div>' +
       '</div></td>' +
       '</tr>';
   });
