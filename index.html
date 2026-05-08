@@ -1849,6 +1849,30 @@
   .palete { padding:3px 4px; }
   .palete-sigla { font-size:9px; }
 }
+
+/* ── SNAPSHOT COMPARATIVO ── */
+.cg-snap-info { display:flex; align-items:center; gap:8px; background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:8px 14px; margin-bottom:14px; font-size:11px; color:#166534; }
+.cg-snap-info svg { flex-shrink:0; }
+.cg-comparativo { display:none; margin-bottom:20px; }
+.cg-comparativo.ativo { display:block; }
+.cg-comp-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+.cg-comp-title { font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.1em; }
+.cg-comp-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.cg-comp-col { background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+.cg-comp-col-header { padding:10px 14px; border-bottom:1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between; }
+.cg-comp-col-title { font-size:11px; font-weight:700; }
+.cg-comp-col-date  { font-size:10px; color:#94a3b8; }
+.cg-comp-table { width:100%; border-collapse:collapse; font-size:11px; }
+.cg-comp-table { table-layout:fixed; width:100%; }
+.cg-comp-table th { padding:5px 8px; font-size:8px; font-weight:700; text-transform:uppercase; color:#94a3b8; background:#f8fafc; border-bottom:1px solid #f1f5f9; text-align:left; white-space:nowrap; overflow:hidden; }
+.cg-comp-table td { padding:5px 8px; border-bottom:1px solid #f8fafc; color:#374151; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cg-comp-table tr:last-child td { border-bottom:none; }
+/* Delta badges */
+.delta { font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px; margin-left:4px; }
+.delta-up   { background:#fef2f2; color:#dc2626; }
+.delta-down { background:#f0fdf4; color:#16a34a; }
+.delta-eq   { background:#f8fafc; color:#94a3b8; }
+
 </style>
 
 <div class="cg-wrap">
@@ -1858,11 +1882,22 @@
       <div class="cg-title">📦 Cargas — Estoque OPL · GRU</div>
       <div class="cg-lastupdate" id="cg-lastupdate">Nenhum arquivo carregado</div>
     </div>
-    <label class="cg-upload">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-      Importar Excel TMS
-      <input type="file" id="cg-file-input" accept=".xlsx,.xlsm,.xls" onchange="cgImportar(this)">
-    </label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <label class="cg-upload">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        Importar Excel TMS
+        <input type="file" id="cg-file-input" accept=".xlsx,.xlsm,.xls" onchange="cgImportar(this)">
+      </label>
+      <button id="cg-btn-snapshot" onclick="cgSalvarSnapshot()" style="display:none;align-items:center;gap:6px;background:#fff;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 14px;cursor:pointer;color:#374151;font-size:12px;font-family:'Poppins',sans-serif;transition:all .2s" onmouseover="this.style.borderColor='#00B200';this.style.color='#16a34a'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#374151'">
+        📌 Gravar como Snapshot
+      </button>
+      <button id="cg-btn-comparar" onclick="cgToggleComparacao()" style="display:none;align-items:center;gap:6px;background:#fff;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 14px;cursor:pointer;color:#374151;font-size:12px;font-family:'Poppins',sans-serif;transition:all .2s" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#374151'">
+        📊 Ver Comparativo
+      </button>
+      <button id="cg-btn-limpar-snap" onclick="cgLimparSnapshot()" style="display:none;align-items:center;gap:6px;background:#fff;border:1.5px solid #fca5a5;border-radius:8px;padding:8px 14px;cursor:pointer;color:#dc2626;font-size:12px;font-family:'Poppins',sans-serif" title="Remover snapshot salvo">
+        🗑 Limpar Snapshot
+      </button>
+    </div>
   </div>
 
   <!-- VAZIO -->
@@ -1892,6 +1927,57 @@
             </div>
             <div class="planta-totais" id="cg-planta-totais"></div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INFO SNAPSHOT -->
+    <div id="cg-snap-info" class="cg-snap-info" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span id="cg-snap-label">Snapshot salvo</span>
+    </div>
+
+    <!-- PAINEL COMPARATIVO -->
+    <div id="cg-comparativo" class="cg-comparativo">
+      <div class="cg-comp-header">
+        <div class="cg-comp-title">📊 Comparativo — Snapshot vs Atual</div>
+      </div>
+      <div class="cg-comp-grid">
+        <!-- SNAPSHOT -->
+        <div class="cg-comp-col">
+          <div class="cg-comp-col-header">
+            <span class="cg-comp-col-title" style="color:#64748b">📌 Snapshot (inicial)</span>
+            <span class="cg-comp-col-date" id="cg-snap-date">—</span>
+          </div>
+          <table class="cg-comp-table">
+
+            <thead><tr>
+              <th>Destino</th>
+              <th>Ton.Disp.</th>
+              <th>Ton.Crít.</th>
+              <th>% Crít.Plan.</th>
+              <th>% Plan./Disp.</th>
+            </tr></thead>
+            <tbody id="cg-snap-tbody"></tbody>
+          </table>
+        </div>
+        <!-- ATUAL -->
+        <div class="cg-comp-col">
+          <div class="cg-comp-col-header">
+            <span class="cg-comp-col-title" style="color:#0f172a">📥 Atual</span>
+            <span class="cg-comp-col-date" id="cg-atual-date">—</span>
+          </div>
+          <table class="cg-comp-table">
+
+            <thead><tr>
+              <th>Ton.Disp.</th>
+              <th>Ton.Crít.</th>
+              <th>% Crít.Plan.</th>
+              <th>% Plan./Disp.</th>
+              <th>Δ Crít.</th>
+            </tr></thead>
+            <tbody id="cg-atual-tbody"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -2050,6 +2136,9 @@ function cgImportar(input) {
       try { localStorage.setItem('cg_data', JSON.stringify(_cgData)); } catch(ex){}
       cgRenderizar(_cgData);
       showToast('✅ ' + destinos.length + ' destinos carregados!', 'success');
+      cgAtualizarUISnapshot();
+      // Se o comparativo estiver aberto, re-renderizar com dados novos
+      if (_cgModoComp) cgRenderizarComparativo();
     } catch(err) {
       console.error(err);
       showToast('❌ Erro: ' + err.message, 'error');
@@ -2154,6 +2243,172 @@ function cgRenderizar(data) {
   });
   document.getElementById('cg-tbody').innerHTML = tbody;
 }
+
+
+// ── SNAPSHOT ──
+var _cgSnapshot = null;
+var _cgModoComp = false;
+
+function cgAtualizarUISnapshot() {
+  var temSnap  = !!_cgSnapshot;
+  var temAtual = !!_cgData;
+  var btnSnap  = document.getElementById('cg-btn-snapshot');
+  var btnComp  = document.getElementById('cg-btn-comparar');
+  var btnLimp  = document.getElementById('cg-btn-limpar-snap');
+  var infoSnap = document.getElementById('cg-snap-info');
+  var snapLbl  = document.getElementById('cg-snap-label');
+
+  if (btnSnap)  btnSnap.style.display  = temAtual && !temSnap ? 'flex' : 'none';
+  if (btnComp)  btnComp.style.display  = temAtual && temSnap  ? 'flex' : 'none';
+  if (btnLimp)  btnLimp.style.display  = temSnap ? 'flex' : 'none';
+  if (infoSnap) {
+    infoSnap.style.display = temSnap ? 'flex' : 'none';
+    if (snapLbl && _cgSnapshot) {
+      snapLbl.textContent = '📌 Snapshot gravado em ' +
+        new Date(_cgSnapshot.ts).toLocaleString('pt-BR') +
+        ' · ' + _cgSnapshot.destinos.length + ' destinos';
+    }
+  }
+}
+
+function cgSalvarSnapshot() {
+  if (!_cgData) return;
+  _cgSnapshot = { ts: _cgData.ts, destinos: JSON.parse(JSON.stringify(_cgData.destinos)) };
+  try { localStorage.setItem('cg_snapshot', JSON.stringify(_cgSnapshot)); } catch(e) {}
+  cgAtualizarUISnapshot();
+  showToast('📌 Snapshot gravado com sucesso!', 'success');
+}
+
+function cgLimparSnapshot() {
+  if (!confirm('Remover o snapshot salvo?')) return;
+  _cgSnapshot = null;
+  localStorage.removeItem('cg_snapshot');
+  _cgModoComp = false;
+  document.getElementById('cg-comparativo').classList.remove('ativo');
+  cgAtualizarUISnapshot();
+  showToast('🗑 Snapshot removido', 'info');
+}
+
+function cgToggleComparacao() {
+  _cgModoComp = !_cgModoComp;
+  var painel = document.getElementById('cg-comparativo');
+  var btn    = document.getElementById('cg-btn-comparar');
+  if (_cgModoComp) {
+    painel.classList.add('ativo');
+    if (btn) btn.textContent = '✕ Fechar Comparativo';
+    cgRenderizarComparativo();
+  } else {
+    painel.classList.remove('ativo');
+    if (btn) btn.textContent = '📊 Ver Comparativo';
+  }
+}
+
+function cgRenderizarComparativo() {
+  if (!_cgSnapshot || !_cgData) return;
+
+  // Snapshot
+  document.getElementById('cg-snap-date').textContent =
+    new Date(_cgSnapshot.ts).toLocaleString('pt-BR');
+  document.getElementById('cg-atual-date').textContent =
+    new Date(_cgData.ts).toLocaleString('pt-BR');
+
+  var snapMap = {};
+  _cgSnapshot.destinos.forEach(function(d) { snapMap[d.sigla] = d; });
+
+  var REGCSS = {'NORDESTE':'#dc2626','NORTE CO':'#2563eb','SUDESTE':'#16a34a','SUL':'#7c3aed','SÃO PAULO':'#ea580c','OUTROS':'#64748b'};
+
+  // Tabela snapshot
+  var snapHTML = '';
+  _cgSnapshot.destinos.forEach(function(d) {
+    var regColor = REGCSS[d.regiao.toUpperCase()] || '#64748b';
+    var snapRowBg = (d.perc_critico >= 96 && d.peso_critico_total > 0) ? 'background:rgba(220,252,231,0.9);border-left:3px solid #16a34a' : (d.peso_critico_total > 0 ? 'background:rgba(254,242,242,0.6)' : '');
+    snapHTML +=
+      '<tr style="' + snapRowBg + '">' +
+      '<td><span style="font-weight:700;font-size:11px;color:' + regColor + '">' + d.sigla + '</span></td>' +
+      '<td>' + (d.peso_geral > 0 ? d.peso_geral.toFixed(2) + 't' : '—') + '</td>' +
+      '<td style="color:' + (d.peso_critico_total > 0 ? '#dc2626' : '#94a3b8') + ';font-weight:700">' +
+        (d.peso_critico_total > 0 ? '⚠ ' + d.peso_critico_total.toFixed(2) + 't' : '—') + '</td>' +
+      '<td style="color:' + (d.perc_critico >= 96 ? '#16a34a' : d.perc_critico > 0 ? '#dc2626' : '#94a3b8') + ';font-weight:700">' +
+        (d.perc_critico > 0 ? d.perc_critico.toFixed(1) + '%' : '—') + '</td>' +
+      '<td style="color:' + (d.perc_plan_geral >= 80 ? '#16a34a' : d.perc_plan_geral >= 40 ? '#d97706' : d.perc_plan_geral > 0 ? '#dc2626' : '#94a3b8') + ';font-weight:700">' +
+        (d.perc_plan_geral > 0 ? d.perc_plan_geral.toFixed(1) + '%' : '—') + '</td>' +
+      '</tr>';
+  });
+  document.getElementById('cg-snap-tbody').innerHTML = snapHTML;
+
+  // Tabela atual — MESMA ORDEM do snapshot para alinhar as linhas
+  var atualMap = {};
+  _cgData.destinos.forEach(function(d) { atualMap[d.sigla] = d; });
+
+  var atualHTML = '';
+  _cgSnapshot.destinos.forEach(function(snapD) {
+    var d = atualMap[snapD.sigla];
+    if (!d) {
+      // Destino sumiu no atual — linha vazia
+      atualHTML += '<tr><td colspan="5" style="color:#94a3b8;font-size:10px">—</td></tr>';
+      return;
+    }
+    var snap = snapMap[d.sigla];
+    var regColor = REGCSS[d.regiao.toUpperCase()] || '#64748b';
+    var rowBg = (d.peso_critico_total > 0) ? 'background:rgba(254,242,242,0.6)' : '';
+
+    // Delta de crítico
+    var deltaCrit = '';
+    if (snap) {
+      var diff = d.peso_critico_total - snap.peso_critico_total;
+      if (Math.abs(diff) > 0.01) {
+        var sinal = diff > 0 ? '+' : '';
+        var cls   = diff > 0 ? 'delta-up' : 'delta-down';
+        deltaCrit = '<span class="delta ' + cls + '">' + sinal + diff.toFixed(2) + 't</span>';
+      } else {
+        deltaCrit = '<span class="delta delta-eq">= 0</span>';
+      }
+    } else {
+      deltaCrit = '<span class="delta delta-up">novo</span>';
+    }
+
+    // Verde se melhorou para 100% (era < 100% no snapshot)
+    // Verificar melhora: % Crít.Plan. que era < 100% agora atingiu 100%
+    var snapPerc = snap ? (snap.perc_critico || snap.perc_plan_crit || 0) : null;
+    var atualPerc = d.perc_critico || d.perc_plan_crit || 0;
+    // Melhorou: tinha crítico no snapshot (>0) e agora está 100% planejado
+    // Verde sempre que % Crít.Plan. for 100% (todo crítico está planejado)
+    var cem_porcento = atualPerc >= 96 && d.peso_critico_total > 0;
+    // Também verde se tinha crítico no snap e agora não tem mais
+    var semCritico = snap && snap.peso_critico_total > 0 && d.peso_critico_total === 0;
+    var rowStyle = (cem_porcento || semCritico) ? 'background:rgba(220,252,231,0.9);border-left:3px solid #16a34a' : rowBg;
+
+    atualHTML +=
+      '<tr style="' + rowStyle + '">' +
+      '<td>' + (d.peso_geral > 0 ? d.peso_geral.toFixed(2) + 't' : '—') + '</td>' +
+      '<td style="color:' + (d.peso_critico_total > 0 ? '#dc2626' : '#94a3b8') + ';font-weight:' + (d.peso_critico_total > 0 ? '700' : '400') + '">' +
+        (d.peso_critico_total > 0 ? '⚠ ' + d.peso_critico_total.toFixed(2) + 't' : '—') + '</td>' +
+      '<td style="color:' + (d.perc_critico >= 96 ? '#16a34a' : d.perc_critico > 0 ? '#dc2626' : '#94a3b8') + ';font-weight:700">' +
+        (d.perc_critico > 0 ? d.perc_critico.toFixed(1) + '%' : '—') + '</td>' +
+      '<td style="color:' + (d.perc_plan_geral >= 80 ? '#16a34a' : d.perc_plan_geral >= 40 ? '#d97706' : d.perc_plan_geral > 0 ? '#dc2626' : '#94a3b8') + ';font-weight:700">' +
+        (d.perc_plan_geral > 0 ? d.perc_plan_geral.toFixed(1) + '%' : '—') + '</td>' +
+      '<td>' + deltaCrit + '</td>' +
+      '</tr>';
+  });
+  // Adicionar destinos novos que não existiam no snapshot
+  _cgData.destinos.forEach(function(d) {
+    if (!snapMap[d.sigla]) {
+      var regColor = REGCSS[d.regiao.toUpperCase()] || '#64748b';
+      var rowBg2 = d.peso_critico_total > 0 ? 'background:rgba(254,242,242,0.6)' : '';
+      atualHTML += '<tr style="' + rowBg2 + '"><td colspan="5" style="font-size:10px;color:' + regColor + ';font-style:italic">+ ' + d.sigla + ' (novo)</td></tr>';
+    }
+  });
+  document.getElementById('cg-atual-tbody').innerHTML = atualHTML;
+}
+
+// Restaurar snapshot do localStorage
+try {
+  var savedSnap = localStorage.getItem('cg_snapshot');
+  if (savedSnap) {
+    _cgSnapshot = JSON.parse(savedSnap);
+    setTimeout(cgAtualizarUISnapshot, 100);
+  }
+} catch(e) {}
 
 // Restaurar do localStorage
 document.addEventListener('DOMContentLoaded', function() {
