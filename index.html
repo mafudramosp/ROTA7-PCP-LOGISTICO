@@ -1133,7 +1133,6 @@
     <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Programados"><span class="sb-text">Programados</span><span class="sb-badge" id="badge-hist" style="display:none"></span></button>
     <button class="sb-item" id="tab-grade" onclick="showTab('grade')" data-tip="Grade"><span class="sb-text">Grade</span><span class="sb-badge" id="badge-grade" style="display:none"></span></button>
     <button class="sb-item" id="tab-cargas" onclick="showTab('cargas')" data-tip="Planejamento"><span class="sb-text">Planejamento</span></button>
-    <button class="sb-item" id="tab-cerebro" onclick="showTab('cerebro');cbInicializar()" data-tip="Mindset"><span class="sb-text">Mindset</span></button>
   </div>
   <div class="sb-section">
     <div class="sb-label">Operações</div>
@@ -1652,12 +1651,12 @@
 
 
 <!-- INSTALL INSTRUCTIONS MODAL -->
-<div class="modal-overlay" id="install-modal" onclick="if(event.target===this)this.style.display = 'none'">
+<div class="modal-overlay" id="install-modal" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal" style="text-align:center;max-width:360px">
     <div style="font-size:48px;margin-bottom:12px">📲</div>
     <div style="font-size:15px;font-weight:700;margin-bottom:10px">Instalar no Celular</div>
     <div id="install-modal-text" style="font-size:13px;color:var(--text2);line-height:1.7;background:var(--bg3);border-radius:8px;padding:14px;margin-bottom:16px"></div>
-    <button class="btn btn-ghost" onclick="document.getElementById('install-modal').style.display = 'none'">Fechar</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('install-modal').classList.remove('open')">Fechar</button>
   </div>
 </div>
 <!-- MODAL DETALHES -->
@@ -2030,7 +2029,7 @@ var CG_FILIAL_REGIAO = {
   'UMU':'SUDESTE','IPN':'SUDESTE','DIV':'SUDESTE','SR2':'SUDESTE','LDO':'SUDESTE',
   'BNU':'SUL','JLL':'SUL','XAP':'SUL','JCB':'SUL','CAC':'SUL','CWB':'SUL',
   'IGU':'SUL','FBE':'SUL','PGZ':'SUL','PFB':'SUL','RIA':'SUL','CXJ':'SUL',
-  'FLN':'SUL','CCM':'SUL','SJK':'SÃO PAULO','SSZ':'SÃO PAULO','POA':'SUL','PET':'SUL','SCZ':'SUL',
+  'FLN':'SUL','CCM':'SUL','SJK':'SUL','SSZ':'SUL','POA':'SUL','PET':'SUL','SCZ':'SUL',
   'SAO':'SÃO PAULO','GRU':'SÃO PAULO','GR2':'SÃO PAULO','SAO2':'SÃO PAULO'
 };
 
@@ -2059,14 +2058,6 @@ function cgImportar(input) {
       var cSit    = c['SITUACAO_PREV_EMBARQUE'];
       var cMotivo = c['Motivo'];
       var cPeso   = c['P_Operacional']!==undefined ? c['P_Operacional'] : c['P_Calculo'];
-      // Colunas extras para o Mindset
-      var cEmissao = c['Emissao'];
-      var cCTRC    = c['CTRC'];
-      var cRemet   = c['Remetente'];
-      var cDestin  = c['Destinatario'];
-      var cVols    = c['Qtde_Volumes'];
-      var cNF      = c['Vl_Nota_Fiscal'];
-      var cDtPrev  = c['DT_PREV_EMBARQUE'];
 
       // Agregar por destino usando lógica de status
       var destMap = {};
@@ -2096,12 +2087,11 @@ function cgImportar(input) {
         if (!destMap[dest]) destMap[dest] = {
           sigla: dest,
           regiao: CG_FILIAL_REGIAO[dest] || 'OUTROS',
-          peso_geral: 0, peso_planejado: 0,
-          peso_critico_total: 0, peso_critico_plan: 0,
-          ctes_disp: 0, ctes_plan: 0, atrasados: 0,
-          total_volumes: 0, valor_nf: 0,
-          datas_prev: [], equipamentos: new Set(),
-          ctes_lista: []  // lista resumida de CTEs
+          peso_geral: 0,          // Disponível (AC > 0)
+          peso_planejado: 0,      // Planejado (BI preenchido)
+          peso_critico_total: 0,  // Crítico total (atrasados)
+          peso_critico_plan: 0,   // Crítico planejado (atrasado + BI preenchido)
+          ctes_disp: 0, atrasados: 0
         };
 
         // Ton. Disponível = Equipamento (AC) preenchido (> 0)
@@ -2113,47 +2103,24 @@ function cgImportar(input) {
         // Ton. Planejado = Mercadoria_Planejada preenchida
         if (bi) {
           destMap[dest].peso_planejado += peso;
-          destMap[dest].ctes_plan++;
         }
-        // Ton. Crítico total = todos os atrasados
+        // Ton. Crítico total = todos os atrasados (independente de status)
         if (sit === 'Atrasado') {
           destMap[dest].peso_critico_total += peso;
           destMap[dest].atrasados++;
-          if (bi) destMap[dest].peso_critico_plan += peso;
-        }
-        // Dados ricos extras
-        var dtPrev = row[cDtPrev] ? String(row[cDtPrev]).substring(0,10) : null;
-        if (dtPrev && dtPrev !== 'null') destMap[dest].datas_prev.push(dtPrev);
-        if (row[cBG] && String(row[cBG]).trim() && String(row[cBG]).trim() !== '0') {
-          destMap[dest].equipamentos.add(String(row[cBG]).trim());
-        }
-        destMap[dest].total_volumes += parseInt(row[cVols] || 0);
-        destMap[dest].valor_nf += parseFloat(row[cNF] || 0);
-        // Guardar CTE resumido (só disponíveis ou críticos)
-        if ((bgPreench || sit === 'Atrasado') && destMap[dest].ctes_lista.length < 20) {
-          destMap[dest].ctes_lista.push({
-            ctrc: row[cCTRC] || '', emit: String(row[cEmissao] || '').substring(0,10),
-            remet: String(row[cRemet] || '').substring(0,20),
-            dest_nome: String(row[cDestin] || '').substring(0,25),
-            peso: peso, sit: sit, dtPrev: dtPrev,
-            status: bgPreench ? 'DISPONÍVEL' : (bi ? 'PLANEJADO' : sit === 'Atrasado' ? 'CRÍTICO' : 'PÁTIO'),
-            equip: row[cBG] ? String(row[cBG]).trim() : ''
-          });
+          // Crítico planejado = atrasado E Mercadoria_Planejada preenchida
+          if (bi) {
+            destMap[dest].peso_critico_plan += peso;
+          }
         }
       }
 
       // Converter para array e arredondar
       var destinos = Object.values(destMap).map(function(d) {
-        d.peso_geral         = Math.round(d.peso_geral/10)/100;
-        d.peso_planejado     = Math.round(d.peso_planejado/10)/100;
-        d.peso_critico_total = Math.round(d.peso_critico_total/10)/100;
-        d.peso_critico_plan  = Math.round(d.peso_critico_plan/10)/100;
-        d.valor_nf           = Math.round(d.valor_nf);
-        d.equipamentos       = Array.from(d.equipamentos || []);
-        // Data prevista mais próxima
-        var datas = (d.datas_prev || []).filter(Boolean).sort();
-        d.dt_prev_mais_proxima = datas.length ? datas[0] : '—';
-        d.datas_prev = datas.filter(function(v,i,a){ return a.indexOf(v)===i; }).slice(0,5);
+        d.peso_geral          = Math.round(d.peso_geral/10)/100;
+        d.peso_planejado      = Math.round(d.peso_planejado/10)/100;
+        d.peso_critico_total  = Math.round(d.peso_critico_total/10)/100;
+        d.peso_critico_plan   = Math.round(d.peso_critico_plan/10)/100;
         // % Crítico = Crítico Planejado ÷ Crítico Total × 100
         // (do total atrasado, quanto % já está planejado na carreta)
         d.perc_critico    = d.peso_critico_total > 0 ? Math.round(d.peso_critico_plan/d.peso_critico_total*1000)/10 : 0;
@@ -2170,9 +2137,8 @@ function cgImportar(input) {
       cgRenderizar(_cgData);
       showToast('✅ ' + destinos.length + ' destinos carregados!', 'success');
       cgAtualizarUISnapshot();
+      // Se o comparativo estiver aberto, re-renderizar com dados novos
       if (_cgModoComp) cgRenderizarComparativo();
-      // Atualizar mindset se estiver ativo
-      if (typeof cbConstruirGrafo === 'function') { cbConstruirGrafo(_cgData); }
     } catch(err) {
       console.error(err);
       showToast('❌ Erro: ' + err.message, 'error');
@@ -2457,233 +2423,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </div>
 
-
-<!-- ABA MINDSET OPERACIONAL -->
-<div id="tab-cerebro-content" class="tab-content" style="background:#050810;min-height:calc(100vh - 52px);padding:0;position:relative;overflow:hidden">
-<style>
-/* ── MINDSET OPERACIONAL ── */
-.cb-wrap{display:flex;flex-direction:column;height:calc(100vh - 52px);position:relative}
-.cb-grafo-section{flex:1;position:relative;min-height:0}
-#cb-grafo-canvas{width:100%;height:100%;display:block}
-.cb-hud{position:absolute;top:16px;left:16px;pointer-events:none}
-.cb-hud-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:800;color:#00ff88;text-transform:uppercase;letter-spacing:.2em;opacity:.8}
-.cb-hud-sub{font-family:'Space Mono',monospace;font-size:9px;color:#4ade80;opacity:.5;margin-top:2px}
-.cb-status{position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center;pointer-events:none}
-.cb-status button{pointer-events:all}
-.cb-status-dot{width:6px;height:6px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88;animation:cb-pulse 2s infinite}
-.cb-status-txt{font-family:'Space Mono',monospace;font-size:9px;color:#00ff88;opacity:.7}
-@keyframes cb-pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.cb-tooltip{position:fixed;background:rgba(5,8,16,.95);border:1px solid rgba(0,255,136,.3);border-radius:8px;padding:8px 12px;pointer-events:none;display:none;z-index:9998}
-.cb-tooltip-name{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#00ff88}
-.cb-tooltip-info{font-family:'Space Mono',monospace;font-size:9px;color:#94a3b8;margin-top:3px}
-.cb-chat-section{height:280px;border-top:1px solid rgba(0,255,136,.15);background:rgba(5,8,16,.95);display:flex;flex-direction:column;backdrop-filter:blur(10px);flex-shrink:0}
-.cb-chat-messages{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
-.cb-chat-messages::-webkit-scrollbar{width:3px}
-.cb-chat-messages::-webkit-scrollbar-thumb{background:rgba(0,255,136,.2);border-radius:2px}
-.cb-msg{display:flex;gap:10px;animation:cb-fadein .3s ease}
-@keyframes cb-fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.cb-msg-icon{width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:2px}
-.cb-msg.user .cb-msg-icon{background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.3)}
-.cb-msg.ai .cb-msg-icon{background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.2)}
-.cb-msg-body{flex:1;min-width:0}
-.cb-msg-label{font-family:'Space Mono',monospace;font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
-.cb-msg-text{font-family:'Space Mono',monospace;font-size:11px;color:#e2e8f0;line-height:1.6}
-.cb-msg-text table{width:100%;border-collapse:collapse;margin-top:8px;font-size:10px}
-.cb-msg-text th{padding:5px 10px;text-align:left;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#00ff88;border-bottom:1px solid rgba(0,255,136,.2);background:rgba(0,255,136,.05)}
-.cb-msg-text td{padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:#cbd5e1}
-.cb-msg-text td:first-child{color:#e2e8f0;font-weight:700}
-.cb-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:700;margin-left:4px}
-.cb-tag.red{background:rgba(239,68,68,.15);color:#f87171}
-.cb-tag.green{background:rgba(0,255,136,.1);color:#00ff88}
-.cb-tag.yellow{background:rgba(234,179,8,.1);color:#fbbf24}
-.cb-typing{display:flex;gap:3px;align-items:center;padding:4px 0}
-.cb-typing span{width:4px;height:4px;border-radius:50%;background:#00ff88;animation:cb-bounce .9s infinite}
-.cb-typing span:nth-child(2){animation-delay:.15s}
-.cb-typing span:nth-child(3){animation-delay:.3s}
-@keyframes cb-bounce{0%,80%,100%{transform:scale(.7);opacity:.4}40%{transform:scale(1);opacity:1}}
-.cb-input-row{padding:10px 16px;border-top:1px solid rgba(255,255,255,.04);display:flex;gap:8px;align-items:center}
-.cb-input-wrap{flex:1;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(0,255,136,.15);border-radius:8px;padding:6px 12px;transition:border-color .2s}
-.cb-input-wrap:focus-within{border-color:rgba(0,255,136,.4)}
-.cb-input{flex:1;background:none;border:none;outline:none;font-family:'Space Mono',monospace;font-size:11px;color:#e2e8f0}
-.cb-input::placeholder{color:#374151}
-.cb-send-btn{background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:6px 14px;cursor:pointer;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#00ff88;transition:all .15s;white-space:nowrap}
-.cb-send-btn:hover{background:rgba(0,255,136,.25)}
-.cb-send-btn:disabled{opacity:.4;cursor:not-allowed}
-.cb-sugestoes{padding:6px 16px 0;display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0}
-.cb-sug{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:3px 10px;font-family:'Space Mono',monospace;font-size:9px;color:#6b7280;cursor:pointer;transition:all .15s}
-.cb-sug:hover{border-color:rgba(0,255,136,.3);color:#00ff88}
-.cb-empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
-.cb-empty-icon{font-size:32px;margin-bottom:12px;opacity:.3}
-.cb-empty-txt{font-family:'Syne',sans-serif;font-size:12px;color:#374151;text-align:center}
-.cb-empty-txt small{display:block;font-family:'Space Mono',monospace;font-size:9px;margin-top:4px;color:#1f2937}
-</style>
-<!-- LOGIN CÉREBRO -->
-<div id="cb-login" style="position:absolute;inset:0;z-index:1000;background:#050810;display:flex;align-items:center;justify-content:center">
-<style>
-.cb-login-card{background:rgba(0,255,136,.03);border:1px solid rgba(0,255,136,.2);border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;width:90%;box-shadow:0 0 60px rgba(0,255,136,.05)}
-.cb-login-logo{font-size:36px;margin-bottom:14px}
-.cb-login-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:#00ff88;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-.cb-login-sub{font-family:'Space Mono',monospace;font-size:9px;color:#374151;letter-spacing:.1em;margin-bottom:28px}
-.cb-login-label{font-family:'Space Mono',monospace;font-size:9px;color:#4b5563;text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px;text-align:left}
-.cb-login-input{width:100%;background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.2);border-radius:8px;padding:10px 14px;font-family:'Space Mono',monospace;font-size:12px;color:#e2e8f0;outline:none;box-sizing:border-box;margin-bottom:14px;transition:border-color .2s}
-.cb-login-input:focus{border-color:rgba(0,255,136,.5)}
-.cb-login-btn{width:100%;background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.4);border-radius:8px;padding:11px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#00ff88;cursor:pointer;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;margin-bottom:10px}
-.cb-login-btn:hover{background:rgba(0,255,136,.25)}
-.cb-login-link{font-family:'Space Mono',monospace;font-size:9px;color:#374151;cursor:pointer;text-decoration:underline}
-.cb-login-link:hover{color:#00ff88}
-.cb-login-err{font-family:'Space Mono',monospace;font-size:10px;color:#ef4444;margin-top:-8px;margin-bottom:10px;display:none}
-.cb-login-scan{height:1px;background:linear-gradient(90deg,transparent,#00ff88,transparent);animation:cb-scan2 2s linear infinite;margin-bottom:24px}
-@keyframes cb-scan2{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
-</style>
-<div class="cb-login-card">
-  <div class="cb-login-logo" style="line-height:1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="44" height="44">
-  <!-- Lâmpada -->
-  <path d="M50 8 C33 8 20 21 20 38 C20 50 27 60 38 65 L38 75 C38 77 40 79 42 79 L58 79 C60 79 62 77 62 75 L62 65 C73 60 80 50 80 38 C80 21 67 8 50 8Z" fill="none" stroke="#00ff88" stroke-width="3.5"/>
-  <!-- Base lâmpada -->
-  <rect x="40" y="79" width="20" height="5" rx="2" fill="#00ff88" opacity="0.6"/>
-  <rect x="42" y="85" width="16" height="5" rx="2" fill="#00ff88" opacity="0.4"/>
-  <!-- Engrenagem grande (direita) -->
-  <g transform="translate(58,36) scale(0.55)">
-    <circle cx="0" cy="0" r="12" fill="none" stroke="#00ff88" stroke-width="3"/>
-    <circle cx="0" cy="0" r="5" fill="#00ff88"/>
-    <rect x="-3" y="-18" width="6" height="8" rx="2" fill="#00ff88"/>
-    <rect x="-3" y="10" width="6" height="8" rx="2" fill="#00ff88"/>
-    <rect x="-18" y="-3" width="8" height="6" rx="2" fill="#00ff88"/>
-    <rect x="10" y="-3" width="8" height="6" rx="2" fill="#00ff88"/>
-    <rect x="-14" y="-14" width="6" height="6" rx="1" transform="rotate(45)" fill="#00ff88"/>
-    <rect x="8" y="-14" width="6" height="6" rx="1" transform="rotate(45)" fill="#00ff88"/>
-    <rect x="-14" y="8" width="6" height="6" rx="1" transform="rotate(45)" fill="#00ff88"/>
-    <rect x="8" y="8" width="6" height="6" rx="1" transform="rotate(45)" fill="#00ff88"/>
-  </g>
-  <!-- Engrenagem pequena (esquerda) -->
-  <g transform="translate(38,42) scale(0.38)">
-    <circle cx="0" cy="0" r="11" fill="none" stroke="#00ff88" stroke-width="3"/>
-    <circle cx="0" cy="0" r="4.5" fill="#00ff88"/>
-    <rect x="-2.5" y="-16" width="5" height="7" rx="1.5" fill="#00ff88"/>
-    <rect x="-2.5" y="9" width="5" height="7" rx="1.5" fill="#00ff88"/>
-    <rect x="-16" y="-2.5" width="7" height="5" rx="1.5" fill="#00ff88"/>
-    <rect x="9" y="-2.5" width="7" height="5" rx="1.5" fill="#00ff88"/>
-  </g>
-  <!-- Brilho -->
-  <line x1="50" y1="2" x2="50" y2="6" stroke="#00ff88" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-  <line x1="30" y1="8" x2="32" y2="11" stroke="#00ff88" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-  <line x1="70" y1="8" x2="68" y2="11" stroke="#00ff88" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-</svg></div>
-  <div class="cb-login-title">Mindset Operacional</div>
-  <div class="cb-login-sub">TRAGETTA · GRU · ACESSO PESSOAL</div>
-  <div class="cb-login-scan"></div>
-  <div id="cb-login-form">
-    <div class="cb-login-label">Nome de usuário</div>
-    <input class="cb-login-input" id="cb-ln-user" placeholder="seu nome..." autocomplete="off" onkeydown="if(event.key==='Enter')document.getElementById('cb-ln-pass').focus()">
-    <div class="cb-login-label">Senha</div>
-    <input class="cb-login-input" id="cb-ln-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')cbLogin()">
-    <div class="cb-login-err" id="cb-login-err">Usuário ou senha incorretos</div>
-    <button class="cb-login-btn" onclick="cbLogin()">⬡ Entrar</button>
-    <div class="cb-login-link" onclick="cbMostrarCadastro()">Primeiro acesso? Criar conta</div>
-  </div>
-  <div id="cb-cadastro-form" style="display:none">
-    <div class="cb-login-label">Seu nome</div>
-    <input class="cb-login-input" id="cb-cad-nome" placeholder="ex: Patrick..." autocomplete="off">
-    <div class="cb-login-label">Criar senha</div>
-    <input class="cb-login-input" id="cb-cad-pass" type="password" placeholder="••••••••">
-    <div class="cb-login-err" id="cb-cad-err"></div>
-    <button class="cb-login-btn" onclick="cbCadastrar()">⬡ Criar conta</button>
-    <div class="cb-login-link" onclick="cbMostrarLogin()">Já tenho conta</div>
-  </div>
-</div>
-</div>
-
-<div class="cb-wrap">
-  <!-- GRAFO -->
-  <div class="cb-grafo-section">
-    <canvas id="cb-grafo-canvas"></canvas>
-
-    <div class="cb-hud">
-      <div class="cb-hud-title">⬡ Mindset Operacional</div>
-      <div class="cb-hud-sub" id="cb-hud-sub">Nenhum relatório carregado</div>
-    </div>
-
-    <div class="cb-status">
-      <button onclick="cbAbrirNotas()" id="cb-btn-notas" style="display:none;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.25);border-radius:6px;padding:4px 10px;font-family:'Space Mono',monospace;font-size:9px;color:#00ff88;cursor:pointer;margin-right:8px">📝 Memórias</button>
-      <button onclick="cbLogout()" id="cb-btn-logout" style="display:none;background:none;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:4px 10px;font-family:'Space Mono',monospace;font-size:9px;color:#f1f5f9;cursor:pointer;margin-right:8px">Sair</button>
-      <div class="cb-status-dot" id="cb-status-dot" style="background:#374151;box-shadow:none"></div>
-      <div class="cb-status-txt" id="cb-status-txt">offline</div>
-    </div>
-
-    <!-- Empty state -->
-    <div class="cb-empty-state" id="cb-empty-grafo">
-      <div class="cb-empty-icon" style="line-height:1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="48" height="48">
-  <!-- Lâmpada -->
-  <path d="M50 8 C33 8 20 21 20 38 C20 50 27 60 38 65 L38 75 C38 77 40 79 42 79 L58 79 C60 79 62 77 62 75 L62 65 C73 60 80 50 80 38 C80 21 67 8 50 8Z" fill="none" stroke="#00ff88" stroke-width="3.5"/>
-  <!-- Base lâmpada -->
-  <rect x="40" y="79" width="20" height="5" rx="2" fill="#00ff88" opacity="0.6"/>
-  <rect x="42" y="85" width="16" height="5" rx="2" fill="#00ff88" opacity="0.4"/>
-  <!-- Engrenagem grande (direita) -->
-  <g transform="translate(58,36) scale(0.55)">
-    <circle cx="0" cy="0" r="12" fill="none" stroke="#00ff88" stroke-width="3"/>
-    <circle cx="0" cy="0" r="5" fill="#00ff88"/>
-    <rect x="-3" y="-18" width="6" height="8" rx="2" fill="#00ff88"/>
-    <rect x="-3" y="10" width="6" height="8" rx="2" fill="#00ff88"/>
-    <rect x="-18" y="-3" width="8" height="6" rx="2" fill="#00ff88"/>
-    <rect x="10" y="-3" width="8" height="6" rx="2" fill="#00ff88"/>
-    <rect x="-14" y="-14" width="6" height="6" rx="1" transform="rotate(45)" fill="#00ff88"/>
-    <rect x="8" y="-14" width="6" height="6" rx="1" transform="rotate(45)" fill="#00ff88"/>
-    <rect x="-14" y="8" width="6" height="6" rx="1" transform="rotate(45)" fill="#00ff88"/>
-    <rect x="8" y="8" width="6" height="6" rx="1" transform="rotate(45)" fill="#00ff88"/>
-  </g>
-  <!-- Engrenagem pequena (esquerda) -->
-  <g transform="translate(38,42) scale(0.38)">
-    <circle cx="0" cy="0" r="11" fill="none" stroke="#00ff88" stroke-width="3"/>
-    <circle cx="0" cy="0" r="4.5" fill="#00ff88"/>
-    <rect x="-2.5" y="-16" width="5" height="7" rx="1.5" fill="#00ff88"/>
-    <rect x="-2.5" y="9" width="5" height="7" rx="1.5" fill="#00ff88"/>
-    <rect x="-16" y="-2.5" width="7" height="5" rx="1.5" fill="#00ff88"/>
-    <rect x="9" y="-2.5" width="7" height="5" rx="1.5" fill="#00ff88"/>
-  </g>
-  <!-- Brilho -->
-  <line x1="50" y1="2" x2="50" y2="6" stroke="#00ff88" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-  <line x1="30" y1="8" x2="32" y2="11" stroke="#00ff88" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-  <line x1="70" y1="8" x2="68" y2="11" stroke="#00ff88" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-</svg></div>
-      <div class="cb-empty-txt">Importe um relatório TMS na aba Planejamento
-        <small>O mindset se ativará com os dados carregados</small>
-      </div>
-    </div>
-
-    <div class="cb-tooltip" id="cb-tooltip">
-      <div class="cb-tooltip-name" id="cb-tooltip-name"></div>
-      <div class="cb-tooltip-info" id="cb-tooltip-info"></div>
-    </div>
-  </div>
-
-  <!-- SUGESTÕES -->
-  <div class="cb-sugestoes" id="cb-sugestoes" style="display:none">
-    <button class="cb-sug" onclick="cbPerguntar('Quais destinos têm carga disponível hoje?')">📦 Disponível hoje</button>
-    <button class="cb-sug" onclick="cbPerguntar('Quais destinos têm carga crítica (atrasada)?')">⚠️ Críticos</button>
-    <button class="cb-sug" onclick="cbPerguntar('Qual região tem mais tonelagem disponível?')">🗺️ Por região</button>
-    <button class="cb-sug" onclick="cbPerguntar('Monte um resumo executivo do estoque atual')">📊 Resumo executivo</button>
-    <button class="cb-sug" onclick="cbPerguntar('Quais destinos têm 100% do crítico planejado?')">✅ 100% planejado</button>
-    <button class="cb-sug" onclick="cbPerguntar('Priorize os 5 destinos mais urgentes')">🔥 Top 5 urgentes</button>
-    <button class="cb-sug" onclick="cbAlertaCritico()">🚨 Alerta Crítico</button>
-    <button class="cb-sug" onclick="cbCalcularCarretas()">🚛 Carretas necessárias</button>
-  </div>
-
-  <!-- CHAT -->
-  <div class="cb-chat-section">
-    <div class="cb-chat-messages" id="cb-messages"></div>
-    <div class="cb-input-row">
-      <div class="cb-input-wrap">
-        <span style="color:#374151;font-size:13px">⬡</span>
-        <input class="cb-input" id="cb-input" placeholder="Pergunte sobre o estoque, destinos, criticidade..." 
-          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();cbEnviar()}">
-      </div>
-      <button class="cb-send-btn" id="cb-send-btn" onclick="cbEnviar()">Enviar</button>
-    </div>
-  </div>
-</div>
-
-
-</div>
 
 </div><!-- /sb-content -->
 </div><!-- /app-layout -->
@@ -4070,7 +3809,7 @@ function viewProg(id) {
       <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
     </div>
   `;
-  document.getElementById('modal-overlay').style.display = 'block';
+  document.getElementById('modal-overlay').classList.add('open');
 }
 
 // ===== EDIT =====
@@ -4115,7 +3854,7 @@ function editProg(id) {
       <button class="btn btn-primary" onclick="saveEdit(${id})">💾 Salvar</button>
     </div>
   `;
-  document.getElementById('modal-edit-overlay').style.display = 'block';
+  document.getElementById('modal-edit-overlay').classList.add('open');
 }
 function saveEdit(id) {
   const r = progData.find(x => x._id === id);
@@ -4142,12 +3881,12 @@ function saveEdit(id) {
 // ===== MODAL =====
 function closeModal(e) {
   if (!e || e.target === document.getElementById('modal-overlay')) {
-    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('modal-overlay').classList.remove('open');
   }
 }
 function closeEditModal(e) {
   if (!e || e.target === document.getElementById('modal-edit-overlay')) {
-    document.getElementById('modal-edit-overlay').style.display = 'none';
+    document.getElementById('modal-edit-overlay').classList.remove('open');
   }
 }
 
@@ -4530,7 +4269,7 @@ function cfOpen(campo, btn) {
   cfDraw(vals, sel);
   var rect = btn.getBoundingClientRect();
   dd.style.top=(rect.bottom+4)+'px'; dd.style.left=Math.max(4,Math.min(rect.left,window.innerWidth-290))+'px';
-  dd.style.display = 'block'; btn.classList.add('active');
+  dd.classList.add('open'); btn.classList.add('active');
 }
 function cfDraw(vals, sel) {
   var s=(document.getElementById('cf-search-input')?.value||'').toLowerCase();
@@ -4552,7 +4291,7 @@ function cfApply() {
   cfClose(); renderHist();
 }
 function cfClose() {
-  document.getElementById('cf-dropdown').style.display = 'none';
+  document.getElementById('cf-dropdown').classList.remove('open');
   if(_cfCol) { var btn=document.getElementById('cfb-'+_cfCol); if(btn&&!_cfF[_cfCol]) btn.classList.remove('active'); }
   _cfCol=null;
 }
@@ -4766,7 +4505,7 @@ function abrirEmailCliente() {
     document.body.removeChild(a);
     setTimeout(function() {
       var ov = document.getElementById('email-overlay');
-      if (ov) ov.style.display = 'none';
+      if (ov) ov.classList.remove('open');
     }, 2000);
   }
 }
@@ -4872,7 +4611,7 @@ function editProgramado(id) {
         'style="background:#00B200;padding:8px 22px;font-weight:600">💾 Salvar</button>' +
     '</div>';
 
-  overlay.style.display = 'block';
+  overlay.classList.add('open');
 }
 
 function updateEpBar() {
@@ -6245,1125 +5984,7 @@ function filtroSemana() {
   renderHist();
 }
 
-
-
-
 </script>
-
-<script>
-// ═══════════════════════════════════════════════
-// MINDSET OPERACIONAL — Grafo + IA Claude
-// ═══════════════════════════════════════════════
-var CB_API_KEY = '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';
-var _cbUsuario = null;
-
-var _cbNodes = [], _cbEdges = [], _cbAnimFrame = null;
-var _cbDragging = null, _cbHover = null;
-var _cbHistorico = [];
-var _cbDados = null;
-
-var REGIAO_COR = {
-  'NORDESTE':   '#f59e0b',
-  'NORTE CO':   '#6366f1',
-  'SUDESTE':    '#10b981',
-  'SUL':        '#8b5cf6',
-  'SÃO PAULO':  '#f97316',
-  'OUTROS':     '#6b7280',
-  'ROOT':       '#00ff88',
-  'NOTA':       '#a78bfa'
-};
-
-// ── Construir grafo a partir dos dados TMS ──
-function cbConstruirGrafo(dados) {
-  _cbDados = dados;
-  _cbNodes = [];
-  _cbEdges = [];
-
-  var canvas = document.getElementById('cb-grafo-canvas');
-  var W = canvas.width, H = canvas.height;
-  var cx = W/2, cy = H/2;
-
-  // Nó raiz
-  _cbNodes.push({ id:'ROOT', label:'GRU', type:'root', regiao:'ROOT',
-    x:cx, y:cy, vx:0, vy:0, r:22, ton:0, crit:0, fx:cx, fy:cy });
-
-  // Agregar por região
-  var regioes = {};
-  dados.destinos.forEach(function(d) {
-    var r = (d.regiao || 'OUTROS').toUpperCase().trim();
-    if (!regioes[r]) regioes[r] = { ton:0, crit:0, destinos:[] };
-    regioes[r].ton += d.peso_geral || 0;
-    regioes[r].crit += d.peso_critico_total || 0;
-    regioes[r].destinos.push(d);
-  });
-
-  // Nós de região
-  var regKeys = Object.keys(regioes);
-  regKeys.forEach(function(reg, i) {
-    var angle = (i / regKeys.length) * Math.PI * 2 - Math.PI/2;
-    var dist = Math.min(W, H) * 0.22;
-    var x = cx + Math.cos(angle) * dist;
-    var y = cy + Math.sin(angle) * dist;
-    var rd = regioes[reg];
-    _cbNodes.push({ id:'REG_'+reg, label:reg.replace(' ','\n'), type:'regiao', regiao:reg,
-      x:x, y:y, vx:0, vy:0, r:14+Math.min(rd.ton/5,8), ton:rd.ton, crit:rd.crit,
-      destinos:rd.destinos.length });
-    _cbEdges.push({ from:'ROOT', to:'REG_'+reg });
-
-    // Nós de destino
-    var dests = rd.destinos.sort(function(a,b){ return b.peso_geral-a.peso_geral; }).slice(0,10);
-    dests.forEach(function(d, j) {
-      var a2 = angle + (j - dests.length/2) * 0.28;
-      var d2 = dist + 90 + (d.peso_geral > 5 ? 20 : 0);
-      var nodeId = 'DEST_'+d.sigla;
-      _cbNodes.push({ id:nodeId, label:d.sigla, type:'destino', regiao:reg,
-        x:cx + Math.cos(a2)*d2, y:cy + Math.sin(a2)*d2, vx:0, vy:0,
-        r:4+Math.min(d.peso_geral*0.4,7),
-        ton:d.peso_geral, crit:d.peso_critico_total||0,
-        percCrit:d.perc_critico||0, percPlan:d.perc_plan_geral||0,
-        sigla:d.sigla, dtPrev:d.dt_prev_mais_proxima||'—',
-        equipamentos:d.equipamentos||[], ctes_disp:d.ctes_disp||0,
-        ton_plan:d.peso_planejado||0 });
-      _cbEdges.push({ from:'REG_'+reg, to:nodeId });
-    });
-  });
-
-  // Atualizar status
-  document.getElementById('cb-empty-grafo').style.display = 'none';
-  document.getElementById('cb-status-dot').style.cssText = 'background:#00ff88;box-shadow:0 0 8px #00ff88';
-  document.getElementById('cb-status-txt').textContent = 'online · ' + dados.destinos.length + ' destinos';
-  document.getElementById('cb-hud-sub').textContent = new Date(dados.ts).toLocaleString('pt-BR') + ' · ' + dados.destinos.length + ' destinos';
-  document.getElementById('cb-sugestoes').style.display = 'flex';
-
-  cbStartAnimation();
-}
-
-// ── Canvas render ──
-function cbStartAnimation() {
-  var canvas = document.getElementById('cb-grafo-canvas');
-  var ctx = canvas.getContext('2d');
-
-  function resize() {
-    var parent = canvas.parentElement;
-    canvas.width  = parent.clientWidth;
-    canvas.height = parent.clientHeight;
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  function draw() {
-    var W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-
-    // Fundo com grid sutil
-    ctx.strokeStyle = 'rgba(0,255,136,0.03)';
-    ctx.lineWidth = 1;
-    for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-    for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-
-    // Aplicar força (spring layout)
-    var nodeMap = {};
-    _cbNodes.forEach(function(n){ nodeMap[n.id]=n; });
-
-    // Força de repulsão
-    for (var i=0; i<_cbNodes.length; i++) {
-      for (var j=i+1; j<_cbNodes.length; j++) {
-        var a=_cbNodes[i], b=_cbNodes[j];
-        var dx=b.x-a.x, dy=b.y-a.y;
-        var dist2=Math.sqrt(dx*dx+dy*dy)||1;
-        var rep=800/(dist2*dist2);
-        a.vx-=dx/dist2*rep; a.vy-=dy/dist2*rep;
-        b.vx+=dx/dist2*rep; b.vy+=dy/dist2*rep;
-      }
-    }
-    // Força das arestas (mola)
-    _cbEdges.forEach(function(e) {
-      var a=nodeMap[e.from], b=nodeMap[e.to];
-      if (!a||!b) return;
-      var dx=b.x-a.x, dy=b.y-a.y;
-      var dist=Math.sqrt(dx*dx+dy*dy)||1;
-      var ideal = a.type==='root' ? 160 : 90;
-      var f=(dist-ideal)*0.02;
-      a.vx+=dx/dist*f; a.vy+=dy/dist*f;
-      b.vx-=dx/dist*f; b.vy-=dy/dist*f;
-    });
-    // Força para centro
-    var cx=W/2, cy=H/2;
-    _cbNodes.forEach(function(n) {
-      if (n.fx!==undefined) { n.x=n.fx; n.y=n.fy; return; }
-      n.vx+=(cx-n.x)*0.002; n.vy+=(cy-n.y)*0.002;
-      n.vx*=0.85; n.vy*=0.85;
-      n.x+=n.vx; n.y+=n.vy;
-      n.x=Math.max(n.r+10, Math.min(W-n.r-10, n.x));
-      n.y=Math.max(n.r+10, Math.min(H-n.r-10, n.y));
-    });
-
-    // Desenhar arestas
-    _cbEdges.forEach(function(e) {
-      var a=nodeMap[e.from], b=nodeMap[e.to];
-      if (!a||!b) return;
-      var cor = REGIAO_COR[b.regiao] || '#4b5563';
-      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
-      ctx.strokeStyle = cor+'33';
-      ctx.lineWidth = a.type==='root' ? 1.5 : 0.8;
-      ctx.stroke();
-    });
-
-    // Desenhar nós
-    _cbNodes.forEach(function(n) {
-      var cor = REGIAO_COR[n.regiao] || '#4b5563';
-      var isHover = _cbHover && _cbHover.id===n.id;
-      var alpha = isHover ? 1 : 0.85;
-
-      // Glow
-      if (n.type!=='destino' || n.crit > 0) {
-        var grd = ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.r*2.5);
-        var glowCor = n.crit > 0 ? '#ef4444' : cor;
-        grd.addColorStop(0, glowCor+'33');
-        grd.addColorStop(1, 'transparent');
-        ctx.beginPath(); ctx.arc(n.x,n.y,n.r*2.5,0,Math.PI*2);
-        ctx.fillStyle=grd; ctx.fill();
-      }
-
-      // Círculo
-      if (n.type === 'nota') cor = '#a78bfa'; // roxo para notas
-      ctx.beginPath(); ctx.arc(n.x,n.y,n.r+(isHover?2:0),0,Math.PI*2);
-      if (n.crit>0 && n.percCrit < 96) {
-        ctx.fillStyle='rgba(239,68,68,0.15)';
-        ctx.strokeStyle='#ef4444';
-      } else if (n.percCrit>=96 || n.crit===0) {
-        ctx.fillStyle=cor+'22';
-        ctx.strokeStyle=cor;
-      } else {
-        ctx.fillStyle=cor+'22';
-        ctx.strokeStyle=cor;
-      }
-      ctx.lineWidth = n.type==='root' ? 2.5 : n.type==='regiao' ? 1.5 : 1;
-      ctx.fill(); ctx.stroke();
-
-      // Label
-      ctx.fillStyle = isHover ? '#fff' : (n.type==='root' ? '#00ff88' : cor+'dd');
-      ctx.font = n.type==='root' ? 'bold 11px Syne, sans-serif' : n.type==='regiao' ? 'bold 8px Syne, sans-serif' : '7px Space Mono, monospace';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      if (n.label.includes('\n')) {
-        var parts=n.label.split('\n');
-        ctx.fillText(parts[0],n.x,n.y-5);
-        ctx.fillText(parts[1],n.x,n.y+5);
-      } else {
-        ctx.fillText(n.label,n.x,n.y);
-      }
-    });
-
-    _cbAnimFrame = requestAnimationFrame(draw);
-  }
-  if (_cbAnimFrame) cancelAnimationFrame(_cbAnimFrame);
-  draw();
-
-  // ── Mouse events ──
-  canvas.onmousemove = function(e) {
-    var rect=canvas.getBoundingClientRect();
-    var mx=e.clientX-rect.left, my=e.clientY-rect.top;
-    var hit=null;
-    _cbNodes.forEach(function(n) {
-      var d=Math.sqrt((n.x-mx)**2+(n.y-my)**2);
-      if (d<=n.r+4) hit=n;
-    });
-    _cbHover=hit;
-    canvas.style.cursor=hit?'pointer':'default';
-    var tt=document.getElementById('cb-tooltip');
-    if (hit) {
-      tt.style.display='block'; tt.style.left=(e.clientX+12)+'px'; tt.style.top=(e.clientY-20)+'px';
-      document.getElementById('cb-tooltip-name').textContent=hit.label.replace('\n',' ');
-      var info = hit.type==='root' ? 'Armazém central GRU' :
-        hit.type==='regiao' ? hit.ton.toFixed(1)+'t disp · '+hit.destinos+' destinos' :
-        hit.type==='nota' ? ('📝 '+(hit.titulo||'nota')+(hit.tags?' ['+hit.tags+']':'')) :
-        hit.ton.toFixed(2)+'t disp' +
-        (hit.ton_plan>0?' · 📦 '+hit.ton_plan.toFixed(2)+'t plan':'') +
-        (hit.crit>0?' · ⚠ '+hit.crit.toFixed(2)+'t crít':'') +
-        (hit.dtPrev&&hit.dtPrev!=='—'?' · 🗓 '+hit.dtPrev:'') +
-        (hit.ctes_disp?' · '+hit.ctes_disp+' CTEs':'') +
-        ' · clique p/ detalhes';
-      document.getElementById('cb-tooltip-info').textContent=info;
-    } else { tt.style.display='none'; }
-
-    if (_cbDragging) { _cbDragging.x=mx; _cbDragging.y=my; _cbDragging.fx=mx; _cbDragging.fy=my; }
-  };
-  canvas.onmousedown = function(e) {
-    if (_cbHover) { _cbDragging=_cbHover; _cbDragging.fx=_cbHover.x; _cbDragging.fy=_cbHover.y; }
-  };
-  canvas.onmouseup = function() {
-    if (_cbDragging && _cbDragging.type==='destino') {
-      delete _cbDragging.fx; delete _cbDragging.fy;
-    }
-    _cbDragging=null;
-  };
-  canvas.onclick = function(e) {
-    if (!_cbHover || _cbDragging) return;
-    var n=_cbHover;
-    if (n.type==='regiao') {
-      cbPerguntar('Me mostre todos os destinos disponíveis em '+n.label.replace('\n',' ')+' com tonelagem, criticidade e datas de previsão de embarque');
-    } else if (n.type==='destino') {
-      cbMostrarPainelDestino(n);
-    } else if (n.type==='nota') {
-      cbPerguntar('Me fale sobre a nota: '+n.titulo);
-    }
-  };
-}
-
-// ── Chat ──
-function cbEnviar() {
-  var input = document.getElementById('cb-input');
-  var txt = input.value.trim();
-  if (!txt) return;
-  input.value='';
-  cbPerguntar(txt);
-}
-
-function cbPerguntar(pergunta) {
-  if (!_cbDados) {
-    cbAdicionarMsg('ai', '⚠️ Nenhum relatório carregado. Importe um arquivo TMS na aba **Planejamento** primeiro.');
-    return;
-  }
-  cbAdicionarMsg('user', pergunta);
-  cbAdicionarTyping();
-
-  // Construir contexto dos dados
-  var ctx = cbConstruirContexto();
-
-  // Chamar API Claude
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': CB_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      system: `Você é o Mindset Operacional da Tragetta Transportes GRU. Analisa dados de estoque de cargas e responde em português com precisão operacional.
-
-DADOS DO RELATÓRIO ATUAL:
-${ctx}
-
-REGRAS DE RESPOSTA:
-- Seja direto e objetivo
-- Use markdown: **negrito**, tabelas com | pipes |, listas com -
-- Para tabelas: sempre inclua cabeçalho e separador ---
-- Destaque críticos com ⚠️ e aprovados com ✅
-- Termine com 1 insight acionável curto
-- Máximo 400 palavras`,
-      messages: [{ role: 'user', content: pergunta }]
-    })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data) {
-    cbRemoverTyping();
-    if (data.content && data.content[0]) {
-      var resposta = data.content[0].text;
-      cbAdicionarMsg('ai', resposta);
-      _cbHistorico.push({ role:'user', content:pergunta });
-      _cbHistorico.push({ role:'assistant', content:resposta });
-      if (_cbHistorico.length > 20) _cbHistorico = _cbHistorico.slice(-20);
-    } else {
-      cbAdicionarMsg('ai', '⚠️ Erro na resposta da API: ' + JSON.stringify(data.error || data));
-    }
-  })
-  .catch(function(err) {
-    cbRemoverTyping();
-    cbAdicionarMsg('ai', '⚠️ Erro de conexão: ' + err.message);
-  });
-}
-
-
-// ── PAINEL RICO DE DESTINO ──
-function cbMostrarPainelDestino(node) {
-  // Buscar dados completos do destino
-  var dest = null;
-  if (typeof _cgData !== 'undefined' && _cgData && _cgData.destinos) {
-    dest = _cgData.destinos.find(function(d){ return d.sigla === (node.sigla || node.label); });
-  }
-
-  if (!dest) {
-    cbPerguntar('Análise completa do destino ' + (node.sigla || node.label));
-    return;
-  }
-
-  // Montar mensagem rica no chat
-  var linhas = [];
-  linhas.push('📍 **' + dest.sigla + '** — ' + (dest.regiao || '—'));
-  linhas.push('');
-
-  // Status geral
-  linhas.push('| Campo | Valor |');
-  linhas.push('|---|---|');
-  linhas.push('| Ton. Disponível | ' + (dest.peso_geral || 0).toFixed(2) + 't |');
-  linhas.push('| Ton. Planejado | ' + (dest.peso_planejado || 0).toFixed(2) + 't |');
-  linhas.push('| Ton. Crítico | ' + (dest.peso_critico_total > 0 ? '⚠ ' + dest.peso_critico_total.toFixed(2) + 't' : '—') + ' |');
-  linhas.push('| % Crítico Plan. | ' + (dest.perc_critico > 0 ? dest.perc_critico.toFixed(1) + '%' : '—') + ' |');
-  linhas.push('| % Plan./Disp. | ' + (dest.perc_plan_geral > 0 ? dest.perc_plan_geral.toFixed(1) + '%' : '—') + ' |');
-  linhas.push('| CTEs Disponíveis | ' + (dest.ctes_disp || 0) + ' |');
-  linhas.push('| CTEs Planejados | ' + (dest.ctes_plan || 0) + ' |');
-  linhas.push('| Total Volumes | ' + (dest.total_volumes || 0).toLocaleString('pt-BR') + ' |');
-  linhas.push('| Valor NF Total | R$ ' + (dest.valor_nf || 0).toLocaleString('pt-BR') + ' |');
-
-  // Datas previstas
-  if (dest.datas_prev && dest.datas_prev.length > 0) {
-    linhas.push('');
-    linhas.push('📅 **Previsões de Embarque:** ' + dest.datas_prev.join(', '));
-    linhas.push('🗓 **Mais próxima:** ' + (dest.dt_prev_mais_proxima || '—'));
-  }
-
-  // Equipamentos
-  if (dest.equipamentos && dest.equipamentos.length > 0) {
-    linhas.push('');
-    linhas.push('🚛 **Equipamentos:** ' + dest.equipamentos.join(', '));
-  }
-
-  // CTEs críticos
-  var criticos = (dest.ctes_lista || []).filter(function(c){ return c.sit === 'Atrasado'; });
-  if (criticos.length > 0) {
-    linhas.push('');
-    linhas.push('⚠️ **CTEs Críticos (atrasados):**');
-    linhas.push('| CTRC | Emissão | Remetente | Peso | Dt.Prev |');
-    linhas.push('|---|---|---|---|---|');
-    criticos.slice(0,5).forEach(function(c){
-      linhas.push('| ' + c.ctrc + ' | ' + c.emit + ' | ' + c.remet + ' | ' + (c.peso/1000).toFixed(2) + 't | ' + (c.dtPrev||'—') + ' |');
-    });
-  }
-
-  // CTEs disponíveis
-  var disponiveis = (dest.ctes_lista || []).filter(function(c){ return c.status === 'DISPONÍVEL'; });
-  if (disponiveis.length > 0) {
-    linhas.push('');
-    linhas.push('📦 **CTEs Disponíveis (amostra):**');
-    linhas.push('| CTRC | Destinatário | Peso | Dt.Prev | Equip. |');
-    linhas.push('|---|---|---|---|---|');
-    disponiveis.slice(0,5).forEach(function(c){
-      linhas.push('| ' + c.ctrc + ' | ' + c.dest_nome + ' | ' + (c.peso/1000).toFixed(2) + 't | ' + (c.dtPrev||'—') + ' | ' + (c.equip||'—') + ' |');
-    });
-  }
-
-  cbAdicionarMsg('ai', linhas.join('\n'));
-}
-
-function cbConstruirContexto() {
-  if (!_cbDados) return '';
-  var d = _cbDados;
-  var linhas = ['RELATÓRIO TMS — ' + new Date(d.ts).toLocaleString('pt-BR')];
-  linhas.push('Total destinos: ' + d.destinos.length);
-
-  // Por região
-  var regioes = {};
-  d.destinos.forEach(function(dest) {
-    var r = dest.regiao || 'OUTROS';
-    if (!regioes[r]) regioes[r] = {ton:0, crit:0, dests:[]};
-    regioes[r].ton += dest.peso_geral||0;
-    regioes[r].crit += dest.peso_critico_total||0;
-    regioes[r].dests.push(dest.sigla);
-  });
-  linhas.push('\nPOR REGIÃO:');
-  Object.keys(regioes).forEach(function(r) {
-    linhas.push(r+': '+regioes[r].ton.toFixed(1)+'t disp, '+regioes[r].crit.toFixed(1)+'t crítico, destinos: '+regioes[r].dests.join(','));
-  });
-
-  // Destinos com dados completos
-  linhas.push('\nDESTINOS (sigla|regiao|disp.t|plan.t|crit.t|%crit.plan|%plan.disp|ctes.disp|dt.prev.proxima|equip):');
-  d.destinos.slice(0, 60).forEach(function(dest) {
-    linhas.push([
-      dest.sigla,
-      dest.regiao||'—',
-      (dest.peso_geral||0).toFixed(2)+'t',
-      (dest.peso_planejado||0).toFixed(2)+'t',
-      (dest.peso_critico_total||0).toFixed(2)+'t',
-      (dest.perc_critico||0).toFixed(1)+'%',
-      (dest.perc_plan_geral||0).toFixed(1)+'%',
-      dest.ctes_disp||0,
-      dest.dt_prev_mais_proxima||'—',
-      (dest.equipamentos||[]).slice(0,3).join(';')||'—'
-    ].join('|'));
-  });
-
-  return linhas.join('\n');
-}
-
-function cbAdicionarMsg(tipo, texto) {
-  var msgs = document.getElementById('cb-messages');
-  var div = document.createElement('div');
-  div.className = 'cb-msg ' + tipo;
-  div.innerHTML =
-    '<div class="cb-msg-icon">' + (tipo==='user'?'👤':'⬡') + '</div>' +
-    '<div class="cb-msg-body">' +
-      '<div class="cb-msg-label">' + (tipo==='user'?'você':'mindset') + '</div>' +
-      '<div class="cb-msg-text">' + cbFormatarMarkdown(texto) + '</div>' +
-    '</div>';
-  msgs.appendChild(div);
-  msgs.scrollTop = msgs.scrollHeight;
-}
-
-function cbAdicionarTyping() {
-  var msgs = document.getElementById('cb-messages');
-  var div = document.createElement('div');
-  div.className = 'cb-msg ai'; div.id = 'cb-typing-msg';
-  div.innerHTML = '<div class="cb-msg-icon">⬡</div><div class="cb-msg-body"><div class="cb-msg-label">mindset</div><div class="cb-typing"><span></span><span></span><span></span></div></div>';
-  msgs.appendChild(div);
-  msgs.scrollTop = msgs.scrollHeight;
-  document.getElementById('cb-send-btn').disabled = true;
-}
-
-function cbRemoverTyping() {
-  var t = document.getElementById('cb-typing-msg');
-  if (t) t.remove();
-  document.getElementById('cb-send-btn').disabled = false;
-}
-
-function cbFormatarMarkdown(txt) {
-  // Tabelas
-  txt = txt.replace(/\n(\|.+\|\n\|[-|: ]+\|\n(?:\|.+\|\n?)+)/g, function(m, table) {
-    var linhas = table.trim().split('\n');
-    var html = '<table>';
-    linhas.forEach(function(l, i) {
-      if (l.match(/^\|[-| :]+\|$/)) return;
-      var cells = l.split('|').filter(function(c){ return c.trim(); });
-      var tag = i===0?'th':'td';
-      html += '<tr>' + cells.map(function(c){ return '<'+tag+'>'+c.trim()+'</'+tag+'>'; }).join('') + '</tr>';
-    });
-    return html + '</table>';
-  });
-  // Bold
-  txt = txt.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#e2e8f0">$1</strong>');
-  // Tags coloridas
-  txt = txt.replace(/⚠️\s*([A-Z]{2,5})/g, '⚠️ <span class="cb-tag red">$1</span>');
-  txt = txt.replace(/✅\s*([A-Z]{2,5})/g, '✅ <span class="cb-tag green">$1</span>');
-  // Listas
-  txt = txt.replace(/\n- (.+)/g, '<br>• $1');
-  // Quebras de linha
-  txt = txt.replace(/\n/g, '<br>');
-  return txt;
-}
-
-// ── Inicializar quando a aba for aberta ──
-function cbInicializar() {
-  // Carregar dados se disponíveis
-  if (typeof _cgData !== 'undefined' && _cgData && _cgData.destinos && _cgData.destinos.length > 0) {
-    cbConstruirGrafo(_cgData);
-  }
-}
-
-// Observar quando a aba é selecionada
-document.addEventListener('DOMContentLoaded', function() {
-  // Checar periodicamente se há dados
-  setInterval(function() {
-    if (typeof _cgData !== 'undefined' && _cgData && _cbNodes.length === 0) {
-      cbConstruirGrafo(_cgData);
-    }
-  }, 2000);
-});
-
-</script>
-
 <!-- ============================================================ -->
-<script>
-// ═══════════════════════════════════════════════
-// CÉREBRO — LOGIN, NOTAS, ARQUIVOS
-// ═══════════════════════════════════════════════
-var SB_CB = 'https://azcthsenafixxxfiikqf.supabase.co/rest/v1';
-var SB_CB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6Y3Roc2VuYWZpeHh4Zmlpa3FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwNDA4MDksImV4cCI6MjA5MzYxNjgwOX0.3eQgkkIZhbH5h94DVpbFMJd8fiZQyG5h2RUIaie_j4I';
-var SB_CB_H = { 'apikey': SB_CB_KEY, 'Authorization': 'Bearer ' + SB_CB_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
-var _cbUser = null;
-var _cbNotas = [];
-var _cbArquivos = [];
-var _cbNotaEdit = null;
-var _cbTabAtual = 'notas';
-
-// ── FETCH HELPER ──
-function sbCb(endpoint, opts) {
-  return fetch(SB_CB + endpoint, Object.assign({ headers: SB_CB_H }, opts || {})).then(function(r){ return r.json(); });
-}
-
-// ── LOGIN / CADASTRO ──
-function cbMostrarCadastro() {
-  document.getElementById('cb-login-form').style.display = 'none';
-  document.getElementById('cb-cadastro-form').style.display = 'block';
-}
-function cbMostrarLogin() {
-  document.getElementById('cb-cadastro-form').style.display = 'none';
-  document.getElementById('cb-login-form').style.display = 'block';
-}
-
-function cbLogin() {
-  var nome = (document.getElementById('cb-ln-user').value || '').trim();
-  var senha = document.getElementById('cb-ln-pass').value || '';
-  if (!nome || !senha) return;
-  var err = document.getElementById('cb-login-err');
-  err.style.display = 'none';
-
-  sbCb('/cb_usuarios?nome=eq.' + encodeURIComponent(nome) + '&senha=eq.' + encodeURIComponent(senha) + '&select=*')
-    .then(function(rows) {
-      if (!rows || rows.length === 0) {
-        err.style.display = 'block';
-        err.textContent = 'Usuário ou senha incorretos';
-        return;
-      }
-      _cbUser = rows[0];
-      cbEntrarSistema();
-    }).catch(function(e) {
-      err.style.display = 'block';
-      err.textContent = 'Erro de conexão: ' + e.message;
-    });
-}
-
-function cbCadastrar() {
-  var nome = (document.getElementById('cb-cad-nome').value || '').trim();
-  var senha = document.getElementById('cb-cad-pass').value || '';
-  var err = document.getElementById('cb-cad-err');
-  err.style.display = 'none';
-  if (!nome || senha.length < 4) {
-    err.style.display = 'block';
-    err.textContent = nome ? 'Senha mínima de 4 caracteres' : 'Digite seu nome';
-    return;
-  }
-  // Check if already exists
-  sbCb('/cb_usuarios?nome=eq.' + encodeURIComponent(nome) + '&select=id')
-    .then(function(rows) {
-      if (rows && rows.length > 0) { err.style.display='block'; err.textContent='Nome já em uso'; return; }
-      return sbCb('/cb_usuarios', { method:'POST', body: JSON.stringify({ nome: nome, senha: senha }) });
-    })
-    .then(function(rows) {
-      if (!rows || !rows[0]) return;
-      _cbUser = rows[0];
-      cbEntrarSistema();
-    }).catch(function(e){ err.style.display='block'; err.textContent='Erro: '+e.message; });
-}
-
-function cbEntrarSistema() {
-  // Fade out login
-  var login = document.getElementById('cb-login');
-  login.style.transition = 'opacity .4s';
-  login.style.opacity = '0';
-  setTimeout(function(){ login.style.display = 'none'; }, 400);
-
-  // Show buttons
-  document.getElementById('cb-btn-notas').style.display = 'inline-flex';
-  document.getElementById('cb-btn-logout').style.display = 'inline-flex';
-
-  // Welcome message + init grafo
-  setTimeout(function() {
-    // Force canvas to correct size AFTER login screen hides
-    var canvas = document.getElementById('cb-grafo-canvas');
-    if (canvas) {
-      canvas.width  = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientHeight;
-    }
-    // Build grafo if data available
-    if (typeof _cgData !== 'undefined' && _cgData && _cgData.destinos) {
-      cbConstruirGrafo(_cgData);
-    }
-    cbAdicionarMsg('ai', '💡 Bem-vindo, **' + _cbUser.nome + '**! Suas memórias pessoais estão conectadas ao mindset.\n\nClique em **📝 Memórias** para adicionar notas ou use o chat para análises.');
-    cbnCarregarNotas();
-    cbnCarregarArquivos();
-  }, 500);
-}
-
-function cbLogout() {
-  _cbUser = null;
-  _cbNotas = [];
-  _cbArquivos = [];
-  document.getElementById('cb-login').style.display = 'flex';
-  document.getElementById('cb-login').style.opacity = '1';
-  document.getElementById('cb-btn-notas').style.display = 'none';
-  document.getElementById('cb-btn-logout').style.display = 'none';
-  document.getElementById('cb-notas-panel').style.display = 'none';
-  document.getElementById('cb-ln-user').value = '';
-  document.getElementById('cb-ln-pass').value = '';
-}
-
-// ── MODAL MEMÓRIAS ──
-function cbAbrirNotas() {
-  if (_cbUser) document.getElementById('cbn-user-lbl').textContent = _cbUser.nome;
-  document.getElementById('cb-modal-memorias').style.display = 'flex';
-  cbnCarregarNotas();
-  cbnCarregarArquivos();
-}
-function cbnFechar() { document.getElementById('cb-modal-memorias').style.display = 'none'; }
-
-function cbnTab(t) {
-  var isN = t === 'notas';
-  document.getElementById('cbn-tab-n').className = 'cbn-tab' + (isN?' on':'');
-  document.getElementById('cbn-tab-a').className = 'cbn-tab' + (!isN?' on':'');
-  document.getElementById('cbn-body-n').style.display = isN ? 'block' : 'none';
-  document.getElementById('cbn-body-a').style.display = !isN ? 'block' : 'none';
-}
-
-// Fechar modal clicando fora
-document.addEventListener('click', function(e) {
-  var modal = document.getElementById('cb-modal-memorias');
-  if (modal && modal.style.display === 'flex' && e.target === modal) cbnFechar();
-});
-
-// ── ALERTA CRÍTICO AUTOMÁTICO ──
-var CAPACIDADE_CARRETA_T = 25; // toneladas por carreta
-
-function cbAlertaCritico() {
-  if (!_cgData || !_cgData.destinos || !_cgData.destinos.length) {
-    cbAdicionarMsg('ai', '⚠️ Importe um relatório TMS primeiro.');
-    return;
-  }
-
-  var destinos = _cgData.destinos;
-
-  // Top críticos com peso crítico não zerado e % plan < 100%
-  var criticos = destinos
-    .filter(function(d){ return d.peso_critico_total > 0; })
-    .sort(function(a,b){
-      // Ordenar por: % crítico não planejado (pior primeiro) e depois pelo peso
-      var pctA = a.perc_critico >= 100 ? 0 : a.peso_critico_total;
-      var pctB = b.perc_critico >= 100 ? 0 : b.peso_critico_total;
-      return pctB - pctA;
-    });
-
-  // Destino mais urgente
-  var top = criticos[0];
-  if (!top) {
-    cbAdicionarMsg('ai', '✅ **Nenhum destino crítico não planejado!** Tudo está sob controle.');
-    return;
-  }
-
-  // Montar alerta
-  var linhas = [];
-  linhas.push('🚨 **ALERTA CRÍTICO — AÇÃO URGENTE NECESSÁRIA**');
-  linhas.push('');
-  linhas.push('**Destino mais crítico:** ' + top.sigla + ' (' + top.regiao + ')');
-  linhas.push('');
-  linhas.push('| Métrica | Valor |');
-  linhas.push('|---|---|');
-  linhas.push('| ⚠️ Ton. Crítica (atrasada) | **' + top.peso_critico_total.toFixed(2) + 't** |');
-  linhas.push('| 📦 Ton. Disponível | ' + top.peso_geral.toFixed(2) + 't |');
-  linhas.push('| ✅ % Crítico Planejado | ' + (top.perc_critico > 0 ? top.perc_critico.toFixed(1) + '%' : '0%') + ' |');
-  linhas.push('| 🗓 Previsão Embarque | ' + (top.dt_prev_mais_proxima || '—') + ' |');
-  linhas.push('| 🚛 Equipamento | ' + ((top.equipamentos||[]).join(', ')||'—') + ' |');
-  linhas.push('');
-
-  // Top 5 críticos
-  if (criticos.length > 1) {
-    linhas.push('**Top ' + Math.min(5, criticos.length) + ' destinos críticos não planejados:**');
-    linhas.push('');
-    linhas.push('| # | Destino | Região | Crit.t | % Plan. | Dt.Prev |');
-    linhas.push('|---|---|---|---|---|---|');
-    criticos.slice(0, 5).forEach(function(d, i) {
-      var pct = d.perc_critico >= 100 ? '✅ 100%' : '⚠️ ' + d.perc_critico.toFixed(1) + '%';
-      linhas.push('| ' + (i+1) + ' | **' + d.sigla + '** | ' + d.regiao + ' | ' + d.peso_critico_total.toFixed(2) + 't | ' + pct + ' | ' + (d.dt_prev_mais_proxima||'—') + ' |');
-    });
-    linhas.push('');
-  }
-
-  // Recomendação
-  var carretas_top = Math.ceil(top.peso_geral / CAPACIDADE_CARRETA_T);
-  linhas.push('💡 **Ação recomendada:** Priorize o carregamento de **' + top.sigla + '** imediatamente.');
-  linhas.push('Serão necessárias aproximadamente **' + carretas_top + ' carreta(s)** para o disponível desse destino.');
-
-  cbAdicionarMsg('ai', linhas.join('\n'));
-}
-
-// ── CALCULAR CARRETAS NECESSÁRIAS ──
-function cbCalcularCarretas() {
-  if (!_cgData || !_cgData.destinos || !_cgData.destinos.length) {
-    cbAdicionarMsg('ai', '⚠️ Importe um relatório TMS primeiro.');
-    return;
-  }
-
-  var destinos = _cgData.destinos;
-  var CAP = CAPACIDADE_CARRETA_T;
-
-  // Total disponível
-  var totalDisp = destinos.reduce(function(s,d){ return s + (d.peso_geral||0); }, 0);
-  var totalCrit = destinos.reduce(function(s,d){ return s + (d.peso_critico_total||0); }, 0);
-  var totalPlan = destinos.reduce(function(s,d){ return s + (d.peso_planejado||0); }, 0);
-
-  var carretasTotal  = Math.ceil(totalDisp / CAP);
-  var carretasCrit   = Math.ceil(totalCrit / CAP);
-  var carretasPlan   = Math.ceil(totalPlan / CAP);
-
-  // Por região
-  var regioes = {};
-  destinos.forEach(function(d) {
-    var r = d.regiao || 'OUTROS';
-    if (!regioes[r]) regioes[r] = { disp:0, crit:0 };
-    regioes[r].disp += d.peso_geral||0;
-    regioes[r].crit += d.peso_critico_total||0;
-  });
-
-  var linhas = [];
-  linhas.push('🚛 **NECESSIDADE DE CARRETAS — Capacidade: ' + CAP + 't/carreta**');
-  linhas.push('');
-  linhas.push('| Métrica | Tonelagem | Carretas |');
-  linhas.push('|---|---|---|');
-  linhas.push('| 📦 Total Disponível | ' + totalDisp.toFixed(1) + 't | **' + carretasTotal + '** |');
-  linhas.push('| ⚠️ Crítico (urgente) | ' + totalCrit.toFixed(1) + 't | **' + carretasCrit + '** |');
-  linhas.push('| ✅ Já planejado | ' + totalPlan.toFixed(1) + 't | **' + carretasPlan + '** |');
-  linhas.push('| 🔴 Restante não plan. | ' + Math.max(0,totalDisp-totalPlan).toFixed(1) + 't | **' + Math.ceil(Math.max(0,totalDisp-totalPlan)/CAP) + '** |');
-  linhas.push('');
-  linhas.push('**Por Região:**');
-  linhas.push('');
-  linhas.push('| Região | Disp.t | Carretas | Crít.t | Carretas Urgentes |');
-  linhas.push('|---|---|---|---|---|');
-
-  Object.keys(regioes).sort().forEach(function(r) {
-    var rd = regioes[r];
-    if (rd.disp === 0) return;
-    linhas.push('| ' + r + ' | ' + rd.disp.toFixed(1) + 't | **' + Math.ceil(rd.disp/CAP) + '** | ' + rd.crit.toFixed(1) + 't | **' + Math.ceil(rd.crit/CAP) + '** |');
-  });
-
-  linhas.push('');
-
-  // Destinos que precisam de carreta urgente (crítico não planejado)
-  var urgentes = destinos
-    .filter(function(d){ return d.peso_critico_total > 0 && d.perc_critico < 100; })
-    .sort(function(a,b){ return b.peso_critico_total - a.peso_critico_total })
-    .slice(0, 8);
-
-  if (urgentes.length > 0) {
-    linhas.push('**Destinos que precisam de carreta com urgência (crítico não 100% planejado):**');
-    linhas.push('');
-    linhas.push('| Destino | Crit.t | Carretas | Dt.Prev |');
-    linhas.push('|---|---|---|---|');
-    urgentes.forEach(function(d) {
-      linhas.push('| ⚠️ **' + d.sigla + '** | ' + d.peso_critico_total.toFixed(2) + 't | ' + Math.ceil(d.peso_critico_total/CAP) + ' | ' + (d.dt_prev_mais_proxima||'—') + ' |');
-    });
-  }
-
-  cbAdicionarMsg('ai', linhas.join('\n'));
-}
-
-// ── DISPARO AUTOMÁTICO DO ALERTA AO CARREGAR DADOS ──
-var _cbGrafoOriginalBuild = cbConstruirGrafo;
-cbConstruirGrafo = function(dados) {
-  _cbGrafoOriginalBuild(dados);
-  // Alerta automático após 2s se usuário logado
-  if (_cbUser) {
-    setTimeout(function() {
-      var criticos = (dados.destinos || []).filter(function(d){
-        return d.peso_critico_total > 0 && d.perc_critico < 100;
-      });
-      if (criticos.length > 0) {
-        var top = criticos.sort(function(a,b){ return b.peso_critico_total - a.peso_critico_total; })[0];
-        var totalDisp = dados.destinos.reduce(function(s,d){ return s+(d.peso_geral||0); },0);
-        var carretas = Math.ceil(totalDisp / CAPACIDADE_CARRETA_T);
-        cbAdicionarMsg('ai',
-          '🚨 **Alerta automático:** ' + criticos.length + ' destino(s) com carga crítica não totalmente planejada.\n\n' +
-          '**Mais urgente:** ' + top.sigla + ' — ' + top.peso_critico_total.toFixed(2) + 't atrasada (' + top.perc_critico.toFixed(1) + '% planejado)' +
-          (top.dt_prev_mais_proxima && top.dt_prev_mais_proxima !== '—' ? ' · Previsão: ' + top.dt_prev_mais_proxima : '') + '\n\n' +
-          '📦 Total disponível: **' + totalDisp.toFixed(1) + 't** → **' + carretas + ' carretas** de ' + CAPACIDADE_CARRETA_T + 't necessárias.\n\n' +
-          '_Use **🚨 Alerta Crítico** ou **🚛 Carretas necessárias** para detalhes completos._'
-        );
-      }
-    }, 2000);
-  }
-};
-
-// ── CRUD NOTAS (modal) ──
-function cbnCarregarNotas() {
-  if (!_cbUser) return;
-  sbCb('/cb_notas?usuario_id=eq.' + _cbUser.id + '&order=atualizado_em.desc&select=*')
-    .then(function(rows) {
-      _cbNotas = rows || [];
-      cbnRenderizarNotas();
-      cbAdicionarNotasAoGrafo();
-    }).catch(function(){});
-}
-
-function cbnRenderizarNotas() {
-  var lista = document.getElementById('cbn-lista-n');
-  if (!_cbNotas.length) { lista.innerHTML = '<div style="font-family:Space Mono,monospace;font-size:10px;color:#2d3748;text-align:center;padding:20px">Nenhuma nota ainda</div>'; return; }
-  lista.innerHTML = _cbNotas.map(function(n) {
-    var tags = (n.tags || '').split(',').filter(Boolean).map(function(t) { return '<span class="cb-nota-tag">' + t.trim() + '</span>'; }).join('');
-    var date = new Date(n.atualizado_em).toLocaleDateString('pt-BR');
-    return '<div class="cb-nota-card">' +
-      '<div style="display:flex;align-items:flex-start;gap:4px">' +
-        '<div style="flex:1;min-width:0;cursor:pointer" onclick="cbnEditar(\'' + n.id + '\')">' +
-          '<div class="cb-nota-titulo">' + (n.titulo || 'Sem título') + '</div>' +
-          '<div class="cb-nota-preview">' + (n.conteudo || '').substring(0, 80) + '</div>' +
-          (tags ? '<div class="cb-nota-tags">' + tags + '</div>' : '') +
-          '<div class="cb-nota-date">' + date + '</div>' +
-        '</div>' +
-        '<button onclick="event.stopPropagation();cbnDeletarNota(\'' + n.id + '\')" ' +
-          'title="Excluir nota" style="flex-shrink:0;background:none;border:1px solid #f3f4f6;border-radius:5px;color:#d1d5db;cursor:pointer;padding:3px 6px;font-size:12px;transition:all .15s;margin-top:1px" ' +
-          'onmouseover="this.style.color=\'#ef4444\';this.style.borderColor=\'#fecaca\';this.style.background=\'#fef2f2\'" ' +
-          'onmouseout="this.style.color=\'#d1d5db\';this.style.borderColor=\'#f3f4f6\';this.style.background=\'none\'">🗑</button>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function cbnNova() {
-  _cbNotaEdit = null;
-  document.getElementById('cbn-titulo').value = '';
-  document.getElementById('cbn-conteudo').value = '';
-  document.getElementById('cbn-tags').value = '';
-  document.getElementById('cbn-editor').style.display = 'block';
-  document.getElementById('cbn-titulo').focus();
-}
-
-function cbnEditar(id) {
-  var nota = _cbNotas.find(function(n){ return n.id === id; });
-  if (!nota) return;
-  _cbNotaEdit = nota;
-  document.getElementById('cbn-titulo').value = nota.titulo || '';
-  document.getElementById('cbn-conteudo').value = nota.conteudo || '';
-  document.getElementById('cbn-tags').value = nota.tags || '';
-  document.getElementById('cbn-editor').style.display = 'block';
-  document.getElementById('cbn-titulo').focus();
-}
-
-function cbnDeletarNota(id) {
-  if (!confirm('Excluir esta nota?')) return;
-  sbCb('/cb_notas?id=eq.' + id, { method: 'DELETE' })
-    .then(function() { cbnCarregarNotas(); showToast('Nota excluída', 'info'); })
-    .catch(function(e){ showToast('Erro: ' + e.message, 'error'); });
-}
-
-function cbnCancelar() {
-  _cbNotaEdit = null;
-  document.getElementById('cbn-editor').style.display = 'none';
-}
-
-function cbnSalvar() {
-  if (!_cbUser) return;
-  var titulo = document.getElementById('cbn-titulo').value.trim();
-  var conteudo = document.getElementById('cbn-conteudo').value.trim();
-  var tags = document.getElementById('cbn-tags').value.trim();
-  if (!titulo && !conteudo) return;
-
-  var payload = { titulo: titulo, conteudo: conteudo, tags: tags, atualizado_em: new Date().toISOString() };
-
-  var promise;
-  if (_cbNotaEdit) {
-    promise = sbCb('/cb_notas?id=eq.' + _cbNotaEdit.id, { method: 'PATCH', body: JSON.stringify(payload) });
-  } else {
-    payload.usuario_id = _cbUser.id;
-    promise = sbCb('/cb_notas', { method: 'POST', body: JSON.stringify(payload) });
-  }
-
-  promise.then(function() {
-    cbnCancelar();
-    cbnCarregarNotas();
-    // Adicionar ao contexto do mindset
-    cbAdicionarMsg('ai', '📝 Nota **' + (titulo || 'sem título') + '** salva nas memórias! Já foi integrada ao grafo e estará disponível nas próximas análises.');
-  }).catch(function(e){ showToast('Erro ao salvar nota: ' + e.message, 'error'); });
-}
-
-function cbAdicionarNotasAoGrafo() {
-  if (!_cbNotas.length || !_cbNodes.length) return;
-  _cbNotas.forEach(function(nota) {
-    var nodeId = 'NOTA_' + nota.id.substring(0,8);
-    // Remove se já existe
-    _cbNodes = _cbNodes.filter(function(n){ return n.id !== nodeId; });
-    // Posição aleatória na periferia
-    var angle = Math.random() * Math.PI * 2;
-    var canvas = document.getElementById('cb-grafo-canvas');
-    var r = Math.min(canvas ? canvas.width : 600, canvas ? canvas.height : 400) * 0.4;
-    _cbNodes.push({
-      id: nodeId, label: (nota.titulo || 'nota').substring(0,8), type: 'nota',
-      regiao: 'NOTA', x: (canvas ? canvas.width/2 : 300) + Math.cos(angle)*r,
-      y: (canvas ? canvas.height/2 : 200) + Math.sin(angle)*r,
-      vx:0, vy:0, r:6, ton:0, crit:0,
-      titulo: nota.titulo, conteudo: nota.conteudo, tags: nota.tags
-    });
-    // Conectar ao nó raiz
-    _cbEdges.push({ from: 'ROOT', to: nodeId });
-  });
-}
-
-// ── ARQUIVOS ──
-function cbnCarregarArquivos() {
-  if (!_cbUser) return;
-  sbCb('/cb_arquivos?usuario_id=eq.' + _cbUser.id + '&order=criado_em.desc&select=*')
-    .then(function(rows){ _cbArquivos = rows || []; cbnRenderizarArquivos(); })
-    .catch(function(){});
-}
-
-function cbnRenderizarArquivos() {
-  var lista = document.getElementById('cbn-lista-a');
-  if (!_cbArquivos.length) { lista.innerHTML = '<div style="font-family:Space Mono,monospace;font-size:10px;color:#2d3748;text-align:center;padding:20px">Nenhum arquivo ainda</div>'; return; }
-  var icones = { 'pdf':'📄', 'xlsx':'📊', 'xlsm':'📊', 'xls':'📊', 'docx':'📝', 'doc':'📝', 'png':'🖼️', 'jpg':'🖼️', 'jpeg':'🖼️', 'txt':'📃' };
-  lista.innerHTML = _cbArquivos.map(function(a) {
-    var ext = (a.nome || '').split('.').pop().toLowerCase();
-    var icon = icones[ext] || '📎';
-    var kb = a.tamanho ? (a.tamanho/1024).toFixed(1) + ' KB' : '';
-    return '<div class="cb-arq-card">' +
-      '<div class="cb-arq-icon">' + icon + '</div>' +
-      '<div class="cb-arq-info"><div class="cb-arq-nome">' + (a.nome||'arquivo') + '</div>' +
-      '<div class="cb-arq-meta">' + kb + ' · ' + new Date(a.criado_em).toLocaleDateString('pt-BR') + '</div></div>' +
-      '<button class="cb-arq-del" onclick="cbnDeletar(\'' + a.id + '\')" title="Remover">🗑</button>' +
-      '</div>';
-  }).join('');
-}
-
-function cbnUpload(input) {
-  if (!_cbUser || !input.files.length) return;
-  var file = input.files[0];
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    // Save metadata to Supabase (file content stored as base64 in url field for prototype)
-    // In production, use Supabase Storage
-    var payload = {
-      usuario_id: _cbUser.id,
-      nome: file.name,
-      tipo: file.type || file.name.split('.').pop(),
-      tamanho: file.size,
-      url: 'local:' + file.name // placeholder - would be Storage URL in production
-    };
-    sbCb('/cb_arquivos', { method: 'POST', body: JSON.stringify(payload) })
-      .then(function(){ cbnCarregarArquivos(); showToast('📎 ' + file.name + ' adicionado!', 'success'); })
-      .catch(function(e){ showToast('Erro: ' + e.message, 'error'); });
-  };
-  reader.readAsText(file);
-}
-
-function cbnDeletar(id) {
-  if (!confirm('Remover este arquivo?')) return;
-  sbCb('/cb_arquivos?id=eq.' + id, { method: 'DELETE' })
-    .then(function(){ cbnCarregarArquivos(); });
-}
-
-// ── CONTEXTO ENRIQUECIDO COM NOTAS ──
-var _cbConstruirContextoOriginal = null;
-function cbConstruirContextoComNotas() {
-  var ctx = cbConstruirContexto();
-  if (_cbNotas.length > 0) {
-    ctx += '\n\nMEMÓRIAS DO USUÁRIO (' + _cbUser.nome + '):\n';
-    _cbNotas.forEach(function(n) {
-      ctx += '- [' + (n.titulo||'nota') + ']: ' + (n.conteudo||'').substring(0,200);
-      if (n.tags) ctx += ' (tags: ' + n.tags + ')';
-      ctx += '\n';
-    });
-  }
-  if (_cbArquivos.length > 0) {
-    ctx += '\nARQUIVOS ANEXADOS: ' + _cbArquivos.map(function(a){ return a.nome; }).join(', ') + '\n';
-  }
-  return ctx;
-}
-
-// Override cbPerguntar to use enriched context
-var _cbPerguntarOriginal = cbPerguntar;
-cbPerguntar = function(pergunta) {
-  if (!_cbUser) { cbAdicionarMsg('ai', '⚠️ Faça login para usar o mindset.'); return; }
-  cbAdicionarMsg('user', pergunta);
-  cbAdicionarTyping();
-  var ctx = cbConstruirContextoComNotas();
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json','x-api-key':CB_API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514', max_tokens: 1500,
-      system: 'Você é o Mindset Operacional de ' + _cbUser.nome + ' na Tragetta Transportes GRU. Analisa dados de estoque de cargas, memórias e notas pessoais.\n\nDADOS:\n' + ctx + '\n\nREGRAS:\n- Responda em português, seja objetivo\n- Use markdown: **negrito**, tabelas | pipes |, listas -\n- Destaque críticos com ⚠️ e resolvidos com ✅\n- Ao mencionar notas do usuário, cite pelo título\n- Máximo 400 palavras',
-      messages: [{ role:'user', content:pergunta }]
-    })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data) {
-    cbRemoverTyping();
-    if (data.content && data.content[0]) cbAdicionarMsg('ai', data.content[0].text);
-    else cbAdicionarMsg('ai', '⚠️ Erro: ' + JSON.stringify(data.error || data));
-  })
-  .catch(function(err){ cbRemoverTyping(); cbAdicionarMsg('ai', '⚠️ Erro: ' + err.message); });
-};
-
-// Show login when cerebro tab opens if not logged in
-var _cbOriginalInicializar = cbInicializar;
-cbInicializar = function() {
-  if (!_cbUser) {
-    var login = document.getElementById('cb-login');
-    if (login) { login.style.display = 'flex'; login.style.opacity = '1'; }
-    return;
-  }
-  _cbOriginalInicializar();
-};
-
-</script>
-
-<!-- MODAL MEMÓRIAS -->
-<div id="cb-modal-memorias" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.4);align-items:flex-start;justify-content:flex-end">
-<div style="width:380px;height:100vh;background:#ffffff;border-left:1px solid #e5e7eb;display:flex;flex-direction:column;animation:slideInRight .25s ease">
-<style>
-@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
-.cbn-h{padding:14px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.cbn-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#111827;letter-spacing:.1em;text-transform:uppercase}
-.cbn-tabs{display:flex;border-bottom:1px solid #e5e7eb;flex-shrink:0}
-.cbn-tab{flex:1;padding:9px;font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
-.cbn-tab.on{color:#111827;border-bottom-color:#111827;font-weight:700}
-.cbn-body{flex:1;overflow-y:auto;padding:14px;background:#f9fafb}
-.cbn-body::-webkit-scrollbar{width:3px}
-.cbn-body::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
-.cbn-inp{width:100%;background:#fff;border:1px solid #d1d5db;border-radius:7px;padding:9px 12px;font-family:'Space Mono',monospace;font-size:11px;color:#111827;outline:none;box-sizing:border-box;transition:border-color .2s;margin-bottom:10px}
-.cbn-inp:focus{border-color:#374151}
-.cbn-ta{min-height:130px;resize:vertical;line-height:1.6}
-.cbn-btn{background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.35);border-radius:7px;padding:8px 16px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#00ff88;cursor:pointer;transition:all .15s}
-.cbn-btn:hover{background:rgba(0,255,136,.28)}
-.cbn-btn-sec{background:none;border:1px solid #d1d5db;border-radius:7px;padding:8px 14px;font-family:'Space Mono',monospace;font-size:10px;color:#4b5563;cursor:pointer;transition:all .15s}
-.cbn-btn-sec:hover{border-color:rgba(255,255,255,.2);color:#9ca3af}
-.cbn-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:all .15s;position:relative}
-.cbn-card:hover{border-color:#374151;background:#f9fafb}
-.cbn-card-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:3px}
-.cbn-card-prev{font-family:'Space Mono',monospace;font-size:9px;color:#4b5563;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cbn-card-tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
-.cbn-tag{background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:3px;padding:1px 6px;font-size:8px;font-family:'Space Mono',monospace}
-.cbn-card-date{font-size:8px;color:#2d3748;margin-top:5px;font-family:'Space Mono',monospace}
-.cbn-card-del{position:absolute;top:8px;right:8px;background:none;border:none;color:#374151;cursor:pointer;font-size:11px;padding:2px 4px;border-radius:3px}
-.cbn-card-del:hover{color:#ef4444;background:rgba(239,68,68,.1)}
-.cbn-upload{border:1.5px dashed #d1d5db;border-radius:8px;padding:22px 12px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px;display:block}
-.cbn-upload:hover{border-color:#374151;background:rgba(0,255,136,.03)}
-.cbn-upload input{display:none}
-.cbn-arq{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;margin-bottom:7px}
-.cbn-empty{text-align:center;padding:24px;font-family:'Space Mono',monospace;font-size:10px;color:#9ca3af}
-</style>
-
-<!-- Cabeçalho -->
-<div class="cbn-h">
-  <span class="cbn-title">📝 Memórias</span>
-  <div style="display:flex;align-items:center;gap:10px">
-    <span id="cbn-user-lbl" style="font-family:'Space Mono',monospace;font-size:9px;color:#6b7280"></span>
-    <button onclick="cbnFechar()" style="background:none;border:none;color:#4b5563;cursor:pointer;font-size:18px;line-height:1;padding:0 4px">×</button>
-  </div>
-</div>
-
-<!-- Tabs -->
-<div class="cbn-tabs">
-  <button class="cbn-tab on" id="cbn-tab-n" onclick="cbnTab('notas')">📝 Notas</button>
-  <button class="cbn-tab" id="cbn-tab-a" onclick="cbnTab('arquivos')">📎 Arquivos</button>
-</div>
-
-<!-- Body Notas -->
-<div class="cbn-body" id="cbn-body-n">
-  <!-- Editor (oculto por padrão) -->
-  <div id="cbn-editor" style="display:none;margin-bottom:14px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px">
-    <input class="cbn-inp" id="cbn-titulo" placeholder="Título da nota...">
-    <textarea class="cbn-inp cbn-ta" id="cbn-conteudo" placeholder="Escreva aqui... Use #tag para categorizar"></textarea>
-    <input class="cbn-inp" id="cbn-tags" placeholder="Tags: ex: urgente, nordeste, VDC">
-    <div style="display:flex;gap:8px">
-      <button class="cbn-btn" onclick="cbnSalvar()">💾 Salvar</button>
-      <button class="cbn-btn-sec" onclick="cbnCancelar()">Cancelar</button>
-    </div>
-  </div>
-  <!-- Botão nova nota -->
-  <button onclick="cbnNova()" id="cbn-btn-nova" style="width:100%;background:none;border:1.5px dashed rgba(0,255,136,.2);border-radius:8px;padding:9px;font-family:'Space Mono',monospace;font-size:10px;color:#374151;cursor:pointer;margin-bottom:12px;transition:all .2s" onmouseover="this.style.borderColor='#374151';this.style.color='#111827'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280'">+ Nova nota</button>
-  <!-- Lista -->
-  <div id="cbn-lista-n"></div>
-</div>
-
-<!-- Body Arquivos -->
-<div class="cbn-body" id="cbn-body-a" style="display:none">
-  <label class="cbn-upload">
-    <input type="file" multiple accept=".pdf,.xlsx,.xlsm,.xls,.docx,.doc,.png,.jpg,.jpeg,.txt" onchange="cbnUpload(this)">
-    <div style="font-size:28px;margin-bottom:8px">📎</div>
-    <div style="font-family:'Space Mono',monospace;font-size:10px;color:#4b5563">Clique para anexar arquivo<br><span style="color:#00ff88">PDF, Excel, Word, Imagens</span></div>
-  </label>
-  <div id="cbn-lista-a"><div class="cbn-empty">Nenhum arquivo ainda</div></div>
-</div>
-
-</div>
-</div>
-
 </body>
 </html>
