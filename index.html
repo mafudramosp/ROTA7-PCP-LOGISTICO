@@ -2467,11 +2467,11 @@ document.addEventListener('DOMContentLoaded', function() {
 #cb-grafo-canvas{width:100%;height:100%;display:block}
 .cb-hud{position:absolute;top:16px;left:16px;pointer-events:none}
 .cb-hud-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:800;color:#00ff88;text-transform:uppercase;letter-spacing:.2em;opacity:.8}
-.cb-hud-sub{font-family:'Space Mono',monospace;font-size:9px;color:#6ee7b7;opacity:.8;margin-top:2px}
+.cb-hud-sub{font-family:'Space Mono',monospace;font-size:9px;color:#4ade80;opacity:.5;margin-top:2px}
 .cb-status{position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center;pointer-events:none}
 .cb-status button{pointer-events:all}
 .cb-status-dot{width:6px;height:6px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88;animation:cb-pulse 2s infinite}
-.cb-status-txt{font-family:'Space Mono',monospace;font-size:9px;color:#00ff88;opacity:1}
+.cb-status-txt{font-family:'Space Mono',monospace;font-size:9px;color:#00ff88;opacity:.7}
 @keyframes cb-pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .cb-tooltip{position:fixed;background:rgba(5,8,16,.95);border:1px solid rgba(0,255,136,.3);border-radius:8px;padding:8px 12px;pointer-events:none;display:none;z-index:9998}
 .cb-tooltip-name{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#00ff88}
@@ -2486,11 +2486,11 @@ document.addEventListener('DOMContentLoaded', function() {
 .cb-msg.user .cb-msg-icon{background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.3)}
 .cb-msg.ai .cb-msg-icon{background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.2)}
 .cb-msg-body{flex:1;min-width:0}
-.cb-msg-label{font-family:'Space Mono',monospace;font-size:8px;color:#9ca3af;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
-.cb-msg-text{font-family:'Space Mono',monospace;font-size:11px;color:#f1f5f9;line-height:1.6}
+.cb-msg-label{font-family:'Space Mono',monospace;font-size:8px;color:#4b5563;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+.cb-msg-text{font-family:'Space Mono',monospace;font-size:11px;color:#e2e8f0;line-height:1.6}
 .cb-msg-text table{width:100%;border-collapse:collapse;margin-top:8px;font-size:10px}
 .cb-msg-text th{padding:5px 10px;text-align:left;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#00ff88;border-bottom:1px solid rgba(0,255,136,.2);background:rgba(0,255,136,.05)}
-.cb-msg-text td{padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.06);color:#e2e8f0}
+.cb-msg-text td{padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:#cbd5e1}
 .cb-msg-text td:first-child{color:#e2e8f0;font-weight:700}
 .cb-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:700;margin-left:4px}
 .cb-tag.red{background:rgba(239,68,68,.15);color:#f87171}
@@ -2505,18 +2505,17 @@ document.addEventListener('DOMContentLoaded', function() {
 .cb-input-wrap{flex:1;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(0,255,136,.15);border-radius:8px;padding:6px 12px;transition:border-color .2s}
 .cb-input-wrap:focus-within{border-color:rgba(0,255,136,.4)}
 .cb-input{flex:1;background:none;border:none;outline:none;font-family:'Space Mono',monospace;font-size:11px;color:#e2e8f0}
-.cb-input::placeholder{color:#6b7280}
+.cb-input::placeholder{color:#374151}
 .cb-send-btn{background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:6px 14px;cursor:pointer;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#00ff88;transition:all .15s;white-space:nowrap}
 .cb-send-btn:hover{background:rgba(0,255,136,.25)}
 .cb-send-btn:disabled{opacity:.4;cursor:not-allowed}
 .cb-sugestoes{padding:6px 16px 0;display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0}
-.cb-sug{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:3px 10px;font-family:'Space Mono',monospace;font-size:9px;color:#d1d5db;cursor:pointer;transition:all .15s}
+.cb-sug{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:3px 10px;font-family:'Space Mono',monospace;font-size:9px;color:#6b7280;cursor:pointer;transition:all .15s}
 .cb-sug:hover{border-color:rgba(0,255,136,.3);color:#00ff88}
 .cb-empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
 .cb-empty-icon{font-size:32px;margin-bottom:12px;opacity:.3}
-.cb-empty-txt{font-family:'Syne',sans-serif;font-size:12px;color:#9ca3af;text-align:center}
-.cb-empty-txt small{display:block;font-family:'Space Mono',monospace;font-size:9px;margin-top:4px;color:#6b7280}
-
+.cb-empty-txt{font-family:'Syne',sans-serif;font-size:12px;color:#374151;text-align:center}
+.cb-empty-txt small{display:block;font-family:'Space Mono',monospace;font-size:9px;margin-top:4px;color:#1f2937}
 </style>
 <!-- LOGIN CÉREBRO -->
 <div id="cb-login" style="position:absolute;inset:0;z-index:1000;background:#050810;display:flex;align-items:center;justify-content:center">
@@ -2598,8 +2597,6 @@ document.addEventListener('DOMContentLoaded', function() {
   <!-- GRAFO -->
   <div class="cb-grafo-section">
     <canvas id="cb-grafo-canvas"></canvas>
-
-    
 
     <div class="cb-hud">
       <div class="cb-hud-title">⬡ Mindset Operacional</div>
@@ -6257,7 +6254,7 @@ function filtroSemana() {
 // ═══════════════════════════════════════════════
 // MINDSET OPERACIONAL — Grafo + IA Claude
 // ═══════════════════════════════════════════════
-var CB_API_KEY = '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';
+var CB_API_KEY = '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';
 var _cbUsuario = null;
 
 var _cbNodes = [], _cbEdges = [], _cbAnimFrame = null;
@@ -6641,10 +6638,10 @@ function cbMostrarPainelDestino(node) {
   if (disponiveis.length > 0) {
     linhas.push('');
     linhas.push('📦 **CTEs Disponíveis (amostra):**');
-    linhas.push('| CTRC | Remetente | Peso | Dt.Prev | Equip. |');
+    linhas.push('| CTRC | Destinatário | Peso | Dt.Prev | Equip. |');
     linhas.push('|---|---|---|---|---|');
     disponiveis.slice(0,5).forEach(function(c){
-      linhas.push('| ' + c.ctrc + ' | ' + c.remet + ' | ' + (c.peso/1000).toFixed(2) + 't | ' + (c.dtPrev||'—') + ' | ' + (c.equip||'—') + ' |');
+      linhas.push('| ' + c.ctrc + ' | ' + c.dest_nome + ' | ' + (c.peso/1000).toFixed(2) + 't | ' + (c.dtPrev||'—') + ' | ' + (c.equip||'—') + ' |');
     });
   }
 
@@ -7082,12 +7079,20 @@ function cbnRenderizarNotas() {
   lista.innerHTML = _cbNotas.map(function(n) {
     var tags = (n.tags || '').split(',').filter(Boolean).map(function(t) { return '<span class="cb-nota-tag">' + t.trim() + '</span>'; }).join('');
     var date = new Date(n.atualizado_em).toLocaleDateString('pt-BR');
-    return '<div class="cb-nota-card" onclick="cbnEditar(\'' + n.id + '\')">' +
-      '<div class="cb-nota-titulo">' + (n.titulo || 'Sem título') + '</div>' +
-      '<div class="cb-nota-preview">' + (n.conteudo || '').substring(0, 80) + '</div>' +
-      (tags ? '<div class="cb-nota-tags">' + tags + '</div>' : '') +
-      '<div class="cb-nota-date">' + date + '</div>' +
-      '</div>';
+    return '<div class="cb-nota-card">' +
+      '<div style="display:flex;align-items:flex-start;gap:4px">' +
+        '<div style="flex:1;min-width:0;cursor:pointer" onclick="cbnEditar(\'' + n.id + '\')">' +
+          '<div class="cb-nota-titulo">' + (n.titulo || 'Sem título') + '</div>' +
+          '<div class="cb-nota-preview">' + (n.conteudo || '').substring(0, 80) + '</div>' +
+          (tags ? '<div class="cb-nota-tags">' + tags + '</div>' : '') +
+          '<div class="cb-nota-date">' + date + '</div>' +
+        '</div>' +
+        '<button onclick="event.stopPropagation();cbnDeletarNota(\'' + n.id + '\')" ' +
+          'title="Excluir nota" style="flex-shrink:0;background:none;border:1px solid #f3f4f6;border-radius:5px;color:#d1d5db;cursor:pointer;padding:3px 6px;font-size:12px;transition:all .15s;margin-top:1px" ' +
+          'onmouseover="this.style.color=\'#ef4444\';this.style.borderColor=\'#fecaca\';this.style.background=\'#fef2f2\'" ' +
+          'onmouseout="this.style.color=\'#d1d5db\';this.style.borderColor=\'#f3f4f6\';this.style.background=\'none\'">🗑</button>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
@@ -7109,6 +7114,13 @@ function cbnEditar(id) {
   document.getElementById('cbn-tags').value = nota.tags || '';
   document.getElementById('cbn-editor').style.display = 'block';
   document.getElementById('cbn-titulo').focus();
+}
+
+function cbnDeletarNota(id) {
+  if (!confirm('Excluir esta nota?')) return;
+  sbCb('/cb_notas?id=eq.' + id, { method: 'DELETE' })
+    .then(function() { cbnCarregarNotas(); showToast('Nota excluída', 'info'); })
+    .catch(function(e){ showToast('Erro: ' + e.message, 'error'); });
 }
 
 function cbnCancelar() {
@@ -7272,38 +7284,38 @@ cbInicializar = function() {
 </script>
 
 <!-- MODAL MEMÓRIAS -->
-<div id="cb-modal-memorias" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);align-items:flex-start;justify-content:flex-end">
-<div style="width:380px;height:100vh;background:#0a0e1a;border-left:1px solid rgba(0,255,136,.2);display:flex;flex-direction:column;animation:slideInRight .25s ease">
+<div id="cb-modal-memorias" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.4);align-items:flex-start;justify-content:flex-end">
+<div style="width:380px;height:100vh;background:#ffffff;border-left:1px solid #e5e7eb;display:flex;flex-direction:column;animation:slideInRight .25s ease">
 <style>
 @keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
-.cbn-h{padding:14px 16px;border-bottom:1px solid rgba(0,255,136,.1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.cbn-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#00ff88;letter-spacing:.1em;text-transform:uppercase}
-.cbn-tabs{display:flex;border-bottom:1px solid rgba(0,255,136,.08);flex-shrink:0}
-.cbn-tab{flex:1;padding:9px;font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#4b5563;background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
-.cbn-tab.on{color:#00ff88;border-bottom-color:#00ff88}
-.cbn-body{flex:1;overflow-y:auto;padding:14px}
+.cbn-h{padding:14px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.cbn-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#111827;letter-spacing:.1em;text-transform:uppercase}
+.cbn-tabs{display:flex;border-bottom:1px solid #e5e7eb;flex-shrink:0}
+.cbn-tab{flex:1;padding:9px;font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.cbn-tab.on{color:#111827;border-bottom-color:#111827;font-weight:700}
+.cbn-body{flex:1;overflow-y:auto;padding:14px;background:#f9fafb}
 .cbn-body::-webkit-scrollbar{width:3px}
-.cbn-body::-webkit-scrollbar-thumb{background:rgba(0,255,136,.2);border-radius:2px}
-.cbn-inp{width:100%;background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.15);border-radius:7px;padding:9px 12px;font-family:'Space Mono',monospace;font-size:11px;color:#e2e8f0;outline:none;box-sizing:border-box;transition:border-color .2s;margin-bottom:10px}
-.cbn-inp:focus{border-color:rgba(0,255,136,.45)}
+.cbn-body::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+.cbn-inp{width:100%;background:#fff;border:1px solid #d1d5db;border-radius:7px;padding:9px 12px;font-family:'Space Mono',monospace;font-size:11px;color:#111827;outline:none;box-sizing:border-box;transition:border-color .2s;margin-bottom:10px}
+.cbn-inp:focus{border-color:#374151}
 .cbn-ta{min-height:130px;resize:vertical;line-height:1.6}
 .cbn-btn{background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.35);border-radius:7px;padding:8px 16px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#00ff88;cursor:pointer;transition:all .15s}
 .cbn-btn:hover{background:rgba(0,255,136,.28)}
-.cbn-btn-sec{background:none;border:1px solid rgba(255,255,255,.08);border-radius:7px;padding:8px 14px;font-family:'Space Mono',monospace;font-size:10px;color:#4b5563;cursor:pointer;transition:all .15s}
+.cbn-btn-sec{background:none;border:1px solid #d1d5db;border-radius:7px;padding:8px 14px;font-family:'Space Mono',monospace;font-size:10px;color:#4b5563;cursor:pointer;transition:all .15s}
 .cbn-btn-sec:hover{border-color:rgba(255,255,255,.2);color:#9ca3af}
-.cbn-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:all .15s;position:relative}
-.cbn-card:hover{border-color:rgba(0,255,136,.3);background:rgba(0,255,136,.03)}
-.cbn-card-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#f1f5f9;margin-bottom:3px}
-.cbn-card-prev{font-family:'Space Mono',monospace;font-size:9px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbn-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:all .15s;position:relative}
+.cbn-card:hover{border-color:#374151;background:#f9fafb}
+.cbn-card-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:3px}
+.cbn-card-prev{font-family:'Space Mono',monospace;font-size:9px;color:#4b5563;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cbn-card-tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
-.cbn-tag{background:rgba(0,255,136,.09);color:#00ff88;border-radius:3px;padding:1px 6px;font-size:8px;font-family:'Space Mono',monospace}
-.cbn-card-date{font-size:8px;color:#6b7280;margin-top:5px;font-family:'Space Mono',monospace}
+.cbn-tag{background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:3px;padding:1px 6px;font-size:8px;font-family:'Space Mono',monospace}
+.cbn-card-date{font-size:8px;color:#2d3748;margin-top:5px;font-family:'Space Mono',monospace}
 .cbn-card-del{position:absolute;top:8px;right:8px;background:none;border:none;color:#374151;cursor:pointer;font-size:11px;padding:2px 4px;border-radius:3px}
 .cbn-card-del:hover{color:#ef4444;background:rgba(239,68,68,.1)}
-.cbn-upload{border:1.5px dashed rgba(0,255,136,.2);border-radius:8px;padding:22px 12px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px;display:block}
-.cbn-upload:hover{border-color:rgba(0,255,136,.5);background:rgba(0,255,136,.03)}
+.cbn-upload{border:1.5px dashed #d1d5db;border-radius:8px;padding:22px 12px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px;display:block}
+.cbn-upload:hover{border-color:#374151;background:rgba(0,255,136,.03)}
 .cbn-upload input{display:none}
-.cbn-arq{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;margin-bottom:7px}
+.cbn-arq{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;margin-bottom:7px}
 .cbn-empty{text-align:center;padding:24px;font-family:'Space Mono',monospace;font-size:10px;color:#9ca3af}
 </style>
 
@@ -7311,7 +7323,7 @@ cbInicializar = function() {
 <div class="cbn-h">
   <span class="cbn-title">📝 Memórias</span>
   <div style="display:flex;align-items:center;gap:10px">
-    <span id="cbn-user-lbl" style="font-family:'Space Mono',monospace;font-size:9px;color:#374151"></span>
+    <span id="cbn-user-lbl" style="font-family:'Space Mono',monospace;font-size:9px;color:#6b7280"></span>
     <button onclick="cbnFechar()" style="background:none;border:none;color:#4b5563;cursor:pointer;font-size:18px;line-height:1;padding:0 4px">×</button>
   </div>
 </div>
@@ -7325,7 +7337,7 @@ cbInicializar = function() {
 <!-- Body Notas -->
 <div class="cbn-body" id="cbn-body-n">
   <!-- Editor (oculto por padrão) -->
-  <div id="cbn-editor" style="display:none;margin-bottom:14px;background:rgba(0,255,136,.02);border:1px solid rgba(0,255,136,.1);border-radius:10px;padding:12px">
+  <div id="cbn-editor" style="display:none;margin-bottom:14px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px">
     <input class="cbn-inp" id="cbn-titulo" placeholder="Título da nota...">
     <textarea class="cbn-inp cbn-ta" id="cbn-conteudo" placeholder="Escreva aqui... Use #tag para categorizar"></textarea>
     <input class="cbn-inp" id="cbn-tags" placeholder="Tags: ex: urgente, nordeste, VDC">
@@ -7335,7 +7347,7 @@ cbInicializar = function() {
     </div>
   </div>
   <!-- Botão nova nota -->
-  <button onclick="cbnNova()" id="cbn-btn-nova" style="width:100%;background:none;border:1.5px dashed rgba(0,255,136,.2);border-radius:8px;padding:9px;font-family:'Space Mono',monospace;font-size:10px;color:#374151;cursor:pointer;margin-bottom:12px;transition:all .2s" onmouseover="this.style.borderColor='rgba(0,255,136,.5)';this.style.color='#00ff88'" onmouseout="this.style.borderColor='rgba(0,255,136,.2)';this.style.color='#374151'">+ Nova nota</button>
+  <button onclick="cbnNova()" id="cbn-btn-nova" style="width:100%;background:none;border:1.5px dashed rgba(0,255,136,.2);border-radius:8px;padding:9px;font-family:'Space Mono',monospace;font-size:10px;color:#374151;cursor:pointer;margin-bottom:12px;transition:all .2s" onmouseover="this.style.borderColor='#374151';this.style.color='#111827'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280'">+ Nova nota</button>
   <!-- Lista -->
   <div id="cbn-lista-n"></div>
 </div>
@@ -7352,8 +7364,6 @@ cbInicializar = function() {
 
 </div>
 </div>
-
-
 
 </body>
 </html>
