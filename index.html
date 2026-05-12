@@ -2158,22 +2158,10 @@ function cgImportar(input) {
         });
         window._cgDataCrit[d.sigla.toUpperCase()] = sorted[0];
       });
-      // Preencher data_crit em progData imediatamente (campos vazios)
-      var atualizados = 0;
-      if (typeof progData !== 'undefined' && progData.length) {
-        progData.forEach(function(r) {
-          var dest = (r.destino || '').toUpperCase().trim();
-          if (!r.data_crit && window._cgDataCrit[dest]) {
-            r.data_crit = window._cgDataCrit[dest];
-            atualizados++;
-          }
-        });
-        if (atualizados > 0) {
-          if (typeof saveLocal === 'function') saveLocal();
-          if (typeof renderProg === 'function') renderProg();
-          if (typeof renderHist === 'function') renderHist();
-          showToast('📅 ' + atualizados + ' datas críticas preenchidas!', 'success');
-        }
+      // Preencher data_crit em progData imediatamente
+      var atualizados = autoPreencherDataCrit() || 0;
+      if (atualizados > 0) {
+        showToast('📅 ' + atualizados + ' datas críticas preenchidas!', 'success');
       }
     } catch(err) {
       console.error(err);
@@ -2648,6 +2636,27 @@ function iniciarEscutaRealtime() {
 }
 
 // Sincronizar manualmente
+
+// ── Auto-preencher data_crit do mapa TMS em progData ──
+function autoPreencherDataCrit() {
+  if (!window._cgDataCrit || !progData || !progData.length) return;
+  var count = 0;
+  progData.forEach(function(r) {
+    if (r.data_crit) return; // não sobrescrever
+    var dest = (r.destino || '').toUpperCase().trim();
+    if (window._cgDataCrit[dest]) {
+      r.data_crit = window._cgDataCrit[dest];
+      count++;
+    }
+  });
+  if (count > 0) {
+    if (typeof saveLocal === 'function') saveLocal();
+    if (typeof renderHist === 'function') renderHist();
+    if (typeof renderProg === 'function') renderProg();
+  }
+  return count;
+}
+
 function syncManual() {
   showSyncStatus('&#8635; Buscando dados...');
   fbGetAll().then(function(recs) {
@@ -2655,6 +2664,7 @@ function syncManual() {
       var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
       progData = deduplicar(f);
       nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
+      autoPreencherDataCrit();
       saveLocal();
     }
     renderProg(); renderHist(); hideSyncStatus();
@@ -3672,6 +3682,19 @@ function lookupRegiao() {
   var dest = (document.getElementById('f-destino')?.value || '').toUpperCase().trim();
   var regEl = document.getElementById('f-regiao');
   if (!regEl) return;
+
+  // Auto-preencher Data Crítica do mapa TMS sempre que destino mudar
+  var critEl = document.getElementById('f-data_crit');
+  if (critEl && !critEl.value && dest && window._cgDataCrit && window._cgDataCrit[dest]) {
+    var dtBR = window._cgDataCrit[dest]; // dd/mm/yyyy
+    if (critEl.type === 'date') {
+      // Converter dd/mm/yyyy → yyyy-mm-dd para input type=date
+      var p = dtBR.split('/');
+      if (p.length === 3) critEl.value = p[2] + '-' + p[1] + '-' + p[0];
+    } else {
+      critEl.value = dtBR;
+    }
+  }
 
   if (!dest) { regEl.value = ''; return; }
 
