@@ -1090,8 +1090,21 @@
   body.dark .sidebar .sb-item.active { color: #00B200 !important; background: rgba(0,178,0,.07) !important; border-left-color: #00B200 !important; }
   body.dark .sidebar .sb-section-label { color: #4b5563 !important; }
   /* Exceção: aba Planejamento e Mindset não mudam */
-  body.dark #tab-cargas-content { background: #f1f5f9 !important; }
+  body.dark #tab-cargas-content { background: #f1f5f9 !important; color: #374151 !important; }
   body.dark #tab-cerebro-content { background: #050810 !important; }
+  /* Isola aba Cargas do dark mode — tabelas, inputs, labels e stat-cards */
+  body.dark #tab-cargas-content table    { background: transparent !important; }
+  body.dark #tab-cargas-content th       { background: #f8fafc !important; color: #94a3b8 !important; border-color: #f1f5f9 !important; }
+  body.dark #tab-cargas-content td       { color: #374151 !important; border-color: #f8fafc !important; background: transparent !important; }
+  body.dark #tab-cargas-content tr:nth-child(even) td { background: #fafafa !important; }
+  body.dark #tab-cargas-content tr:hover td            { background: #f8fafc !important; }
+  body.dark #tab-cargas-content .form-label,
+  body.dark #tab-cargas-content label    { color: #64748b !important; }
+  body.dark #tab-cargas-content input:not([type=checkbox]):not([type=radio]),
+  body.dark #tab-cargas-content select,
+  body.dark #tab-cargas-content textarea { background: #fff !important; color: #374151 !important; border-color: #e2e8f0 !important; }
+  body.dark #tab-cargas-content .stat-card,
+  body.dark #tab-cargas-content [class*="stat-"] { background: #fff !important; border-color: #e2e8f0 !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
 
