@@ -1664,10 +1664,6 @@
   <div class="modal" id="modal-content"></div>
 </div>
 
-<!-- MODAL EDITAR -->
-<div class="modal-overlay" id="modal-edit-overlay" onclick="closeEditModal(event)">
-  <div class="modal" id="modal-edit-content" style="min-width:500px"></div>
-</div>
 
 <!-- ===================== TAB: PLATAFORMA ===================== -->
 <div id="tab-plataforma-content" class="tab-content" style="background:#f3f4f6;min-height:calc(100vh - 104px)">
@@ -2058,6 +2054,7 @@ function cgImportar(input) {
       var cSit    = c['SITUACAO_PREV_EMBARQUE'];
       var cMotivo = c['Motivo'];
       var cPeso   = c['P_Operacional']!==undefined ? c['P_Operacional'] : c['P_Calculo'];
+      var cDtPrev = c['DT_PREV_EMBARQUE'] !== undefined ? c['DT_PREV_EMBARQUE'] : 32; // col AG
 
       // Agregar por destino usando lógica de status
       var destMap = {};
@@ -2087,11 +2084,10 @@ function cgImportar(input) {
         if (!destMap[dest]) destMap[dest] = {
           sigla: dest,
           regiao: CG_FILIAL_REGIAO[dest] || 'OUTROS',
-          peso_geral: 0,          // Disponível (AC > 0)
-          peso_planejado: 0,      // Planejado (BI preenchido)
-          peso_critico_total: 0,  // Crítico total (atrasados)
-          peso_critico_plan: 0,   // Crítico planejado (atrasado + BI preenchido)
-          ctes_disp: 0, atrasados: 0
+          peso_geral: 0, peso_planejado: 0,
+          peso_critico_total: 0, peso_critico_plan: 0,
+          ctes_disp: 0, atrasados: 0,
+          datas_prev: []
         };
 
         // Ton. Disponível = Equipamento (AC) preenchido (> 0)
@@ -2111,6 +2107,20 @@ function cgImportar(input) {
           // Crítico planejado = atrasado E Mercadoria_Planejada preenchida
           if (bi) {
             destMap[dest].peso_critico_plan += peso;
+          }
+        }
+        // Coletar DT_PREV_EMBARQUE (coluna AG)
+        var dtRaw = (cDtPrev !== undefined) ? row[cDtPrev] : null;
+        if (dtRaw) {
+          var dtStr = String(dtRaw).trim().split(' ')[0]; // pegar só a data
+          // Normalizar: yyyy-mm-dd → dd/mm/yyyy
+          if (dtStr.match(/^[0-9]{4}-[0-9]{2}-[0-9]{2}/)) {
+            var p = dtStr.split('-');
+            dtStr = p[2]+'/'+p[1]+'/'+p[0];
+          }
+          // Aceitar só dd/mm/yyyy
+          if (dtStr.match(/^[0-9]{2}\/[0-9]{2}\/[0-9]{4}$/)) {
+            destMap[dest].datas_prev.push(dtStr);
           }
         }
       }
@@ -2137,8 +2147,34 @@ function cgImportar(input) {
       cgRenderizar(_cgData);
       showToast('✅ ' + destinos.length + ' destinos carregados!', 'success');
       cgAtualizarUISnapshot();
-      // Se o comparativo estiver aberto, re-renderizar com dados novos
       if (_cgModoComp) cgRenderizarComparativo();
+      // ── Construir mapa destino → data mais antiga para autopreenchimento ──
+      window._cgDataCrit = {};
+      destinos.forEach(function(d) {
+        if (!d.datas_prev || !d.datas_prev.length) return;
+        var sorted = d.datas_prev.slice().sort(function(a, b) {
+          var toISO = function(s) { var p = s.split('/'); return p[2]+'-'+p[1]+'-'+p[0]; };
+          return toISO(a).localeCompare(toISO(b));
+        });
+        window._cgDataCrit[d.sigla.toUpperCase()] = sorted[0];
+      });
+      // Preencher data_crit em progData imediatamente (campos vazios)
+      var atualizados = 0;
+      if (typeof progData !== 'undefined' && progData.length) {
+        progData.forEach(function(r) {
+          var dest = (r.destino || '').toUpperCase().trim();
+          if (!r.data_crit && window._cgDataCrit[dest]) {
+            r.data_crit = window._cgDataCrit[dest];
+            atualizados++;
+          }
+        });
+        if (atualizados > 0) {
+          if (typeof saveLocal === 'function') saveLocal();
+          if (typeof renderProg === 'function') renderProg();
+          if (typeof renderHist === 'function') renderHist();
+          showToast('📅 ' + atualizados + ' datas críticas preenchidas!', 'success');
+        }
+      }
     } catch(err) {
       console.error(err);
       showToast('❌ Erro: ' + err.message, 'error');
@@ -2248,6 +2284,47 @@ function cgRenderizar(data) {
 // ── SNAPSHOT ──
 var _cgSnapshot = null;
 var _cgModoComp = false;
+
+
+// ── Sincronizar data_crit do progData com DT_PREV_EMBARQUE do TMS ──
+function cgSincronizarDataCrit(destinos) {
+  if (!destinos || !progData || !progData.length) return;
+
+  // Montar mapa destino → data mais antiga (dd/mm/aaaa)
+  var mapaDataCrit = {};
+  destinos.forEach(function(d) {
+    if (!d.datas_prev || !d.datas_prev.length) return;
+    // Ordenar datas e pegar a mais antiga
+    var sorted = d.datas_prev.slice().sort(function(a, b) {
+      // Converter dd/mm/yyyy para yyyy-mm-dd para comparar
+      var toISO = function(s) {
+        var p = s.split('/');
+        return p[2]+'-'+p[1]+'-'+p[0];
+      };
+      return toISO(a).localeCompare(toISO(b));
+    });
+    mapaDataCrit[d.sigla.toUpperCase()] = sorted[0]; // data mais antiga
+  });
+
+  if (!Object.keys(mapaDataCrit).length) return;
+
+  var atualizados = 0;
+  progData.forEach(function(r) {
+    var dest = (r.destino || '').toUpperCase().trim();
+    if (mapaDataCrit[dest] && !r.data_crit) {
+      // Só preenche se estiver vazio
+      r.data_crit = mapaDataCrit[dest];
+      atualizados++;
+    }
+  });
+
+  if (atualizados > 0) {
+    saveData();
+    renderProg();
+    renderHist();
+    showToast('📅 ' + atualizados + ' datas críticas preenchidas automaticamente!', 'success');
+  }
+}
 
 function cgAtualizarUISnapshot() {
   var temSnap  = !!_cgSnapshot;
@@ -3217,7 +3294,17 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
   const prev_fech = fromDatetimeLocal(document.getElementById('prev_' + rowId)?.value || '');
   const obs = document.getElementById('obs_' + rowId)?.value || '';
   const tipo_prior = document.getElementById('prior_' + rowId)?.value || '';
-  const data_crit = fromDateOnly(document.getElementById('crit_' + rowId)?.value || '');
+  var _critInput = document.getElementById('crit_' + rowId);
+  var _critVal = _critInput ? _critInput.value.trim() : '';
+  // Auto-preencher do mapa TMS se vazio
+  if (!_critVal && window._cgDataCrit) {
+    var _destUp = (destino || '').toUpperCase().trim();
+    if (window._cgDataCrit[_destUp]) {
+      _critVal = window._cgDataCrit[_destUp];
+      if (_critInput) _critInput.value = _critVal; // mostrar no campo
+    }
+  }
+  const data_crit = fromDateOnly(_critVal || '');
 
   if (!frota && !ocupPct) {
     showToast('Preencha a frota ou a ocupação antes de salvar', 'error');
@@ -5986,5 +6073,10 @@ function filtroSemana() {
 
 </script>
 <!-- ============================================================ -->
+
+<!-- MODAL EDITAR -->
+<div class="modal-overlay" id="modal-edit-overlay" onclick="closeEditModal(event)">
+  <div class="modal" id="modal-edit-content" style="min-width:500px"></div>
+</div>
 </body>
 </html>
