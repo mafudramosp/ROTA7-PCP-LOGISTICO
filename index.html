@@ -994,6 +994,52 @@
   }
 
   
+  
+  /* ── SUBMENUS SIDEBAR ── */
+  .sb-group { width: 100%; }
+  .sb-group-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px 6px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background .15s;
+    user-select: none;
+  }
+  .sb-group-header:hover { background: rgba(255,255,255,.05); }
+  .sb-group-title {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: #e2e8f0;
+    font-family: 'Poppins', sans-serif;
+  }
+  .sb-group-arrow {
+    font-size: 9px; color: #4b5563;
+    transition: transform .2s;
+    line-height: 1;
+  }
+  .sb-group-arrow.open { transform: rotate(90deg); }
+  .sb-group-items {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height .25s ease;
+  }
+  .sb-group-items.open { max-height: 400px; }
+  .sb-group-items .sb-item {
+    padding-left: 22px !important;
+  }
+  .sb-group-items .sb-item::before {
+    content: '';
+    display: inline-block;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: #374151;
+    margin-right: 8px;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  .sb-group-items .sb-item.active::before { background: #00B200; }
+  /* Grupo ativo mostra título em destaque */
+  .sb-group.has-active .sb-group-title { color: #e2e8f0; }
+
   /* ── TEMA ESCURO ── */
   body.dark {
     --bg:      #2b2b2b;
@@ -1188,20 +1234,42 @@
 <div class="app-layout">
 <nav class="sidebar" id="sidebar">
   <div class="sb-toggle"><button onclick="toggleSidebar()">☰</button></div>
-  <div class="sb-section">
-    <div class="sb-label">Principal</div>
-    <button class="sb-item active" id="tab-programacao" onclick="showTab('programacao')" data-tip="Programação"><span class="sb-text">Programação</span><span class="sb-badge" id="badge-prog" style="display:none"></span></button>
-    <button class="sb-item" id="tab-nova" onclick="showTab('nova')" data-tip="Adicionar"><span class="sb-text">Adicionar</span></button>
-    <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Programados"><span class="sb-text">Programados</span><span class="sb-badge" id="badge-hist" style="display:none"></span></button>
-    <button class="sb-item" id="tab-grade" onclick="showTab('grade')" data-tip="Grade"><span class="sb-text">Grade</span><span class="sb-badge" id="badge-grade" style="display:none"></span></button>
-    <button class="sb-item" id="tab-cargas" onclick="showTab('cargas')" data-tip="Planejamento"><span class="sb-text">Planejamento</span></button>
+  <!-- Grupo: Programar -->
+  <div class="sb-group" id="grp-programar">
+    <div class="sb-group-header" onclick="toggleSbGroup('programar')">
+      <span class="sb-group-title">Programar</span>
+      <span class="sb-group-arrow open" id="arrow-programar">›</span>
+    </div>
+    <div class="sb-group-items open" id="items-programar">
+      <button class="sb-item active" id="tab-programacao" onclick="showTab('programacao')" data-tip="Programação"><span class="sb-text">Programação</span><span class="sb-badge" id="badge-prog" style="display:none"></span></button>
+      <button class="sb-item" id="tab-nova" onclick="showTab('nova')" data-tip="Adicionar"><span class="sb-text">Adicionar</span></button>
+      <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Programados"><span class="sb-text">Programados</span><span class="sb-badge" id="badge-hist" style="display:none"></span></button>
+      <button class="sb-item" id="tab-grade" onclick="showTab('grade')" data-tip="Grade"><span class="sb-text">Grade</span><span class="sb-badge" id="badge-grade" style="display:none"></span></button>
+    </div>
   </div>
-  <div class="sb-section">
-    <div class="sb-label">Operações</div>
-    <button class="sb-item" id="tab-plataforma" onclick="showTab('plataforma')" data-tip="Plataforma"><span class="sb-text">Plataforma</span></button>
-    <button class="sb-item" id="tab-dashboard" onclick="showTab('dashboard')" data-tip="Dashboard"><span class="sb-text">Dashboard</span></button>
+  <!-- Grupo: Estoque -->
+  <div class="sb-group" id="grp-estoque">
+    <div class="sb-group-header" onclick="toggleSbGroup('estoque')">
+      <span class="sb-group-title">Estoque</span>
+      <span class="sb-group-arrow" id="arrow-estoque">›</span>
+    </div>
+    <div class="sb-group-items" id="items-estoque">
+      <button class="sb-item" id="tab-cargas" onclick="showTab('cargas')" data-tip="Planejamento"><span class="sb-text">Planejamento</span></button>
+      <button class="sb-item" id="tab-plataforma" onclick="showTab('plataforma')" data-tip="Plataforma"><span class="sb-text">Plataforma</span></button>
+    </div>
   </div>
-  <div class="sb-section">
+  <!-- Grupo: Análise -->
+  <div class="sb-group" id="grp-analise">
+    <div class="sb-group-header" onclick="toggleSbGroup('analise')">
+      <span class="sb-group-title">Análise</span>
+      <span class="sb-group-arrow" id="arrow-analise">›</span>
+    </div>
+    <div class="sb-group-items" id="items-analise">
+      <button class="sb-item" id="tab-dashboard" onclick="showTab('dashboard')" data-tip="Dashboard"><span class="sb-text">Dashboard</span></button>
+    </div>
+  </div>
+  <!-- Sincronização -->
+  <div class="sb-section" style="margin-top:4px">
     <div class="sb-label">Sincronização</div>
     <button class="sb-item" onclick="syncManual()" data-tip="Atualizar"><span class="sb-text">Atualizar</span></button>
     <button class="sb-item" onclick="salvarTudoFirebase()" data-tip="Salvar Tudo"><span class="sb-text">Salvar Tudo</span></button>
@@ -6184,6 +6252,40 @@ function _applyThemeSwitch(dark) {
     setTimeout(function(){ _applyThemeSwitch(true); }, 50);
   }
 })();
+</script>
+<script>
+// ── SUBMENUS SIDEBAR ──
+function toggleSbGroup(name) {
+  var items = document.getElementById('items-' + name);
+  var arrow = document.getElementById('arrow-' + name);
+  if (!items) return;
+  var isOpen = items.classList.contains('open');
+  items.classList.toggle('open', !isOpen);
+  if (arrow) arrow.classList.toggle('open', !isOpen);
+}
+
+// Auto-abrir grupo quando uma aba dentro dele é selecionada
+var _sbGroupMap = {
+  'programacao': 'programar', 'nova': 'programar',
+  'historico': 'programar', 'grade': 'programar',
+  'cargas': 'estoque', 'plataforma': 'estoque',
+  'dashboard': 'analise'
+};
+
+var _origShowTab = showTab;
+showTab = function(tab) {
+  _origShowTab(tab);
+  // Auto-expandir o grupo da aba selecionada
+  var grp = _sbGroupMap[tab];
+  if (grp) {
+    var items = document.getElementById('items-' + grp);
+    var arrow = document.getElementById('arrow-' + grp);
+    if (items && !items.classList.contains('open')) {
+      items.classList.add('open');
+      if (arrow) arrow.classList.add('open');
+    }
+  }
+};
 </script>
 </body>
 </html>
