@@ -993,7 +993,60 @@
     .sb-content{margin-left:140px}
   }
 
-  </style>
+  
+  /* ── TEMA ESCURO ── */
+  body.dark {
+    --bg:      #2b2b2b;
+    --bg2:     #2b2b2b;
+    --bg3:     #222222;
+    --bg4:     #1a1a1a;
+    --border:  #444444;
+    --border2: #555555;
+    --text:    #f1f5f9;
+    --text2:   #cbd5e1;
+    --text3:   #94a3b8;
+  }
+  /* Conteúdo principal */
+  body.dark #sb-content { background: var(--bg) !important; }
+  body.dark .tab-content.active { background: var(--bg) !important; }
+  /* Cards */
+  body.dark .card { background: var(--bg3) !important; border-color: var(--border) !important; }
+  /* Tabelas */
+  body.dark table { background: var(--bg) !important; }
+  body.dark th { background: var(--bg4) !important; color: var(--text2) !important; border-color: var(--border) !important; }
+  body.dark td { color: var(--text2) !important; border-color: var(--border) !important; background: var(--bg) !important; }
+  body.dark tr:nth-child(even) td { background: var(--bg3) !important; }
+  body.dark tr:hover td { background: var(--bg4) !important; }
+  /* Inputs */
+  body.dark input:not([type=checkbox]):not([type=radio]),
+  body.dark select,
+  body.dark textarea { background: var(--bg3) !important; color: var(--text) !important; border-color: var(--border) !important; }
+  body.dark input::placeholder, body.dark textarea::placeholder { color: var(--text3) !important; }
+  /* Labels e textos */
+  body.dark .form-label, body.dark label { color: var(--text2) !important; }
+  body.dark .form-group label { color: var(--text3) !important; }
+  /* Barras */
+  body.dark .toolbar, body.dark .filter-bar, body.dark .topbar-inner { background: var(--bg3) !important; border-color: var(--border) !important; }
+  /* Modal */
+  body.dark .modal { background: var(--bg3) !important; color: var(--text) !important; border-color: var(--border) !important; }
+  body.dark .modal-title { color: var(--text) !important; }
+  body.dark .modal-footer { background: var(--bg4) !important; border-color: var(--border) !important; }
+  /* Stat cards */
+  body.dark .stat-card, body.dark [class*="stat-"] { background: var(--bg3) !important; border-color: var(--border) !important; }
+  /* Next saidas bar */
+  body.dark .next-saidas, body.dark [id*="next-saida"] { background: var(--bg4) !important; }
+  /* Scrollbar */
+  body.dark ::-webkit-scrollbar-track { background: var(--bg3); }
+  body.dark ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+  /* Exceção: sidebar permanece com cor original */
+  body.dark .sidebar { background: #111 !important; }
+  body.dark .sidebar .sb-item { color: #9ca3af !important; }
+  body.dark .sidebar .sb-item.active { color: #00B200 !important; background: rgba(0,178,0,.07) !important; border-left-color: #00B200 !important; }
+  body.dark .sidebar .sb-section-label { color: #4b5563 !important; }
+  /* Exceção: aba Planejamento e Mindset não mudam */
+  body.dark #tab-cargas-content { background: #f1f5f9 !important; }
+  body.dark #tab-cerebro-content { background: #050810 !important; }
+</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
 
 </script>
@@ -1083,7 +1136,16 @@
   </button>
   
   <div style="margin-left:auto"></div>
-  <button id="notif-bell" onclick="toggleNotifPanel()" title="Alertas de horário" style="
+  <div onclick="toggleTheme()" title="Alternar tema claro/escuro"
+    style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:4px 8px;border-radius:8px;transition:background .2s;user-select:none"
+    onmouseover="this.style.background='rgba(255,255,255,.08)'"
+    onmouseout="this.style.background='none'">
+    <span style="font-size:10px;color:#9ca3af;font-family:'Poppins',sans-serif;font-weight:500;letter-spacing:.02em" id="theme-label">Tema</span>
+    <div id="theme-btn" style="width:36px;height:20px;border-radius:10px;background:#374151;position:relative;transition:background .3s;flex-shrink:0">
+      <div id="theme-knob" style="width:14px;height:14px;border-radius:50%;background:#fff;position:absolute;top:3px;left:3px;transition:transform .3s;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div>
+    </div>
+  </div>
+  <button id="notif-bell" onclick="toggleNotifPanel()"  title="Alertas de horário" style="
     background:none;border:none;cursor:pointer;position:relative;
     padding:6px 8px;border-radius:8px;transition:background 0.15s;
     color:#d1d5db;font-size:18px;line-height:1;
@@ -6101,5 +6163,27 @@ function filtroSemana() {
 <div class="modal-overlay" id="modal-edit-overlay" onclick="closeEditModal(event)">
   <div class="modal" id="modal-edit-content" style="min-width:500px"></div>
 </div>
+<script>
+// ── TEMA CLARO / ESCURO ──
+function toggleTheme() {
+  var dark = document.body.classList.toggle('dark');
+  localStorage.setItem('theme', dark ? 'dark' : 'light');
+  _applyThemeSwitch(dark);
+}
+function _applyThemeSwitch(dark) {
+  var btn   = document.getElementById('theme-btn');
+  var knob  = document.getElementById('theme-knob');
+  var label = document.getElementById('theme-label');
+  if (btn)   btn.style.background  = dark ? '#00B200' : '#374151';
+  if (knob)  knob.style.transform  = dark ? 'translateX(16px)' : 'translateX(0)';
+  if (label) label.textContent     = dark ? 'Dark' : 'Tema';
+}
+(function() {
+  if (localStorage.getItem('theme') === 'dark') {
+    document.body.classList.add('dark');
+    setTimeout(function(){ _applyThemeSwitch(true); }, 50);
+  }
+})();
+</script>
 </body>
 </html>
