@@ -1989,6 +1989,14 @@
   .palete-sigla { font-size:9px; }
 }
 
+/* ── SIDEBAR DE INDICADORES ── */
+.cg-sidebar { width:200px; flex-shrink:0; display:flex; flex-direction:column; gap:12px; position:sticky; top:16px; }
+.cg-ind-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+.cg-ind-label { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.08em; line-height:1.3; margin-bottom:8px; }
+.cg-ind-value { font-size:28px; font-weight:800; line-height:1; }
+.cg-ind-sub   { font-size:10px; color:#94a3b8; margin-top:5px; }
+.cg-ind-cap   { font-size:10px; color:#94a3b8; margin-top:4px; display:flex; align-items:center; gap:4px; }
+
 /* ── SNAPSHOT COMPARATIVO ── */
 .cg-snap-info { display:flex; align-items:center; gap:8px; background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:8px 14px; margin-bottom:14px; font-size:11px; color:#166534; }
 .cg-snap-info svg { flex-shrink:0; }
@@ -2014,7 +2022,8 @@
 
 </style>
 
-<div class="cg-wrap">
+<div class="cg-wrap" style="display:flex;gap:20px;align-items:flex-start">
+<div class="cg-main" style="flex:1;min-width:0">
   <!-- HEADER -->
   <div class="cg-header">
     <div>
@@ -2146,8 +2155,37 @@
       </div>
     </div>
 
+  </div><!-- /cg-conteudo -->
+</div><!-- /cg-main -->
+
+<!-- SIDEBAR DE INDICADORES -->
+<div class="cg-sidebar" id="cg-sidebar" style="display:none">
+
+  <div class="cg-ind-card">
+    <div class="cg-ind-label">Carretas necessárias</div>
+    <div class="cg-ind-value" id="cg-ind-carretas" style="color:#dc2626">—</div>
+    <div class="cg-ind-sub" id="cg-ind-carretas-sub"></div>
+    <div class="cg-ind-cap">Capacidade padrão: 25 t</div>
   </div>
-</div>
+
+  <div class="cg-ind-card">
+    <div class="cg-ind-label">Carretas carregando</div>
+    <div class="cg-ind-value" id="cg-ind-carregando" style="color:#2563eb">—</div>
+    <div class="cg-ind-sub" id="cg-ind-carregando-sub"></div>
+    <div class="cg-ind-cap">Programadas em Programados</div>
+  </div>
+
+  <div class="cg-ind-card">
+    <div class="cg-ind-label">Eficiência crítica</div>
+    <div class="cg-ind-value" id="cg-ind-efic" style="color:#dc2626">—</div>
+    <div class="cg-ind-sub" id="cg-ind-efic-sub"></div>
+    <div class="cg-ind-cap">Crítico ÷ disponível (programados)</div>
+  </div>
+
+
+</div><!-- /cg-sidebar -->
+
+</div><!-- /cg-wrap -->
 
 <script>
 // ── CARGAS MODULE ──
@@ -2409,6 +2447,76 @@ function cgRenderizar(data) {
       '</tr>';
   });
   document.getElementById('cg-tbody').innerHTML = tbody;
+
+  // Atualizar cards laterais
+  cgAtualizarCards(totalGeral, totalCrit, destinos);
+}
+
+// ── CARDS LATERAIS DE INDICADORES ──
+function cgAtualizarCards(totalGeral, totalCrit, destinos) {
+  var sidebar = document.getElementById('cg-sidebar');
+  if (!sidebar) return;
+  sidebar.style.display = 'flex';
+
+  var CAP_CARRETA = 25; // toneladas
+
+  // Card 1 — Carretas necessárias
+  var carrNec = totalGeral > 0 ? Math.ceil(totalGeral / CAP_CARRETA) : 0;
+  document.getElementById('cg-ind-carretas').textContent = carrNec > 0 ? carrNec : '—';
+  document.getElementById('cg-ind-carretas-sub').textContent =
+    totalGeral > 0 ? totalGeral.toFixed(1) + ' t disponível' : '';
+
+  // Card 2 — Carretas carregando (lê progData global)
+  var carregando = (typeof progData !== 'undefined') ? progData.length : 0;
+  document.getElementById('cg-ind-carregando').textContent = carregando;
+  var pendentes = carrNec - carregando;
+  document.getElementById('cg-ind-carregando-sub').textContent =
+    pendentes > 0 ? pendentes + ' ainda pendente' + (pendentes > 1 ? 's' : '') :
+    carregando > 0 ? '✓ Cobertura completa' : '';
+
+  // Card 3 — Eficiência crítica: peso crítico ÷ peso disponível das composições em Programados
+  var pesoDispProg = 0, pesoCritProg2 = 0;
+  if (typeof progData !== 'undefined' && destinos) {
+    // Monta set de siglas cobertas por progData (destino OU composição)
+    var siglasProgSet = {};
+    progData.forEach(function(p) {
+      var dest = String(p.destino || '').toUpperCase().trim();
+      if (dest) siglasProgSet[dest] = true;
+      // Composição pode ter múltiplas siglas separadas por vírgula
+      String(p.composicao || '').split(',').forEach(function(s) {
+        var sig = s.trim().toUpperCase();
+        if (sig) siglasProgSet[sig] = true;
+      });
+    });
+    destinos.forEach(function(d) {
+      if (siglasProgSet[d.sigla.toUpperCase().trim()]) {
+        pesoDispProg  += d.peso_critico_total;
+        pesoCritProg2 += d.peso_critico_plan;
+      }
+    });
+  }
+  var efic = pesoDispProg > 0 ? Math.round(pesoCritProg2 / pesoDispProg * 100) : 0;
+  var eficEl = document.getElementById('cg-ind-efic');
+  eficEl.textContent = efic + '%';
+  eficEl.style.color = efic >= 80 ? '#16a34a' : efic >= 50 ? '#d97706' : '#dc2626';
+  document.getElementById('cg-ind-efic-sub').textContent =
+    pesoDispProg > 0
+      ? pesoCritProg2.toFixed(1) + ' t plan. de ' + pesoDispProg.toFixed(1) + ' t crit.'
+      : 'Sem crítico programado';
+
+  // Card 4 — Média de ocupação das carretas em progData
+  var ocupEl  = document.getElementById('cg-ind-ocup');
+  var ocupSub = document.getElementById('cg-ind-ocup-sub');
+  if (typeof progData !== 'undefined' && progData.length > 0) {
+    var somaOcup = progData.reduce(function(s,p){ return s + (p.ocup || 0); }, 0);
+    var mediaOcup = Math.round(somaOcup / progData.length * 100);
+    ocupEl.textContent = mediaOcup + '%';
+    ocupEl.style.color = mediaOcup >= 80 ? '#16a34a' : mediaOcup >= 50 ? '#d97706' : '#dc2626';
+    ocupSub.textContent = progData.length + ' carreta' + (progData.length > 1 ? 's' : '') + ' programada' + (progData.length > 1 ? 's' : '');
+  } else {
+    ocupEl.textContent = '—';
+    ocupSub.textContent = 'Sem programações';
+  }
 }
 
 
