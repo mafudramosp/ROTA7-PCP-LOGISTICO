@@ -2504,19 +2504,6 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
       ? pesoCritProg2.toFixed(1) + ' t plan. de ' + pesoDispProg.toFixed(1) + ' t crit.'
       : 'Sem crítico programado';
 
-  // Card 4 — Média de ocupação das carretas em progData
-  var ocupEl  = document.getElementById('cg-ind-ocup');
-  var ocupSub = document.getElementById('cg-ind-ocup-sub');
-  if (typeof progData !== 'undefined' && progData.length > 0) {
-    var somaOcup = progData.reduce(function(s,p){ return s + (p.ocup || 0); }, 0);
-    var mediaOcup = Math.round(somaOcup / progData.length * 100);
-    ocupEl.textContent = mediaOcup + '%';
-    ocupEl.style.color = mediaOcup >= 80 ? '#16a34a' : mediaOcup >= 50 ? '#d97706' : '#dc2626';
-    ocupSub.textContent = progData.length + ' carreta' + (progData.length > 1 ? 's' : '') + ' programada' + (progData.length > 1 ? 's' : '');
-  } else {
-    ocupEl.textContent = '—';
-    ocupSub.textContent = 'Sem programações';
-  }
 }
 
 
