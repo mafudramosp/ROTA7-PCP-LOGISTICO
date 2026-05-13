@@ -3985,7 +3985,7 @@ function salvarProg() {
   const tipo_prior = document.getElementById('f-tipo_prior').value;
   const data_crit = document.getElementById('f-data_crit').value;
 
-  if (!destino || !composicao || !saida || !dia || !tipo || !frota || !ocupPct) {
+  if (!destino || !composicao || !saida || !dia || !tipo || !frota || document.getElementById('f-ocup').value === '') {
     showToast('Preencha todos os campos obrigatórios (*)','error');
     return;
   }
@@ -5763,7 +5763,7 @@ function salvarAddPlat() {
   var ocupPct = parseInt(document.getElementById('ap-ocup').value) || 0;
   var tipo = document.getElementById('ap-tipo').value || 'Carro da Malha';
 
-  if (!destino || !saida || !dia || !frota || !ocupPct) {
+  if (!destino || !saida || !dia || !frota || document.getElementById('ap-ocup').value === '') {
     showToast('Preencha todos os campos obrigatórios *', 'error');
     return;
   }
