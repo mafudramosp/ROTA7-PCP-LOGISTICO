@@ -2466,8 +2466,20 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
   document.getElementById('cg-ind-carretas-sub').textContent =
     totalGeral > 0 ? totalGeral.toFixed(1) + ' t disponível' : '';
 
-  // Card 2 — Carretas carregando (lê progData global)
-  var carregando = (typeof progData !== 'undefined') ? progData.length : 0;
+  // Card 2 — Carretas carregando (mesmo filtro da aba Programados: gerado hoje, com frota ou ocup)
+  var _hoje = getDataHoje(); // dd/MM/yyyy
+  var carregando = 0;
+  if (typeof progData !== 'undefined') {
+    carregando = progData.filter(function(r) {
+      if (!r.frota && !r.ocup) return false;
+      var gd = (r.gerado || '').substring(0, 10); // yyyy-MM-dd ou dd/MM/yyyy
+      // Normaliza para dd/MM/yyyy
+      var gdBR = gd.indexOf('-') !== -1
+        ? gd.split('-')[2] + '/' + gd.split('-')[1] + '/' + gd.split('-')[0]
+        : gd;
+      return gdBR === _hoje;
+    }).length;
+  }
   document.getElementById('cg-ind-carregando').textContent = carregando;
   var pendentes = carrNec - carregando;
   document.getElementById('cg-ind-carregando-sub').textContent =
