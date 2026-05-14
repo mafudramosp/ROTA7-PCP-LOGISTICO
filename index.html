@@ -2339,6 +2339,8 @@ function cgImportar(input) {
         });
         window._cgDataCrit[d.sigla.toUpperCase()] = sorted[0];
       });
+      // Persistir mapa de datas críticas no localStorage
+      try { localStorage.setItem('cg_data_crit', JSON.stringify(window._cgDataCrit)); } catch(ex){}
       // Preencher data_crit em progData imediatamente
       var atualizados = autoPreencherDataCrit() || 0;
       if (atualizados > 0) {
@@ -2727,6 +2729,13 @@ try {
 
 // Restaurar do localStorage
 document.addEventListener('DOMContentLoaded', function() {
+  try {
+    // Restaurar mapa de datas críticas persistido
+    var savedCrit = localStorage.getItem('cg_data_crit');
+    if (savedCrit) {
+      window._cgDataCrit = JSON.parse(savedCrit);
+    }
+  } catch(e) {}
   try {
     var saved = localStorage.getItem('cg_data');
     if (saved) {
