@@ -950,6 +950,12 @@
   .sb-item.active .sb-badge{background:rgba(0,178,0,.18);color:#00B200}
   .sidebar.collapsed .sb-badge{opacity:0;width:0;overflow:hidden;padding:0;margin:0}
   .sidebar.collapsed .sb-item:hover::after{content:attr(data-tip);position:fixed;left:50px;background:#1f2937;color:#f3f4f6;padding:4px 10px;border-radius:6px;font-size:11px;white-space:nowrap;z-index:9999;border:1px solid #374151;box-shadow:0 4px 12px rgba(0,0,0,.4);pointer-events:none}
+  .sidebar.collapsed .sb-group-title{opacity:0;width:0;overflow:hidden;transition:opacity .15s}
+  .sidebar.collapsed .sb-group-arrow{opacity:0;width:0;overflow:hidden}
+  .sidebar.collapsed .sb-group-header{justify-content:center;padding:8px 0}
+  .sidebar.collapsed .sb-group-items{max-height:400px!important}
+  .sidebar.collapsed .sb-item{justify-content:center;padding:9px 0}
+  .sidebar.collapsed .sb-label{opacity:0;height:0;padding:0;overflow:hidden}
   .sb-content{flex:1;overflow:auto;min-width:0}
   /* ── FILTROS COLUNA ── */
   .col-filter-wrap{position:relative;display:inline-flex;align-items:center;gap:4px;width:100%}
