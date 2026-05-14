@@ -2428,9 +2428,9 @@ function cgRenderizar(data) {
     var critPct = d.perc_critico;
     var barColor = d.perc_critico >= 100 ? '#16a34a' : '#dc2626';
 
-    var rowBg = d.perc_critico >= 96 && d.peso_critico > 0
+    var rowBg = d.perc_critico >= 96 && d.peso_critico_total > 0
       ? 'background:rgba(220,252,231,0.7);border-left:3px solid #16a34a'
-      : d.peso_critico > 0 ? 'background:rgba(254,242,242,0.6)' : '';
+      : d.peso_critico_total > 0 ? 'background:rgba(254,242,242,0.6)' : '';
 
     tbody +=
       '<tr style="' + rowBg + '">' +
