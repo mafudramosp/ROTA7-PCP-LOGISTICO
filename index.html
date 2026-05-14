@@ -1989,6 +1989,10 @@
   .palete-sigla { font-size:9px; }
 }
 
+/* ── LINHA VERDE (crítico 100% planejado) ── */
+.cg-row-green td { background:rgba(220,252,231,0.7) !important; }
+.cg-row-red   td { background:rgba(254,242,242,0.6) !important; }
+
 /* ── SIDEBAR DE INDICADORES ── */
 .cg-sidebar { width:200px; flex-shrink:0; display:flex; flex-direction:column; gap:12px; position:sticky; top:16px; }
 .cg-ind-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
@@ -2428,12 +2432,12 @@ function cgRenderizar(data) {
     var critPct = d.perc_critico;
     var barColor = d.perc_critico >= 100 ? '#16a34a' : '#dc2626';
 
-    var rowBg = d.perc_critico >= 96 && d.peso_critico_total > 0
-      ? 'background:rgba(220,252,231,0.7);border-left:3px solid #16a34a'
-      : d.peso_critico_total > 0 ? 'background:rgba(254,242,242,0.6)' : '';
+    var rowCls = d.perc_critico >= 96 && d.peso_critico_total > 0
+      ? 'cg-row-green'
+      : d.peso_critico_total > 0 ? 'cg-row-red' : '';
 
     tbody +=
-      '<tr style="' + rowBg + '">' +
+      '<tr class="' + rowCls + '" style="' + (d.perc_critico >= 96 && d.peso_critico_total > 0 ? 'border-left:3px solid #16a34a' : '') + '">' +
       '<td><span class="tag-reg tag-' + css + '">' + d.regiao + '</span></td>' +
       '<td style="font-weight:700;color:#1e293b">' + d.sigla + '</td>' +
       '<td style="font-weight:600">' + (d.peso_geral > 0 ? d.peso_geral.toFixed(2) + ' t' : '—') + '</td>' +
