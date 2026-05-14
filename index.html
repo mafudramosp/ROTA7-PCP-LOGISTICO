@@ -2005,12 +2005,12 @@
 .cg-comp-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
 .cg-comp-title { font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.1em; }
 .cg-comp-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.cg-comp-col { background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+.cg-comp-col { background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow-x:auto; box-shadow:0 1px 3px rgba(0,0,0,.05); }
 .cg-comp-col-header { padding:10px 14px; border-bottom:1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between; }
 .cg-comp-col-title { font-size:11px; font-weight:700; }
 .cg-comp-col-date  { font-size:10px; color:#94a3b8; }
 .cg-comp-table { width:100%; border-collapse:collapse; font-size:11px; }
-.cg-comp-table { table-layout:fixed; width:100%; }
+.cg-comp-table { table-layout:auto; min-width:340px; width:100%; }
 .cg-comp-table th { padding:5px 8px; font-size:8px; font-weight:700; text-transform:uppercase; color:#94a3b8; background:#f8fafc; border-bottom:1px solid #f1f5f9; text-align:left; white-space:nowrap; overflow:hidden; }
 .cg-comp-table td { padding:5px 8px; border-bottom:1px solid #f8fafc; color:#374151; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .cg-comp-table tr:last-child td { border-bottom:none; }
@@ -2428,7 +2428,9 @@ function cgRenderizar(data) {
     var critPct = d.perc_critico;
     var barColor = d.perc_critico >= 100 ? '#16a34a' : '#dc2626';
 
-    var rowBg = d.peso_critico > 0 ? 'background:rgba(254,242,242,0.6)' : '';
+    var rowBg = d.perc_critico >= 96 && d.peso_critico > 0
+      ? 'background:rgba(220,252,231,0.7);border-left:3px solid #16a34a'
+      : d.peso_critico > 0 ? 'background:rgba(254,242,242,0.6)' : '';
 
     tbody +=
       '<tr style="' + rowBg + '">' +
@@ -2638,7 +2640,7 @@ function cgRenderizarComparativo() {
   var snapHTML = '';
   _cgSnapshot.destinos.forEach(function(d) {
     var regColor = REGCSS[d.regiao.toUpperCase()] || '#64748b';
-    var snapRowBg = (d.perc_critico >= 96 && d.peso_critico_total > 0) ? 'background:rgba(220,252,231,0.9);border-left:3px solid #16a34a' : (d.peso_critico_total > 0 ? 'background:rgba(254,242,242,0.6)' : '');
+    var snapRowBg = d.peso_critico_total > 0 ? 'background:rgba(254,242,242,0.6)' : '';
     snapHTML +=
       '<tr style="' + snapRowBg + '">' +
       '<td><span style="font-weight:700;font-size:11px;color:' + regColor + '">' + d.sigla + '</span></td>' +
