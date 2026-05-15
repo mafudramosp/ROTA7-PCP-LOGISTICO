@@ -4339,6 +4339,8 @@ function exportCSV(type) {
     }
     return true;
   });
+  // Aplica filtros de coluna (mesma lógica do renderHist)
+  if (typeof aplicarFiltrosColuna === 'function') data = aplicarFiltrosColuna(data);
 
   if (!data.length) { showToast('Nenhum dado para exportar no período selecionado', 'error'); return; }
 
