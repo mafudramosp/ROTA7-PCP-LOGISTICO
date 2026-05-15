@@ -2342,6 +2342,61 @@ function cgImportar(input) {
 
       _cgData = { destinos: destinos, ts: new Date() };
       try { localStorage.setItem('cg_data', JSON.stringify(_cgData)); } catch(ex){}
+
+      // ── BASELINE + MERGE ─────────────────────────────────────────────────────
+      var hoje = new Date().toISOString().slice(0,10); // yyyy-mm-dd
+      var blKey = 'cg_baseline_' + hoje;
+
+      // Carrega ou cria baseline do dia
+      var baseline = null;
+      try { var blRaw = localStorage.getItem(blKey); if (blRaw) baseline = JSON.parse(blRaw); } catch(ex){}
+
+      if (!baseline) {
+        // Primeiro import do dia → este É a baseline
+        baseline = { destinos: JSON.parse(JSON.stringify(destinos)), ts: new Date() };
+        try { localStorage.setItem(blKey, JSON.stringify(baseline)); } catch(ex){}
+        showToast('📌 Baseline do dia gravada!', 'info');
+      } else {
+        // Imports subsequentes → merge
+        var blMap = {};
+        baseline.destinos.forEach(function(d){ blMap[d.sigla] = d; });
+
+        var destAtual = {};
+        destinos.forEach(function(d){ destAtual[d.sigla] = true; });
+
+        // Destinos que estavam na baseline mas SUMIRAM do TMS = planejados 100%
+        baseline.destinos.forEach(function(bd) {
+          if (!destAtual[bd.sigla] && bd.peso_critico_total > 0) {
+            // Clonar e forçar 100% planejado
+            var concluido = JSON.parse(JSON.stringify(bd));
+            concluido.peso_critico_plan  = concluido.peso_critico_total;
+            concluido.perc_critico       = 100;
+            concluido.perc_plan_crit     = 100;
+            concluido.peso_planejado     = concluido.peso_geral;
+            concluido.perc_plan_geral    = 100;
+            concluido._concluido         = true; // marcador visual
+            destinos.push(concluido);
+          }
+        });
+
+        // Destinos existentes: se % crítico regrediu, manter o melhor resultado
+        destinos.forEach(function(d) {
+          var bl = blMap[d.sigla];
+          if (bl && d.perc_critico < bl.perc_critico) {
+            // Não deixa regredir — mantém o maior % já atingido
+            d.peso_critico_plan  = Math.max(d.peso_critico_plan, bl.peso_critico_plan);
+            d.perc_critico       = bl.perc_critico;
+            d.perc_plan_crit     = bl.perc_critico;
+          }
+        });
+
+        // Re-ordenar por peso_geral
+        destinos.sort(function(a,b){ return b.peso_geral - a.peso_geral; });
+        _cgData = { destinos: destinos, ts: new Date() };
+        try { localStorage.setItem('cg_data', JSON.stringify(_cgData)); } catch(ex){}
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
       cgRenderizar(_cgData);
       showToast('✅ ' + destinos.length + ' destinos carregados!', 'success');
       cgAtualizarUISnapshot();
@@ -2445,14 +2500,16 @@ function cgRenderizar(data) {
     var critPct = d.perc_critico;
     var barColor = d.perc_critico >= 100 ? '#16a34a' : '#dc2626';
 
-    var rowCls = d.perc_critico >= 96 && d.peso_critico_total > 0
+    var rowCls = (d._concluido || (d.perc_critico >= 96 && d.peso_critico_total > 0))
       ? 'cg-row-green'
       : d.peso_critico_total > 0 ? 'cg-row-red' : '';
+    var borderLeft = (d._concluido || (d.perc_critico >= 96 && d.peso_critico_total > 0)) ? 'border-left:3px solid #16a34a' : '';
+    var concluidoBadge = d._concluido ? ' <span style="font-size:9px;background:#dcfce7;color:#16a34a;border-radius:4px;padding:1px 5px;font-weight:700">✓</span>' : '';
 
     tbody +=
-      '<tr class="' + rowCls + '" style="' + (d.perc_critico >= 96 && d.peso_critico_total > 0 ? 'border-left:3px solid #16a34a' : '') + '">' +
+      '<tr class="' + rowCls + '" style="' + borderLeft + '">' +
       '<td><span class="tag-reg tag-' + css + '">' + d.regiao + '</span></td>' +
-      '<td style="font-weight:700;color:#1e293b">' + d.sigla + '</td>' +
+      '<td style="font-weight:700;color:#1e293b">' + d.sigla + concluidoBadge + '</td>' +
       '<td style="font-weight:600">' + (d.peso_geral > 0 ? d.peso_geral.toFixed(2) + ' t' : '—') + '</td>' +
       '<td style="font-weight:600;color:#2563eb">' + (d.peso_planejado > 0 ? d.peso_planejado.toFixed(2) + ' t' : '—') + '</td>' +
       '<td style="font-weight:700;color:' + (d.peso_critico > 0 ? '#dc2626' : '#94a3b8') + '">' +
@@ -2751,16 +2808,20 @@ document.addEventListener('DOMContentLoaded', function() {
   try {
     // Restaurar mapa de datas críticas persistido
     var savedCrit = localStorage.getItem('cg_data_crit');
-    if (savedCrit) {
-      window._cgDataCrit = JSON.parse(savedCrit);
-    }
+    if (savedCrit) window._cgDataCrit = JSON.parse(savedCrit);
+  } catch(e) {}
+  // Limpar baselines de dias anteriores
+  try {
+    var hoje = new Date().toISOString().slice(0,10);
+    Object.keys(localStorage).forEach(function(k) {
+      if (k.startsWith('cg_baseline_') && k !== 'cg_baseline_' + hoje) {
+        localStorage.removeItem(k);
+      }
+    });
   } catch(e) {}
   try {
     var saved = localStorage.getItem('cg_data');
-    if (saved) {
-      _cgData = JSON.parse(saved);
-      cgRenderizar(_cgData);
-    }
+    if (saved) { _cgData = JSON.parse(saved); cgRenderizar(_cgData); }
   } catch(e) {}
 });
 </script>
