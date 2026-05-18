@@ -2931,6 +2931,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .rcf-btn { background:none;border:none;cursor:pointer;padding:1px 3px;border-radius:3px;font-size:9px;color:#94a3b8;line-height:1;margin-left:3px; }
 .rcf-btn:hover { color:#2563eb; }
 .rcf-btn.active { color:#16a34a; }
+#rel-cf-dropdown { position:fixed; background:#1e293b; border:1px solid #334155; border-radius:8px; width:260px; z-index:99999; box-shadow:0 8px 24px rgba(0,0,0,.5); flex-direction:column; max-height:340px; }
 </style>
 
 <!-- Rel column filter dropdown (separate from prog) -->
@@ -3102,27 +3103,27 @@ function relImportar(input) {
 
 // ── Colunas da tabela ──
 var REL_COLS = [
-  {k:'dtPrev',   l:'Prev. Embarque',    w:120, type:'date'},
-  {k:'dataMax',  l:'Dt. Entrega Máx.',  w:120, type:'date'},
-  {k:'dtUlt',    l:'Dt. Últ. Posição',  w:120, type:'date'},
-  {k:'fimDes',   l:'Fim Descarga',      w:120, type:'date'},
-  {k:'disp',     l:'Disponibilidade',   w:130, type:'badge', filter:true},
-  {k:'cliente',  l:'Cliente',           w:130, type:'badge', filter:true},
-  {k:'origem',   l:'Origem',            w:70,  filter:true},
-  {k:'destino',  l:'Destino',           w:70,  filter:true},
-  {k:'equip',    l:'Equipamento',       w:90},
-  {k:'etiq',     l:'Tipo Etiqueta',     w:110, type:'badge', filter:true},
-  {k:'ctrc',     l:'CTRC',              w:100, mono:true},
-  {k:'remetente',l:'Remetente',         w:160, truncate:true, filter:true},
-  {k:'destinatario',l:'Destinatário',   w:160, truncate:true, filter:true},
-  {k:'modal',    l:'Modal',             w:80,  filter:true},
-  {k:'ocorr',    l:'Ocorr.',            w:60},
-  {k:'frotaPlan',l:'Frota Plan.',       w:120, truncate:true},
-  {k:'mac',      l:'Nr. MAC',           w:80},
-  {k:'reboque',  l:'Reboque',           w:80},
-  {k:'vols',     l:'Vols.',             w:55,  right:true},
-  {k:'peso',     l:'Peso (kg)',         w:90,  right:true, type:'num'},
-  {k:'valor',    l:'Valor (R$)',        w:110, right:true, type:'num'}
+  {k:'dtPrev',      l:'Prev. Embarque',    w:120, type:'date',  filter:true},
+  {k:'dataMax',     l:'Dt. Entrega Máx.',  w:120, type:'date',  filter:true},
+  {k:'dtUlt',       l:'Dt. Últ. Posição',  w:120, type:'date',  filter:true},
+  {k:'fimDes',      l:'Fim Descarga',      w:120, type:'date',  filter:true},
+  {k:'disp',        l:'Disponibilidade',   w:130, type:'badge',  filter:true},
+  {k:'cliente',     l:'Cliente',           w:130, type:'badge',  filter:true},
+  {k:'origem',      l:'Origem',            w:70,                 filter:true},
+  {k:'destino',     l:'Destino',           w:70,                 filter:true},
+  {k:'equip',       l:'Equipamento',       w:90,                 filter:true},
+  {k:'etiq',        l:'Tipo Etiqueta',     w:110, type:'badge',  filter:true},
+  {k:'ctrc',        l:'CTRC',             w:100, mono:true,      filter:true},
+  {k:'remetente',   l:'Remetente',        w:160, truncate:true,  filter:true},
+  {k:'destinatario',l:'Destinatário',     w:160, truncate:true,  filter:true},
+  {k:'modal',       l:'Modal',            w:80,                  filter:true},
+  {k:'ocorr',       l:'Ocorr.',           w:60,                  filter:true},
+  {k:'frotaPlan',   l:'Frota Plan.',      w:120, truncate:true,  filter:true},
+  {k:'mac',         l:'Nr. MAC',          w:80,                  filter:true},
+  {k:'reboque',     l:'Reboque',          w:80,                  filter:true},
+  {k:'vols',        l:'Vols.',            w:55,  right:true,     filter:true},
+  {k:'peso',        l:'Peso (kg)',        w:90,  right:true, type:'num', filter:true},
+  {k:'valor',       l:'Valor (R$)',       w:110, right:true, type:'num', filter:true}
 ];
 
 var dispBadge={'Planejado':'rel-badge-plan','Disponível':'rel-badge-disp','Patio':'rel-badge-patio','Em descarregamento':'rel-badge-desc'};
@@ -3220,15 +3221,26 @@ function relRenderizar() {
 
   // Thead
   var thead=document.getElementById('rel-thead');
-  var thHtml='<tr>';
+  thead.innerHTML='';
+  var tr=document.createElement('tr');
   REL_COLS.forEach(function(col){
-    var sortInd='';
-    if(_relSort.col===col.k) sortInd=_relSort.asc?' ▲':' ▼';
-    var filterBtn=col.filter?'<button class="rcf-btn'+((_rcfF[col.k]&&_rcfF[col.k].size)?(' active'):'')+'\" onclick=\"event.stopPropagation();rcfOpen(\''+col.k+'\',this)\">▼</button>':'';
-    thHtml+='<th class="rel-th" style="min-width:'+col.w+'px" onclick="relSort(\''+col.k+'\')">'+col.l+sortInd+filterBtn+'</th>';
+    var th=document.createElement('th');
+    th.className='rel-th';
+    th.style.minWidth=col.w+'px';
+    var sortInd=_relSort.col===col.k?(_relSort.asc?' ▲':' ▼'):'';
+    th.textContent=col.l+sortInd;
+    th.onclick=(function(k){ return function(){ relSort(k); }; })(col.k);
+    if(col.filter){
+      var fbtn=document.createElement('button');
+      fbtn.className='rcf-btn'+((_rcfF[col.k]&&_rcfF[col.k].size)?' active':'');
+      fbtn.setAttribute('id','rcfb-'+col.k);
+      fbtn.textContent='▼';
+      fbtn.onclick=(function(k){ return function(e){ e.stopPropagation(); rcfOpen(k,this); }; })(col.k);
+      th.appendChild(fbtn);
+    }
+    tr.appendChild(th);
   });
-  thHtml+='</tr>';
-  thead.innerHTML=thHtml;
+  thead.appendChild(tr);
 
   // Tbody - chunked para não travar
   var tbody=document.getElementById('rel-tbody');
@@ -3295,7 +3307,7 @@ function relRcfVal(r,k){ return r[k]||''; }
 
 function rcfOpen(campo,btn){
   var dd=document.getElementById('rel-cf-dropdown');
-  var same=dd.classList.contains('open')&&_rcfCol===campo;
+  var same=dd.style.display==='flex'&&_rcfCol===campo;
   rcfClose(); if(same) return;
   _rcfCol=campo;
   var map={}; _relData.forEach(function(r){var v=relRcfVal(r,campo);if(v)map[v]=true;});
@@ -3306,7 +3318,7 @@ function rcfOpen(campo,btn){
   var rect=btn.getBoundingClientRect();
   dd.style.top=(rect.bottom+4)+'px';
   dd.style.left=Math.max(4,Math.min(rect.left,window.innerWidth-270))+'px';
-  dd.classList.add('open');
+  dd.style.display='flex';
 }
 function rcfDraw(vals,sel){
   var s=(document.getElementById('rel-cf-search-input').value||'').toLowerCase();
@@ -3327,12 +3339,14 @@ function rcfApply(){
   rcfClose(); relFiltrar();
 }
 function rcfClose(){
-  document.getElementById('rel-cf-dropdown').classList.remove('open');
+  var dd=document.getElementById('rel-cf-dropdown');
+  if(dd) dd.style.display='none';
+  if(_rcfCol){ var b=document.getElementById('rcfb-'+_rcfCol); if(b&&!(_rcfF[_rcfCol]&&_rcfF[_rcfCol].size)) b.classList.remove('active'); }
   _rcfCol=null;
 }
 document.addEventListener('click',function(e){
   var dd=document.getElementById('rel-cf-dropdown');
-  if(dd&&dd.classList.contains('open')&&!dd.contains(e.target)&&!e.target.classList.contains('rcf-btn')) rcfClose();
+  if(dd&&dd.style.display==='flex'&&!dd.contains(e.target)&&!e.target.classList.contains('rcf-btn')) rcfClose();
 });
 </script>
 
