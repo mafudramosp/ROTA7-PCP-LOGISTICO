@@ -1098,6 +1098,13 @@
   /* Exceção: aba Planejamento e Mindset não mudam */
   body.dark #tab-cargas-content { background: #f1f5f9 !important; color: #374151 !important; }
   body.dark #tab-cerebro-content { background: #050810 !important; }
+  body.dark #tab-relatorio-content { background: #f1f5f9 !important; color: #374151 !important; }
+  #tab-relatorio-content.active { display: flex !important; flex-direction: column; }
+  body.dark #tab-relatorio-content table { background: transparent !important; }
+  body.dark #tab-relatorio-content th  { background: #f8fafc !important; color: #94a3b8 !important; }
+  body.dark #tab-relatorio-content td  { color: #374151 !important; background: transparent !important; }
+  body.dark #tab-relatorio-content tr:nth-child(even) td { background: #fafafa !important; }
+  body.dark #tab-relatorio-content input, body.dark #tab-relatorio-content select { background:#fff !important; color:#374151 !important; }
   /* Isola aba Cargas do dark mode — tabelas, inputs, labels e stat-cards */
   body.dark #tab-cargas-content table    { background: transparent !important; }
   body.dark #tab-cargas-content th       { background: #f8fafc !important; color: #94a3b8 !important; border-color: #f1f5f9 !important; }
@@ -1275,6 +1282,7 @@
     <div class="sb-group-items" id="items-estoque">
       <button class="sb-item" id="tab-cargas" onclick="showTab('cargas')" data-tip="Planejamento"><span class="sb-text">Planejamento</span></button>
       <button class="sb-item" id="tab-plataforma" onclick="showTab('plataforma')" data-tip="Plataforma"><span class="sb-text">Plataforma</span></button>
+      <button class="sb-item" id="tab-relatorio" onclick="showTab('relatorio')" data-tip="Relatório"><span class="sb-text">Relatório</span></button>
     </div>
   </div>
   <!-- Grupo: Análise -->
@@ -1815,6 +1823,8 @@
 
 
 <!-- ===================== TAB: PLATAFORMA ===================== -->
+<div class="cf-dropdown" id="cf-dropdown" style="display:none"><div class="cf-search"><input type="text" id="cf-search-input" placeholder="Buscar..." oninput="cfSearchFilter()"></div><div class="cf-actions"><button onclick="cfSelectAll()">Marcar todos</button><button onclick="cfClearAll()">Desmarcar todos</button></div><div class="cf-list" id="cf-list"></div><div class="cf-footer"><button class="cf-cancel" onclick="cfClose()">Cancelar</button><button class="cf-ok" onclick="cfApply()">OK</button></div></div>
+
 <div id="tab-plataforma-content" class="tab-content" style="background:#f3f4f6;min-height:calc(100vh - 104px)">
   <div class="plat-wrap">
     <!-- Day header -->
@@ -2805,6 +2815,9 @@ try {
 
 // Restaurar do localStorage
 document.addEventListener('DOMContentLoaded', function() {
+  // Garantir cf-dropdown sempre fechado ao carregar
+  var cfdd = document.getElementById('cf-dropdown');
+  if (cfdd) { cfdd.style.display = 'none'; cfdd.classList.remove('open'); }
   try {
     // Restaurar mapa de datas críticas persistido
     var savedCrit = localStorage.getItem('cg_data_crit');
@@ -2828,11 +2841,507 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 
+
+<!-- ── TAB RELATÓRIO DE EMBARQUE ── -->
+<div id="tab-relatorio-content" class="tab-content" style="background:#f1f5f9;min-height:calc(100vh - 52px);padding:16px 20px;box-sizing:border-box">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;flex-shrink:0">
+    <div>
+      <div style="font-size:16px;font-weight:700;color:#1e293b">📋 Relatório de Embarque — Analista</div>
+      <div id="rel-updated" style="font-size:11px;color:#94a3b8"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="rel-search" type="text" placeholder="🔍 Buscar CTRC, remetente, destino..." oninput="relFiltrar()"
+        style="padding:7px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;width:240px;outline:none;background:#fff">
+      <label style="padding:7px 14px;background:#2563eb;color:#fff;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">
+        ⬆ Importar TMS
+        <input type="file" accept=".xlsx,.xls" onchange="relImportar(this)" style="display:none">
+      </label>
+    </div>
+  </div>
+
+  <!-- Totalizadores -->
+  <div id="rel-stats" style="display:none;gap:10px;margin-bottom:12px;flex-wrap:wrap;flex-shrink:0">
+    <div class="rel-stat-card"><div class="rel-stat-label">Total CTRCs</div><div class="rel-stat-val" id="rel-s-total">—</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label">Peso total (kg)</div><div class="rel-stat-val" id="rel-s-peso">—</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label">Valor total</div><div class="rel-stat-val" id="rel-s-valor">—</div></div>
+    <div class="rel-stat-card rel-stat-red" id="rel-card-crit" onclick="relToggleCard('crit')" style="cursor:pointer" title="Clique para filtrar críticos"><div class="rel-stat-label">Críticos</div><div class="rel-stat-val" id="rel-s-crit">—</div></div>
+    <div class="rel-stat-card rel-stat-blue" id="rel-card-plan" onclick="relToggleCard('plan')" style="cursor:pointer" title="Clique para filtrar planejados"><div class="rel-stat-label">Planejados</div><div class="rel-stat-val" id="rel-s-plan">—</div></div>
+    <div class="rel-stat-card rel-stat-green" id="rel-card-disp" onclick="relToggleCard('disp')" style="cursor:pointer" title="Clique para filtrar disponíveis"><div class="rel-stat-label">Disponíveis</div><div class="rel-stat-val" id="rel-s-disp">—</div></div>
+  </div>
+
+  <!-- Tabela fixa estilo Excel -->
+  <div id="rel-empty" style="padding:60px;text-align:center;color:#94a3b8;font-size:13px;background:#fff;border-radius:12px;border:1px solid #e2e8f0;flex:1">
+    Importe um arquivo Excel TMS para visualizar o relatório
+  </div>
+  <div id="rel-table-wrap" style="display:none;flex:1;overflow:auto;background:#fff;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,.05);max-height:calc(100vh - 210px)">
+    <table id="rel-table" style="width:max-content;min-width:100%;border-collapse:collapse;font-size:11px">
+      <thead id="rel-thead"></thead>
+      <tbody id="rel-tbody"></tbody>
+    </table>
+    <div id="rel-loading" style="display:none;text-align:center;padding:12px;color:#94a3b8;font-size:12px">Carregando...</div>
+  </div>
+
+</div>
+
+<style>
+.rel-th { padding:7px 10px; text-align:left; font-size:10px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; border-right:1px solid #e2e8f0; border-bottom:2px solid #cbd5e1; background:#f8fafc; position:sticky; top:0; z-index:5; cursor:pointer; user-select:none; }
+.rel-th:hover { background:#f1f5f9; }
+.rel-td { padding:6px 10px; border-bottom:1px solid #f1f5f9; border-right:1px solid #f8fafc; white-space:nowrap; vertical-align:middle; }
+.rel-badge { display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; }
+.rel-badge-plan  { background:#dcfce7; color:#16a34a; }
+.rel-badge-disp  { background:#dbeafe; color:#2563eb; }
+.rel-badge-patio { background:#fef9c3; color:#854d0e; }
+.rel-badge-desc  { background:#e0e7ff; color:#4f46e5; }
+.rel-badge-crit  { background:#fee2e2; color:#dc2626; }
+.rel-badge-agend { background:#fef3c7; color:#d97706; }
+.rel-badge-fluxo { background:#f1f5f9; color:#475569; }
+.rel-badge-colet { background:#ede9fe; color:#7c3aed; }
+.rel-badge-remb  { background:#f0fdf4; color:#15803d; }
+.rel-stat-card   { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px 16px; min-width:120px; }
+.rel-stat-card.rel-stat-red  { border-color:#fca5a5; }
+.rel-stat-card.rel-stat-blue { border-color:#93c5fd; }
+.rel-stat-card.rel-stat-green{ border-color:#86efac; }
+#rel-stats       { display:flex; }
+.rel-stat-label  { font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px; }
+.rel-stat-val    { font-size:20px; font-weight:800; color:#1e293b; }
+.rel-stat-red  .rel-stat-val  { color:#dc2626; }
+.rel-stat-blue .rel-stat-val  { color:#2563eb; }
+.rel-stat-green .rel-stat-val { color:#16a34a; }
+.rel-stat-card.rel-stat-red.active  { background:#fee2e2; box-shadow:0 0 0 2px #dc2626; }
+.rel-stat-card.rel-stat-blue.active { background:#dbeafe; box-shadow:0 0 0 2px #2563eb; }
+.rel-stat-card.rel-stat-green.active{ background:#dcfce7; box-shadow:0 0 0 2px #16a34a; }
+.rel-stat-card[onclick] { transition:all .1s; }
+.rel-stat-card[onclick]:hover { opacity:.85; transform:translateY(-1px); }
+/* Rel column filter dropdown */
+#rel-cf-dropdown.open { display:flex; }
+.rel-cf-search { padding:8px; border-bottom:1px solid #334155; }
+.rel-cf-search input { width:100%;padding:5px 8px;border:1px solid #334155;border-radius:6px;background:#0f172a;color:#f1f5f9;font-size:11px;box-sizing:border-box;outline:none; }
+.rel-cf-actions { display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid #334155; }
+.rel-cf-actions button { flex:1;background:#334155;border:none;border-radius:5px;color:#cbd5e1;font-size:10px;padding:4px;cursor:pointer; }
+.rel-cf-list { overflow-y:auto;flex:1; }
+.rel-cf-item { display:flex;align-items:center;gap:8px;padding:5px 10px;cursor:pointer;color:#cbd5e1;font-size:11px; }
+.rel-cf-item:hover { background:#334155; }
+.rel-cf-item input { cursor:pointer; }
+.rel-cf-footer { display:flex;gap:6px;padding:8px;border-top:1px solid #334155; }
+.rel-cf-footer button { flex:1;padding:6px;border-radius:6px;border:none;cursor:pointer;font-size:11px;font-weight:600; }
+.rel-cf-cancel { background:#334155;color:#94a3b8; }
+.rel-cf-ok { background:#2563eb;color:#fff; }
+.rcf-btn { background:none;border:none;cursor:pointer;padding:1px 3px;border-radius:3px;font-size:9px;color:#94a3b8;line-height:1;margin-left:3px; }
+.rcf-btn:hover { color:#2563eb; }
+.rcf-btn.active { color:#16a34a; }
+</style>
+
+<!-- Rel column filter dropdown (separate from prog) -->
+<div id="rel-cf-dropdown" style="display:none">
+  <div class="rel-cf-search"><input type="text" id="rel-cf-search-input" placeholder="Buscar..." oninput="rcfSearchFilter()"></div>
+  <div class="rel-cf-actions"><button onclick="rcfSelectAll()">Marcar todos</button><button onclick="rcfClearAll()">Desmarcar todos</button></div>
+  <div class="rel-cf-list" id="rel-cf-list"></div>
+  <div class="rel-cf-footer"><button class="rel-cf-cancel" onclick="rcfClose()">Cancelar</button><button class="rel-cf-ok" onclick="rcfApply()">OK</button></div>
+</div>
+
+<script>
+// ── RELATÓRIO DE EMBARQUE MODULE ──
+
+var _relData = [], _relFilt = [], _relSort = {col:null,asc:true};
+var _rcfF = {}, _rcfCol = null, _rcfVals = {};
+
+// Excel column letter → 0-based index
+function relLetterIdx(l) {
+  l = l.toUpperCase().trim(); var n=0;
+  for(var i=0;i<l.length;i++) n=n*26+l.charCodeAt(i)-64;
+  return n-1;
+}
+
+var REL_CNPJ_PRIORIDADE = new Set([
+  '56998701003301','60659463000191','7863523001778','60318797000100',
+  '60831658001220','6147451002186','77388007000157','11137051078614',
+  '6147451000566','11287350000288','54651716001150','38391432000143',
+  '10588595001092','10588595001335','22086683000508','22086683000346',
+  '54516661008005','51780468000268','54516661003623','13832863000258',
+  '13832863000177','13832863000410','81243735001977','81243735000148',
+  '81243735000903','18944113000534','90735424000197','2421421014333',
+  '2421421005695','2421421000979','2421421013795','2421421012713',
+  '2421421008015','2421421019998'
+]);
+
+function relExcelDate(v) {
+  if (!v && v !== 0) return '';
+  if (typeof v === 'string' && v.indexOf('/') !== -1) return v.slice(0,10);
+  var n = parseFloat(v); if (isNaN(n)) return String(v);
+  var d = new Date((n-25569)*86400000);
+  return ('0'+d.getUTCDate()).slice(-2)+'/'+('0'+(d.getUTCMonth()+1)).slice(-2)+'/'+d.getUTCFullYear();
+}
+
+function relImportar(input) {
+  var file = input.files[0]; if(!file) return;
+  if(typeof XLSX==='undefined'){showToast('Biblioteca XLSX não carregada','error');return;}
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(e.target.result,{type:'array',cellDates:false});
+      var ws = wb.Sheets[Object.keys(wb.Sheets)[0]];
+      var rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+      // Encontra linha de cabeçalho
+      var hdrIdx=0;
+      for(var h=0;h<Math.min(5,rows.length);h++){
+        if(rows[h]&&rows[h].some(function(v){return v&&/CTRC|NR_CTRC|SIGLA_FILIAL/i.test(String(v));})){hdrIdx=h;break;}
+      }
+      var hdr=rows[hdrIdx]; var c={};
+      for(var j=0;j<hdr.length;j++) if(hdr[j]) c[String(hdr[j]).trim()]=j;
+
+      function col(){
+        for(var a=0;a<arguments.length;a++) if(c[arguments[a]]!==undefined) return c[arguments[a]];
+        return undefined;
+      }
+      function colFallback(letter){
+        var found=col.apply(null,Array.prototype.slice.call(arguments,1));
+        return found!==undefined?found:relLetterIdx(letter);
+      }
+
+      // Mapeamento de colunas — nome real do header OU índice da coluna Excel como fallback
+      var cDtPrev  = colFallback('AG','DT_PREV_EMBARQUE','DT_PREV. EMBARQ.');
+      var cDataMax = colFallback('Y','Data_Entrega_Maxima','DATA_ENTREGA_MAXIMA');
+      var cDtUlt   = colFallback('R','DT última posição','DT_POSICAO');
+      var cFimDes  = colFallback('AM','FIM_DESCARREGAMENTO','Fim de descarga');
+      var cOrigem  = colFallback('AI','SIGLA_FILIAL_ORIGEM','Sigla_origem');
+      var cDestino = colFallback('AJ','SIGLA_FILIAL_DESTINO','Siglas_destino');
+      var cEquip   = colFallback('AC','Equipamento','EQUIPAMENTO');
+      var cCtrc    = colFallback('D','CTRC','NR_CTRC','CTE');
+      var cRem     = colFallback('E','Remetente','REMETENTE','NOME_REMETENTE');
+      var cDest2   = colFallback('F','Destinatario','DESTINATARIO','NOME_DESTINATARIO');
+      var cModal   = colFallback('Z','Modal','MODAL','TIPO_MODAL');
+      var cOcorr   = colFallback('AV','Ocorrência aberta','OCORRENCIA_ABERTA');
+      var cPlan    = colFallback('AE','Mercadoria_Planejada','Frota planejada');
+      var cMac     = colFallback('W','Nr_Mac','NR_MAC');
+      var cReboque = colFallback('AS','Reboque transfer.','REBOQUE_TRANSFER');
+      var cVols    = colFallback('I','Volumes','QT_VOLUMES','QTDE_VOLUMES');
+      var cPeso    = colFallback('M','P_Operacional','P_Calculo','Peso operacional');
+      var cValor   = colFallback('P','Valor mercadoria','VALOR_MERCADORIA','VALOR_NF','VALOR_TOTAL');
+      var cMotivo  = colFallback('S','Motivo','MOTIVO');
+      var cSit     = colFallback('AH','SITUACAO_PREV_EMBARQUE');
+      var cCnpj    = colFallback('AK','CNPJ_DESTINATARIO','CPF_CNPJ_DESTINATARIO','CNPJ');
+      var cIniDes  = colFallback('AL','INICIO_DESCARREGAMENTO');
+      var cAgend   = colFallback('AQ','Agendamento','FL_AGENDAMENTO');
+
+      _relData = [];
+      for(var i=hdrIdx+1;i<rows.length;i++){
+        var row=rows[i];
+        if(!row||!row.some(function(v){return v!==null&&v!=='';})) continue;
+        var motivo=String(row[cMotivo]||'').trim();
+        if(motivo==='Ocor.Aberta') continue;
+
+        var origem=String(row[cOrigem]||'').trim().toUpperCase();
+        var tipoEtiq=origem==='GRU'?'Coleta':'Reembarque';
+
+        // Disponibilidade
+        var equipVal=row[cEquip];
+        var equipPreench=equipVal!==null&&equipVal!==undefined&&String(equipVal).trim()!==''&&parseFloat(String(equipVal).replace(',','.'))||false;
+        if(equipVal&&parseFloat(String(equipVal).replace(',','.'))){equipPreench=true;}else{equipPreench=false;}
+        var aeVal=row[cPlan]; var aePreench=aeVal!==null&&aeVal!==undefined&&String(aeVal).trim()!==''&&String(aeVal).trim()!=='0';
+        var alVal=row[cIniDes]; var alPreench=alVal!==null&&alVal!==undefined&&String(alVal).trim()!=='';
+        var amVal=row[cFimDes]; var amPreench=amVal!==null&&amVal!==undefined&&String(amVal).trim()!=='';
+        var dispMerc;
+        if(aePreench) dispMerc='Planejado';
+        else if(alPreench&&!amPreench&&!equipPreench) dispMerc='Em descarregamento';
+        else if(!equipPreench&&!alPreench&&!amPreench) dispMerc='Patio';
+        else dispMerc='Disponível';
+
+        // Modal
+        var modalRaw=String(row[cModal]||'').trim().toUpperCase();
+        var modalVal=modalRaw==='PADRAO'?'Terrestre':'Aéreo';
+
+        // Clientes críticos
+        var cnpjRaw=String(row[cCnpj]||'').trim().replace(/[.\-\/\s]/g,'');
+        var sit=String(row[cSit]||'').trim();
+        var agend=String(row[cAgend]||'').trim().toUpperCase();
+        var clienteCrit;
+        if(REL_CNPJ_PRIORIDADE.has(cnpjRaw)||sit==='Hoje'||sit==='Atrasado') clienteCrit='⚠ Cliente critico';
+        else if(agend==='SIM') clienteCrit='⚠ Agendamento';
+        else clienteCrit='Fluxo';
+
+        var valorRaw=row[cValor]; var valorNum=0;
+        if(valorRaw!==null&&valorRaw!==undefined){
+          if(typeof valorRaw==='number') valorNum=valorRaw;
+          else valorNum=parseFloat(String(valorRaw).replace(/\./g,'').replace(',','.'))||0;
+        }
+
+        _relData.push({
+          dtPrev:relExcelDate(row[cDtPrev]), dataMax:relExcelDate(row[cDataMax]),
+          dtUlt:relExcelDate(row[cDtUlt]), fimDes:relExcelDate(row[cFimDes]),
+          disp:dispMerc, cliente:clienteCrit,
+          origem:String(row[cOrigem]||'').trim(), destino:String(row[cDestino]||'').trim(),
+          equip:String(row[cEquip]||'').trim(), etiq:tipoEtiq,
+          ctrc:String(row[cCtrc]||'').trim(),
+          remetente:String(row[cRem]||'').trim(),
+          destinatario:String(row[cDest2]||'').trim(),
+          modal:modalVal,
+          ocorr:String(row[cOcorr]||'').trim(),
+          frotaPlan:String(row[cPlan]||'').trim(),
+          mac:String(row[cMac]||'').trim(),
+          reboque:String(row[cReboque]||'').trim(),
+          vols:row[cVols]!==null&&row[cVols]!==undefined?String(row[cVols]).trim():'',
+          peso:parseFloat(String(row[cPeso]||'0').replace(',','.'))||0,
+          valor:valorNum
+        });
+      }
+
+      // Reset filtros de coluna
+      _rcfF={}; _relSort={col:null,asc:true};
+      document.getElementById('rel-updated').textContent=
+        'Atualizado: '+new Date().toLocaleString('pt-BR')+' · '+_relData.length+' registros';
+      relFiltrar();
+      input.value='';
+      showToast('✅ '+_relData.length+' registros carregados!','success');
+    } catch(ex){ showToast('Erro: '+ex.message,'error'); console.error(ex); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Colunas da tabela ──
+var REL_COLS = [
+  {k:'dtPrev',   l:'Prev. Embarque',    w:120, type:'date'},
+  {k:'dataMax',  l:'Dt. Entrega Máx.',  w:120, type:'date'},
+  {k:'dtUlt',    l:'Dt. Últ. Posição',  w:120, type:'date'},
+  {k:'fimDes',   l:'Fim Descarga',      w:120, type:'date'},
+  {k:'disp',     l:'Disponibilidade',   w:130, type:'badge', filter:true},
+  {k:'cliente',  l:'Cliente',           w:130, type:'badge', filter:true},
+  {k:'origem',   l:'Origem',            w:70,  filter:true},
+  {k:'destino',  l:'Destino',           w:70,  filter:true},
+  {k:'equip',    l:'Equipamento',       w:90},
+  {k:'etiq',     l:'Tipo Etiqueta',     w:110, type:'badge', filter:true},
+  {k:'ctrc',     l:'CTRC',              w:100, mono:true},
+  {k:'remetente',l:'Remetente',         w:160, truncate:true, filter:true},
+  {k:'destinatario',l:'Destinatário',   w:160, truncate:true, filter:true},
+  {k:'modal',    l:'Modal',             w:80,  filter:true},
+  {k:'ocorr',    l:'Ocorr.',            w:60},
+  {k:'frotaPlan',l:'Frota Plan.',       w:120, truncate:true},
+  {k:'mac',      l:'Nr. MAC',           w:80},
+  {k:'reboque',  l:'Reboque',           w:80},
+  {k:'vols',     l:'Vols.',             w:55,  right:true},
+  {k:'peso',     l:'Peso (kg)',         w:90,  right:true, type:'num'},
+  {k:'valor',    l:'Valor (R$)',        w:110, right:true, type:'num'}
+];
+
+var dispBadge={'Planejado':'rel-badge-plan','Disponível':'rel-badge-disp','Patio':'rel-badge-patio','Em descarregamento':'rel-badge-desc'};
+var dispLabel={'Patio':'Pátio','Em descarregamento':'Em descarga'};
+var critBadge={'⚠ Cliente critico':'rel-badge-crit','⚠ Agendamento':'rel-badge-agend','Fluxo':'rel-badge-fluxo'};
+var etiqBadge={'Coleta':'rel-badge-colet','Reembarque':'rel-badge-remb'};
+
+
+
+var _relCardFilter = null; // 'crit' | 'plan' | 'disp' | null
+
+function relToggleCard(tipo) {
+  _relCardFilter = (_relCardFilter === tipo) ? null : tipo;
+  ['crit','plan','disp'].forEach(function(t){
+    var el = document.getElementById('rel-card-'+t);
+    if (el) el.classList.toggle('active', _relCardFilter === t);
+  });
+  relFiltrar();
+}
+
+// Monta set de siglas de destino que estão em composições de Programados de hoje
+function relGetDestsProgramados() {
+  var set = new Set();
+  if (typeof progData === 'undefined') return set;
+  var hoje = new Date().toISOString().slice(0,10);
+  progData.forEach(function(p) {
+    // Filtra somente os de hoje
+    var gd = (p.gerado||'').substring(0,10);
+    var gdBR = gd.indexOf('-')!==-1 ? gd.split('-')[2]+'/'+gd.split('-')[1]+'/'+gd.split('-')[0] : gd;
+    var hojeLocal = new Date();
+    var hojeBR = ('0'+hojeLocal.getDate()).slice(-2)+'/'+('0'+(hojeLocal.getMonth()+1)).slice(-2)+'/'+hojeLocal.getFullYear();
+    if (gdBR !== hojeBR) return;
+    // Adiciona cada sigla da composição
+    String(p.composicao||p.destino||'').split(/[,\s\/]+/).forEach(function(s){
+      var sig = s.trim().toUpperCase(); if (sig) set.add(sig);
+    });
+  });
+  return set;
+}
+
+function relFiltrar() {
+  var search=(document.getElementById('rel-search').value||'').toLowerCase();
+  _relFilt=_relData.filter(function(r){
+    // Filtro do card clicado
+    if (_relCardFilter === 'crit' && r.cliente !== '⚠ Cliente critico') return false;
+    if (_relCardFilter === 'plan' && r.disp !== 'Planejado') return false;
+    if (_relCardFilter === 'disp' && r.disp !== 'Disponível') return false;
+    // Filtros de coluna
+    for(var k in _rcfF){ if(_rcfF[k]&&!_rcfF[k].has(relRcfVal(r,k))) return false; }
+    // Busca texto
+    if(search){
+      var hay=(r.ctrc+r.remetente+r.destinatario+r.origem+r.destino+r.mac+r.frotaPlan).toLowerCase();
+      if(hay.indexOf(search)===-1) return false;
+    }
+    return true;
+  });
+  // Ordenação
+  if(_relSort.col){
+    var sc=_relSort.col; var asc=_relSort.asc;
+    _relFilt.sort(function(a,b){
+      var av=a[sc]||'', bv=b[sc]||'';
+      if(typeof av==='number'&&typeof bv==='number') return asc?av-bv:bv-av;
+      return asc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
+    });
+  }
+  relRenderizar();
+}
+
+function relRenderizar() {
+  var wrap=document.getElementById('rel-table-wrap');
+  var empty=document.getElementById('rel-empty');
+  var stats=document.getElementById('rel-stats');
+  if(_relFilt.length===0&&_relData.length===0){
+    wrap.style.display='none'; empty.style.display='block'; stats.style.display='none'; return;
+  }
+  empty.style.display='none'; wrap.style.display='block'; stats.style.display='flex';
+
+  // Set de destinos em composições programadas hoje
+  var progSet = relGetDestsProgramados();
+
+  // Stats
+  var totPeso=0,totValor=0,totCrit=0,totPlan=0,totDisp=0;
+  for(var i=0;i<_relFilt.length;i++){
+    totPeso+=_relFilt[i].peso; totValor+=_relFilt[i].valor;
+    if(_relFilt[i].cliente==='⚠ Cliente critico') totCrit++;
+    if(_relFilt[i].disp==='Planejado') totPlan++;
+    if(_relFilt[i].disp==='Disponível') totDisp++;
+  }
+  document.getElementById('rel-s-total').textContent=_relFilt.length.toLocaleString('pt-BR');
+  document.getElementById('rel-s-peso').textContent=totPeso.toLocaleString('pt-BR',{maximumFractionDigits:1})+' kg';
+  document.getElementById('rel-s-valor').textContent='R$ '+totValor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('rel-s-crit').textContent=totCrit.toLocaleString('pt-BR');
+  document.getElementById('rel-s-plan').textContent=totPlan.toLocaleString('pt-BR');
+  document.getElementById('rel-s-disp').textContent=totDisp.toLocaleString('pt-BR');
+
+  // Thead
+  var thead=document.getElementById('rel-thead');
+  var thHtml='<tr>';
+  REL_COLS.forEach(function(col){
+    var sortInd='';
+    if(_relSort.col===col.k) sortInd=_relSort.asc?' ▲':' ▼';
+    var filterBtn=col.filter?'<button class="rcf-btn'+((_rcfF[col.k]&&_rcfF[col.k].size)?(' active'):'')+'\" onclick=\"event.stopPropagation();rcfOpen(\''+col.k+'\',this)\">▼</button>':'';
+    thHtml+='<th class="rel-th" style="min-width:'+col.w+'px" onclick="relSort(\''+col.k+'\')">'+col.l+sortInd+filterBtn+'</th>';
+  });
+  thHtml+='</tr>';
+  thead.innerHTML=thHtml;
+
+  // Tbody - chunked para não travar
+  var tbody=document.getElementById('rel-tbody');
+  tbody.innerHTML='';
+  var CHUNK=300;
+  function renderChunk(start){
+    var frag=document.createDocumentFragment();
+    var end=Math.min(start+CHUNK,_relFilt.length);
+    for(var i=start;i<end;i++){
+      var r=_relFilt[i];
+      var inProg = progSet.has(r.destino.toUpperCase());
+      var rowStyle = '';
+      if (inProg && r.disp === 'Planejado') {
+        rowStyle = 'background:rgba(220,252,231,.7);border-left:3px solid #16a34a';
+      } else if (inProg && r.cliente === '⚠ Cliente critico') {
+        rowStyle = 'background:rgba(254,242,242,.7);border-left:3px solid #dc2626';
+      } else if (inProg) {
+        rowStyle = 'background:rgba(219,234,254,.4);border-left:3px solid #2563eb';
+      } else if (r.cliente === '⚠ Cliente critico') {
+        rowStyle = 'background:rgba(254,242,242,.5)';
+      } else if (r.disp === 'Planejado') {
+        rowStyle = 'background:rgba(220,252,231,.5)';
+      }
+      var tr=document.createElement('tr');
+      if(rowStyle) tr.setAttribute('style',rowStyle);
+      var cells='';
+      REL_COLS.forEach(function(col){
+        var v=r[col.k]; var disp='';
+        if(col.type==='badge'){
+          var bc=col.k==='disp'?dispBadge[v]:col.k==='cliente'?critBadge[v]:etiqBadge[v];
+          var lb=col.k==='disp'?(dispLabel[v]||v):v;
+          disp='<span class="rel-badge '+(bc||'rel-badge-fluxo')+'">'+lb+'</span>';
+        } else if(col.type==='num'){
+          disp=col.k==='valor'?'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):(v||0).toLocaleString('pt-BR',{maximumFractionDigits:3});
+        } else {
+          disp=v||'—';
+        }
+        var st=''; if(col.right) st+='text-align:right;'; if(col.mono) st+='font-family:monospace;font-size:10px;'; 
+        if(col.truncate) st+='max-width:'+col.w+'px;overflow:hidden;text-overflow:ellipsis;';
+        cells+='<td class="rel-td"'+(st?' style="'+st+'"':'')+(col.truncate?' title="'+(v||'').replace(/"/g,'&quot;')+'"':'')+'>' +disp+'</td>';
+      });
+      tr.innerHTML=cells;
+      frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+    if(end<_relFilt.length){
+      document.getElementById('rel-loading').style.display='block';
+      setTimeout(function(){renderChunk(end);},0);
+    } else {
+      document.getElementById('rel-loading').style.display='none';
+    }
+  }
+  renderChunk(0);
+}
+
+function relSort(colKey){
+  if(_relSort.col===colKey) _relSort.asc=!_relSort.asc;
+  else { _relSort.col=colKey; _relSort.asc=true; }
+  relFiltrar();
+}
+
+// ── Filtros de coluna do Relatório ──
+function relRcfVal(r,k){ return r[k]||''; }
+
+function rcfOpen(campo,btn){
+  var dd=document.getElementById('rel-cf-dropdown');
+  var same=dd.classList.contains('open')&&_rcfCol===campo;
+  rcfClose(); if(same) return;
+  _rcfCol=campo;
+  var map={}; _relData.forEach(function(r){var v=relRcfVal(r,campo);if(v)map[v]=true;});
+  var vals=Object.keys(map).sort(); _rcfVals[campo]=vals;
+  var sel=_rcfF[campo]||new Set(vals);
+  document.getElementById('rel-cf-search-input').value='';
+  rcfDraw(vals,sel);
+  var rect=btn.getBoundingClientRect();
+  dd.style.top=(rect.bottom+4)+'px';
+  dd.style.left=Math.max(4,Math.min(rect.left,window.innerWidth-270))+'px';
+  dd.classList.add('open');
+}
+function rcfDraw(vals,sel){
+  var s=(document.getElementById('rel-cf-search-input').value||'').toLowerCase();
+  var f=s?vals.filter(function(v){return v.toLowerCase().indexOf(s)!==-1;}):vals;
+  document.getElementById('rel-cf-list').innerHTML=f.map(function(v){
+    var chk=sel&&sel.has?sel.has(v):true;
+    return '<label class="rel-cf-item"><input type="checkbox" value="'+v.replace(/"/g,'&quot;')+'" '+(chk?'checked':'')+'><span>'+(v||'(vazio)')+'</span></label>';
+  }).join('');
+}
+function rcfSearchFilter(){ if(!_rcfCol)return; rcfDraw(_rcfVals[_rcfCol]||[],_rcfF[_rcfCol]||new Set(_rcfVals[_rcfCol]||[])); }
+function rcfSelectAll(){ document.querySelectorAll('#rel-cf-list input').forEach(function(c){c.checked=true;}); }
+function rcfClearAll(){  document.querySelectorAll('#rel-cf-list input').forEach(function(c){c.checked=false;}); }
+function rcfApply(){
+  if(!_rcfCol) return;
+  var m=new Set(); document.querySelectorAll('#rel-cf-list input').forEach(function(c){if(c.checked)m.add(c.value);});
+  var all=new Set(_rcfVals[_rcfCol]||[]);
+  if(m.size===all.size) delete _rcfF[_rcfCol]; else _rcfF[_rcfCol]=m;
+  rcfClose(); relFiltrar();
+}
+function rcfClose(){
+  document.getElementById('rel-cf-dropdown').classList.remove('open');
+  _rcfCol=null;
+}
+document.addEventListener('click',function(e){
+  var dd=document.getElementById('rel-cf-dropdown');
+  if(dd&&dd.classList.contains('open')&&!dd.contains(e.target)&&!e.target.classList.contains('rcf-btn')) rcfClose();
+});
+</script>
+
+
+
 </div><!-- /sb-content -->
 </div><!-- /app-layout -->
 
 <!-- FILTRO COLUNA -->
-<div class="cf-dropdown" id="cf-dropdown"><div class="cf-search"><input type="text" id="cf-search-input" placeholder="Buscar..." oninput="cfSearchFilter()"></div><div class="cf-actions"><button onclick="cfSelectAll()">Marcar todos</button><button onclick="cfClearAll()">Desmarcar todos</button></div><div class="cf-list" id="cf-list"></div><div class="cf-footer"><button class="cf-cancel" onclick="cfClose()">Cancelar</button><button class="cf-ok" onclick="cfApply()">OK</button></div></div>
 
 <div class="toast" id="toast"></div>
 <div id="sync-status" style="display:none;position:fixed;bottom:70px;right:24px;z-index:9000;background:#1a1a2e;color:#94a3b8;font-size:12px;font-family:Poppins,sans-serif;padding:8px 14px;border-radius:8px;border:1px solid #2d2d4e"></div>
@@ -4709,7 +5218,7 @@ function cfVal(r, c) {
 }
 function cfOpen(campo, btn) {
   var dd = document.getElementById('cf-dropdown');
-  var same = dd.classList.contains('open') && _cfCol===campo;
+  var same = dd.style.display === 'flex' && _cfCol===campo;
   cfClose(); if (same) return;
   _cfCol = campo;
   var base = progData.filter(function(r){ return r.frota||r.ocup; });
@@ -4720,7 +5229,7 @@ function cfOpen(campo, btn) {
   cfDraw(vals, sel);
   var rect = btn.getBoundingClientRect();
   dd.style.top=(rect.bottom+4)+'px'; dd.style.left=Math.max(4,Math.min(rect.left,window.innerWidth-290))+'px';
-  dd.classList.add('open'); btn.classList.add('active');
+  dd.style.display = 'flex'; btn.classList.add('active');
 }
 function cfDraw(vals, sel) {
   var s=(document.getElementById('cf-search-input')?.value||'').toLowerCase();
@@ -4742,13 +5251,15 @@ function cfApply() {
   cfClose(); renderHist();
 }
 function cfClose() {
-  document.getElementById('cf-dropdown').classList.remove('open');
+  var dd = document.getElementById('cf-dropdown');
+  dd.style.display = 'none';
+  dd.classList.remove('open');
   if(_cfCol) { var btn=document.getElementById('cfb-'+_cfCol); if(btn&&!_cfF[_cfCol]) btn.classList.remove('active'); }
   _cfCol=null;
 }
 document.addEventListener('click', function(e) {
   var dd=document.getElementById('cf-dropdown');
-  if(dd&&dd.classList.contains('open')&&!dd.contains(e.target)&&!e.target.classList.contains('cf-btn')) cfClose();
+  if(dd&&dd.style.display==='flex'&&!dd.contains(e.target)&&!e.target.classList.contains('cf-btn')) cfClose();
 });
 
 // Aplicar filtros + badges no renderHist
@@ -6479,13 +6990,20 @@ function toggleSbGroup(name) {
 var _sbGroupMap = {
   'programacao': 'programar', 'nova': 'programar',
   'historico': 'programar', 'grade': 'programar',
-  'cargas': 'estoque', 'plataforma': 'estoque',
+  'cargas': 'estoque', 'plataforma': 'estoque', 'relatorio': 'estoque',
   'dashboard': 'analise'
 };
 
 var _origShowTab = showTab;
 showTab = function(tab) {
   _origShowTab(tab);
+  // Fechar e resetar dropdowns de filtro de coluna ao trocar de aba
+  var cf = document.getElementById('cf-dropdown');
+  if (cf) { cf.classList.remove('open'); cf.style.display = ''; }
+  if (typeof _cfCol !== 'undefined') _cfCol = null;
+  var rcf = document.getElementById('rel-cf-dropdown');
+  if (rcf) { rcf.classList.remove('open'); }
+  if (typeof _rcfCol !== 'undefined') _rcfCol = null;
   // Auto-expandir o grupo da aba selecionada
   var grp = _sbGroupMap[tab];
   if (grp) {
@@ -6499,4 +7017,3 @@ showTab = function(tab) {
 };
 </script>
 </body>
-</html>
