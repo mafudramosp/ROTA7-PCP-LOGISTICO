@@ -1271,6 +1271,7 @@
       <button class="sb-item" id="tab-nova" onclick="showTab('nova')" data-tip="Adicionar"><span class="sb-text">Adicionar</span></button>
       <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Programados"><span class="sb-text">Programados</span><span class="sb-badge" id="badge-hist" style="display:none"></span></button>
       <button class="sb-item" id="tab-grade" onclick="showTab('grade')" data-tip="Grade"><span class="sb-text">Grade</span><span class="sb-badge" id="badge-grade" style="display:none"></span></button>
+      <button class="sb-item" id="tab-plataforma" onclick="showTab('plataforma')" data-tip="Plataforma"><span class="sb-text">Plataforma</span></button>
     </div>
   </div>
   <!-- Grupo: Estoque -->
@@ -1281,7 +1282,6 @@
     </div>
     <div class="sb-group-items" id="items-estoque">
       <button class="sb-item" id="tab-cargas" onclick="showTab('cargas')" data-tip="Planejamento"><span class="sb-text">Planejamento</span></button>
-      <button class="sb-item" id="tab-plataforma" onclick="showTab('plataforma')" data-tip="Plataforma"><span class="sb-text">Plataforma</span></button>
       <button class="sb-item" id="tab-relatorio" onclick="showTab('relatorio')" data-tip="Relatório"><span class="sb-text">Relatório</span></button>
     </div>
   </div>
@@ -7003,8 +7003,8 @@ function toggleSbGroup(name) {
 // Auto-abrir grupo quando uma aba dentro dele é selecionada
 var _sbGroupMap = {
   'programacao': 'programar', 'nova': 'programar',
-  'historico': 'programar', 'grade': 'programar',
-  'cargas': 'estoque', 'plataforma': 'estoque', 'relatorio': 'estoque',
+  'historico': 'programar', 'grade': 'programar', 'plataforma': 'programar',
+  'cargas': 'estoque', 'relatorio': 'estoque',
   'dashboard': 'analise'
 };
 
