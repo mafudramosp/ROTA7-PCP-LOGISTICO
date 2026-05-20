@@ -2485,13 +2485,17 @@ function cgRenderizar(data) {
     var topDest = rd.destinos.slice(0,6).sort(function(a,b){ return b.peso_geral - a.peso_geral; });
 
     var paletesHTML = topDest.map(function(d) {
-      var temCrit = d.peso_critico > 0;
-      var critStr = temCrit ? d.peso_critico.toFixed(1)+'t' : '';
-      var bgCrit  = temCrit ? 'background:#fef2f2;border:1.5px solid #fca5a5;' : '';
+      var temCrit  = d.peso_critico > 0;
+      var concluido = d._concluido || (d.perc_critico >= 96 && temCrit);
+      var critStr  = temCrit ? d.peso_critico.toFixed(1)+'t' : '';
+      var bgCrit   = concluido
+        ? 'background:#dcfce7;border:1.5px solid #86efac;'
+        : temCrit ? 'background:#fef2f2;border:1.5px solid #fca5a5;' : '';
+      var siglaCor = concluido ? 'color:#16a34a;font-weight:800' : temCrit ? 'color:#b91c1c;font-weight:800' : '';
       return '<div class="palete" style="' + bgCrit + '">' +
-        '<span class="palete-sigla" style="' + (temCrit ? 'color:#b91c1c;font-weight:800' : '') + '">' + d.sigla + '</span>' +
+        '<span class="palete-sigla" style="' + siglaCor + '">' + d.sigla + '</span>' +
         '<span class="palete-ton">' + d.peso_geral.toFixed(1) + 't</span>' +
-        (critStr ? '<span class="palete-crit" style="background:#fee2e2;color:#dc2626;font-weight:800">⚠ ' + critStr + '</span>' : '') +
+        (critStr ? '<span class="palete-crit" style="background:' + (concluido?'#bbf7d0;color:#16a34a':'#fee2e2;color:#ea580c') + ';font-weight:800">' + (concluido?'✓ ':'⚠ ') + critStr + '</span>' : '') +
         '</div>';
     }).join('');
 
