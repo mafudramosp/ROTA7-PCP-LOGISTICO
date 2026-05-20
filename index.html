@@ -7326,10 +7326,22 @@ function frotasRenderizar() {
   frotas.forEach(function(p) {
     var frota    = String(p.frota||'').trim();
     var destinos = p.composicao || p.destino || '—';
-    var fech     = p.prev_fechamento || p.previsao_fechamento || '—';
+    var fech     = p.prev_fech || p.prev_fechamento || p.previsao_fechamento || '—';
 
-    // Tenta match por frotaPlan primeiro
-    var ri = relByFrota[frota];
+    // Tenta match por frotaPlan: exato, sem espaços, e parcial
+    var froNorm = frota.toUpperCase().replace(/\s+/g,'');
+    var ri = relByFrota[frota] || relByFrota[froNorm];
+    // Tenta match parcial (frota contém número do TMS ou vice-versa)
+    if (!ri || ri.peso === 0) {
+      Object.keys(relByFrota).forEach(function(k) {
+        if (!ri || ri.peso === 0) {
+          var kn = k.toUpperCase().replace(/\s+/g,'');
+          if (kn === froNorm || froNorm.indexOf(kn) !== -1 || kn.indexOf(froNorm) !== -1) {
+            ri = relByFrota[k];
+          }
+        }
+      });
+    }
 
     // Fallback: soma por destinos da composição
     if (!ri || ri.peso === 0) {
