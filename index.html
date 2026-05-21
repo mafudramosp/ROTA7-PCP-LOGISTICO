@@ -2992,6 +2992,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 var _relData = [], _relFilt = [], _relSort = {col:null,asc:true};
 var _rcfF = {}, _rcfCol = null, _rcfVals = {};
+var _rowCache = [];
 
 // Excel column letter → 0-based index
 function relLetterIdx(l) {
@@ -3230,6 +3231,8 @@ function relProcessarRows(rows) {
     var e2=Math.min(s+3000,total);
     for(var i=s;i<e2;i++){
       var row=dataRows[i]; if(!row) continue;
+      // Pula linha se coluna N (índice 13) estiver vazia — linha sem dado relevante
+      var colN = row[13]; if(colN===null||colN===undefined||String(colN).trim()==='') continue;
       var ok=false; for(var x=0;x<row.length;x++){if(row[x]!==null&&row[x]!==''){ok=true;break;}} if(!ok) continue;
       if(String(row[cMotivo]||'').trim()==='Ocor.Aberta') continue;
       var origem=String(row[cOrigem]||'').trim().toUpperCase();
@@ -3373,6 +3376,7 @@ function relFiltrar() {
       return asc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
     });
   }
+  if(typeof _rowCache !== 'undefined') _rowCache = []; // limpa cache de HTML das linhas
   relRenderizar();
 }
 
@@ -3426,50 +3430,74 @@ function relRenderizar() {
   });
   thead.appendChild(tr);
 
-  // Tbody - chunked para não travar
-  var tbody=document.getElementById('rel-tbody');
-  tbody.innerHTML='';
-  var CHUNK=800;
-  function renderChunk(start){
-    var frag=document.createDocumentFragment();
-    var end=Math.min(start+CHUNK,_relFilt.length);
-    for(var i=start;i<end;i++){
-      var r=_relFilt[i];
-      var inProg = progSet.has(r.destino.toUpperCase());
-      var rowStyle = '';
-      if (inProg && r.disp === 'Planejado') rowStyle='background:rgba(220,252,231,.7);border-left:3px solid #16a34a';
-      else if (inProg && r.cliente === '⚠ Cliente critico') rowStyle='background:rgba(255,247,237,.7);border-left:3px solid #ea580c';
-      else if (inProg) rowStyle='background:rgba(219,234,254,.4);border-left:3px solid #2563eb';
-      else if (r.cliente === '⚠ Cliente critico') rowStyle='background:rgba(255,247,237,.5)';
-      else if (r.disp === 'Planejado') rowStyle='background:rgba(220,252,231,.5)';
-      var tr=document.createElement('tr');
-      if(rowStyle) tr.setAttribute('style',rowStyle);
-      var cells='';
-      REL_COLS.forEach(function(col){
-        var v=r[col.k]; var disp='';
-        if(col.type==='badge'){
-          var bc=col.k==='disp'?dispBadge[v]:col.k==='cliente'?critBadge[v]:etiqBadge[v];
-          var lb=col.k==='disp'?(dispLabel[v]||v):v;
-          disp='<span class="rel-badge '+(bc||'rel-badge-fluxo')+'">'+lb+'</span>';
-        } else if(col.type==='num'){
-          disp=col.k==='valor'?'R$ '+relFmtNum(v||0,2).replace('.',','):(relFmtNum(v||0,3));
-        } else { disp=v||'—'; }
-        var st=''; if(col.right) st+='text-align:right;'; if(col.mono) st+='font-family:monospace;font-size:10px;';
-        if(col.truncate) st+='max-width:'+col.w+'px;overflow:hidden;text-overflow:ellipsis;';
-        cells+='<td class="rel-td"'+(st?' style="'+st+'"':'')+(col.truncate?' title="'+(v||'').replace(/"/g,'&quot;')+'"':'')+'>' +disp+'</td>';
-      });
-      tr.innerHTML=cells;
-      frag.appendChild(tr);
+  // ── VIRTUAL SCROLL ──
+  var ROW_H = 34; // altura estimada por linha em px
+  var wrap2 = document.getElementById('rel-table-wrap');
+  var tbody = document.getElementById('rel-tbody');
+  tbody.innerHTML = '';
+  document.getElementById('rel-loading').style.display = 'none';
+
+  // Pré-calcula HTML das linhas como strings (mais rápido que DOM)
+  var _rowCache = new Array(_relFilt.length);
+  var _rowCacheBuilt = false;
+  var _vsStart = 0, _vsEnd = 0;
+
+  function buildRowHTML(i) {
+    if (_rowCache[i]) return _rowCache[i];
+    var r = _relFilt[i];
+    var inProg = progSet.has(r.destino.toUpperCase());
+    var rowStyle = '';
+    if (inProg && r.disp==='Planejado') rowStyle='background:rgba(220,252,231,.7);border-left:3px solid #16a34a';
+    else if (inProg && r.cliente==='⚠ Cliente critico') rowStyle='background:rgba(255,247,237,.7);border-left:3px solid #ea580c';
+    else if (inProg) rowStyle='background:rgba(219,234,254,.4);border-left:3px solid #2563eb';
+    else if (r.cliente==='⚠ Cliente critico') rowStyle='background:rgba(255,247,237,.5)';
+    else if (r.disp==='Planejado') rowStyle='background:rgba(220,252,231,.5)';
+    var cells = '';
+    for (var ci = 0; ci < REL_COLS.length; ci++) {
+      var col = REL_COLS[ci]; var v = r[col.k]; var disp = '';
+      if (col.type==='badge') {
+        var bc = col.k==='disp'?dispBadge[v]:col.k==='cliente'?critBadge[v]:etiqBadge[v];
+        var lb = col.k==='disp'?(dispLabel[v]||v):v;
+        disp = '<span class="rel-badge '+(bc||'rel-badge-fluxo')+'">'+lb+'</span>';
+      } else if (col.type==='num') {
+        disp = col.k==='valor'?'R$ '+relFmtNum(v||0,2).replace('.',','):relFmtNum(v||0,3);
+      } else { disp = v||'—'; }
+      var st = ''; if(col.right) st+='text-align:right;'; if(col.mono) st+='font-family:monospace;font-size:10px;';
+      if(col.truncate) st+='max-width:'+col.w+'px;overflow:hidden;text-overflow:ellipsis;';
+      cells += '<td class="rel-td"'+(st?' style="'+st+'"':'')+(col.truncate?' title="'+(v||'').replace(/"/g,'&quot;')+'"':'')+'>'+disp+'</td>';
     }
-    tbody.appendChild(frag);
-    if(end<_relFilt.length){
-      document.getElementById('rel-loading').style.display='block';
-      requestAnimationFrame(function(){ renderChunk(end); });
-    } else {
-      document.getElementById('rel-loading').style.display='none';
-    }
+    _rowCache[i] = '<tr style="'+rowStyle+'">'+cells+'</tr>';
+    return _rowCache[i];
   }
-  renderChunk(0);
+
+  function vsRender() {
+    var scrollTop = wrap2.scrollTop;
+    var viewH = wrap2.clientHeight || 500;
+    var total = _relFilt.length;
+    var start = Math.max(0, Math.floor(scrollTop / ROW_H) - 10);
+    var end   = Math.min(total, Math.ceil((scrollTop + viewH) / ROW_H) + 10);
+    if (start === _vsStart && end === _vsEnd) return;
+    _vsStart = start; _vsEnd = end;
+
+    var paddingTop  = start * ROW_H;
+    var paddingBot  = (total - end) * ROW_H;
+    var html = '';
+    for (var i = start; i < end; i++) html += buildRowHTML(i);
+    tbody.innerHTML =
+      '<tr style="height:'+paddingTop+'px"><td colspan="'+REL_COLS.length+'" style="padding:0;border:none"></td></tr>' +
+      html +
+      '<tr style="height:'+paddingBot+'px"><td colspan="'+REL_COLS.length+'" style="padding:0;border:none"></td></tr>';
+  }
+
+  // Initial render
+  vsRender();
+  // Attach scroll listener (replace previous)
+  wrap2.onscroll = function(){ vsRender(); };
+  // Build first 200 rows in background for snappy scroll start
+  setTimeout(function(){
+    var lim = Math.min(200, _relFilt.length);
+    for (var i = 0; i < lim; i++) buildRowHTML(i);
+  }, 100);
 }
 
 function relSort(colKey){
@@ -3535,7 +3563,6 @@ document.addEventListener('click',function(e){
       <div style="font-size:16px;font-weight:700;color:#1e293b">🚛 Frotas em Carregamento</div>
       <div id="frotas-updated" style="font-size:11px;color:#94a3b8"></div>
     </div>
-    <button onclick="frotasRenderizar()" style="padding:7px 14px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">↺ Atualizar</button>
   </div>
   <div id="frotas-empty" style="text-align:center;padding:60px;color:#94a3b8;font-size:13px;background:#fff;border-radius:12px;border:1px solid #e2e8f0">
     Nenhuma frota programada hoje. Verifique a aba Programados.
