@@ -3025,10 +3025,12 @@ function relExcelDate(v) {
 function relAbrirExport() {
   if (!_relFilt.length) { showToast('Sem dados para exportar','error'); return; }
   document.getElementById('rel-export-count').textContent = _relFilt.length.toLocaleString('pt-BR');
+  var saved = JSON.parse(localStorage.getItem('rel_export_cols') || 'null');
   var container = document.getElementById('rel-export-cols');
   container.innerHTML = REL_COLS.map(function(col){
+    var isChecked = saved ? saved.indexOf(col.k) !== -1 : true;
     return '<label style="display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:11px;color:#374151">' +
-      '<input type="checkbox" checked data-key="'+col.k+'" style="cursor:pointer"> '+col.l+'</label>';
+      '<input type="checkbox" '+(isChecked?'checked':'')+' data-key="'+col.k+'" style="cursor:pointer"> '+col.l+'</label>';
   }).join('');
   document.getElementById('rel-export-modal').style.display = 'flex';
 }
@@ -3041,6 +3043,7 @@ function relExecutarExport() {
   var selCols = [];
   document.querySelectorAll('#rel-export-cols input:checked').forEach(function(c){ selCols.push(c.getAttribute('data-key')); });
   if (!selCols.length) { showToast('Selecione ao menos uma coluna','error'); return; }
+  try { localStorage.setItem('rel_export_cols', JSON.stringify(selCols)); } catch(e){}
   relFecharExport();
 
   var colMap = {}; REL_COLS.forEach(function(c){ colMap[c.k]=c; });
@@ -3075,13 +3078,14 @@ function relExecutarExport() {
 function relAbrirImpressao() {
   if (!_relFilt.length) { showToast('Sem dados para imprimir','error'); return; }
   document.getElementById('rel-print-count').textContent = _relFilt.length.toLocaleString('pt-BR');
+  var saved = JSON.parse(localStorage.getItem('rel_print_cols') || 'null');
   var container = document.getElementById('rel-print-cols');
   container.innerHTML = REL_COLS.map(function(col){
+    var isChecked = saved ? saved.indexOf(col.k) !== -1 : true;
     return '<label style="display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:11px;color:#374151">' +
-      '<input type="checkbox" checked data-key="'+col.k+'" style="cursor:pointer"> '+col.l+'</label>';
+      '<input type="checkbox" '+(isChecked?'checked':'')+' data-key="'+col.k+'" style="cursor:pointer"> '+col.l+'</label>';
   }).join('');
-  var modal = document.getElementById('rel-print-modal');
-  modal.style.display = 'flex';
+  document.getElementById('rel-print-modal').style.display = 'flex';
 }
 function relFecharImpressao() { document.getElementById('rel-print-modal').style.display = 'none'; }
 function relPrintSelAll()  { document.querySelectorAll('#rel-print-cols input').forEach(function(c){c.checked=true;}); }
@@ -3091,6 +3095,7 @@ function relExecutarImpressao() {
   var selCols = [];
   document.querySelectorAll('#rel-print-cols input:checked').forEach(function(c){ selCols.push(c.getAttribute('data-key')); });
   if (!selCols.length) { showToast('Selecione ao menos uma coluna','error'); return; }
+  try { localStorage.setItem('rel_print_cols', JSON.stringify(selCols)); } catch(e){}
   relFecharImpressao();
 
   var colMap = {};
@@ -3100,7 +3105,7 @@ function relExecutarImpressao() {
   var dispLabel2 = {'Patio':'Pátio','Em descarregamento':'Em descarga'};
 
   var thead = '<tr>' + selCols.map(function(k){
-    return '<th style="padding:5px 8px;background:#1e293b;color:#fff;font-size:9px;text-transform:uppercase;white-space:nowrap;border:1px solid #334155">' + colMap[k].l + '</th>';
+    return '<th style="padding:5px 8px;background:#1e293b;color:#fff;font-size:9px;font-weight:700;text-transform:uppercase;white-space:nowrap;border:1px solid #0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact">' + colMap[k].l + '</th>';
   }).join('') + '</tr>';
 
   var tbody = _relFilt.map(function(r){
@@ -3121,12 +3126,57 @@ function relExecutarImpressao() {
     return '<tr>'+cells+'</tr>';
   }).join('');
 
+  // Calcula totais para impressão
+  var totPeso=0, totValor=0, totCrit=0, totPlan=0, totDisp=0, totPatio=0;
+  _relFilt.forEach(function(r){
+    totPeso  += r.peso  || 0;
+    totValor += r.valor || 0;
+    if (r.cliente === '⚠ Cliente critico') totCrit++;
+    if (r.disp === 'Planejado')            totPlan++;
+    if (r.disp === 'Disponível')           totDisp++;
+    if (r.disp === 'Patio')               totPatio++;
+  });
+
+  var totaisHTML =
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">' +
+      '<div style="padding:6px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;min-width:100px">' +
+        '<div style="font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px">Total CTRCs</div>' +
+        '<div style="font-size:16px;font-weight:800;color:#1e293b">'+_relFilt.length.toLocaleString('pt-BR')+'</div>' +
+      '</div>' +
+      '<div style="padding:6px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;min-width:120px">' +
+        '<div style="font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px">Peso Total (kg)</div>' +
+        '<div style="font-size:16px;font-weight:800;color:#1e293b">'+totPeso.toLocaleString('pt-BR',{maximumFractionDigits:1})+'</div>' +
+      '</div>' +
+      '<div style="padding:6px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;min-width:140px">' +
+        '<div style="font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px">Valor Total</div>' +
+        '<div style="font-size:16px;font-weight:800;color:#1e293b">R$ '+totValor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>' +
+      '</div>' +
+      '<div style="padding:6px 12px;background:#fff;border:1px solid #fca5a5;border-radius:6px;min-width:80px">' +
+        '<div style="font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px">Críticos</div>' +
+        '<div style="font-size:16px;font-weight:800;color:#ea580c">'+totCrit.toLocaleString('pt-BR')+'</div>' +
+      '</div>' +
+      '<div style="padding:6px 12px;background:#fff;border:1px solid #93c5fd;border-radius:6px;min-width:80px">' +
+        '<div style="font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px">Planejados</div>' +
+        '<div style="font-size:16px;font-weight:800;color:#2563eb">'+totPlan.toLocaleString('pt-BR')+'</div>' +
+      '</div>' +
+      '<div style="padding:6px 12px;background:#fff;border:1px solid #86efac;border-radius:6px;min-width:80px">' +
+        '<div style="font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px">Disponíveis</div>' +
+        '<div style="font-size:16px;font-weight:800;color:#16a34a">'+totDisp.toLocaleString('pt-BR')+'</div>' +
+      '</div>' +
+      '<div style="padding:6px 12px;background:#fff;border:1px solid #fde68a;border-radius:6px;min-width:80px">' +
+        '<div style="font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:2px">Pátio</div>' +
+        '<div style="font-size:16px;font-weight:800;color:#854d0e">'+totPatio.toLocaleString('pt-BR')+'</div>' +
+      '</div>' +
+    '</div>';
+
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório Embarque GRU</title>' +
     '<style>body{font-family:Arial,sans-serif;font-size:10px;margin:12px} table{border-collapse:collapse;width:100%} ' +
+    'th{-webkit-print-color-adjust:exact;print-color-adjust:exact} ' +
     '@page{size:landscape;margin:10mm} @media print{button{display:none}} h3{margin:0 0 8px;font-size:13px}</style></head><body>' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
     '<h3>Relatório de Embarque — GRU</h3>' +
-    '<span style="font-size:10px;color:#64748b">'+document.getElementById('rel-updated').textContent+' · '+_relFilt.length+' registros</span></div>' +
+    '<span style="font-size:10px;color:#64748b">'+document.getElementById('rel-updated').textContent+'</span></div>' +
+    totaisHTML +
     '<button onclick="window.print()" style="margin-bottom:10px;padding:5px 14px;background:#2563eb;color:#fff;border:none;border-radius:5px;cursor:pointer">Imprimir</button>' +
     '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table></body></html>';
 
