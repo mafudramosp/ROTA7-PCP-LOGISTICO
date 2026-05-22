@@ -2425,6 +2425,8 @@ function cgImportar(input) {
       });
       // Persistir mapa de datas críticas no localStorage
       try { localStorage.setItem('cg_data_crit', JSON.stringify(window._cgDataCrit)); } catch(ex){}
+      // Salvar mapa no Supabase para outros usuários
+      cgSalvarCritSupabase();
       // Preencher data_crit em progData imediatamente
       var atualizados = autoPreencherDataCrit() || 0;
       if (atualizados > 0) {
@@ -2432,6 +2434,8 @@ function cgImportar(input) {
       }
       // Guardar buffer e processar
       window._relPendingBuffer = e.target.result;
+      // Salvar planejamento no Supabase para outros usuários
+      setTimeout(sbSalvarPlanejamento, 800);
       // Se já estiver na aba Relatório, processa imediatamente
       var relTab = document.getElementById('tab-relatorio-content');
       if (relTab && relTab.classList.contains('active')) {
@@ -2838,6 +2842,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var savedCrit = localStorage.getItem('cg_data_crit');
     if (savedCrit) window._cgDataCrit = JSON.parse(savedCrit);
   } catch(e) {}
+  // Carregar mapa atualizado do Supabase (compartilhado entre usuários)
+  setTimeout(cgCarregarCritSupabase, 1000);
+  // Carregar relatório e planejamento do Supabase
+  setTimeout(sbCarregarPlanejamento, 1200);
+  setTimeout(sbCarregarRelatorio, 1500);
   // Limpar baselines de dias anteriores
   try {
     var hoje = new Date().toISOString().slice(0,10);
@@ -3319,6 +3328,8 @@ function relProcessarRows(rows) {
       relFiltrar();
       if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 100);
       if (typeof hubRenderizar === 'function') { _hubTree = null; setTimeout(hubRenderizar, 150); }
+      // Salva no Supabase para outros usuários
+      setTimeout(sbSalvarRelatorio, 500);
     }
   }
   parseChunk(0);
@@ -3912,6 +3923,102 @@ function iniciarEscutaRealtime() {
 // Sincronizar manualmente
 
 // ── Auto-preencher data_crit do mapa TMS em progData ──
+// ── SALVAR/CARREGAR DATA_CRIT NO SUPABASE ──
+function cgSalvarCritSupabase() {
+  if (!window._cgDataCrit || !Object.keys(window._cgDataCrit).length) return;
+  try {
+    fetch(SB_URL + '/configuracoes', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ chave: 'cg_data_crit', valor: JSON.stringify(window._cgDataCrit) })
+    }).catch(function(){});
+  } catch(e) {}
+}
+
+// ── SYNC RELATÓRIO ──
+function sbSalvarRelatorio() {
+  if (!_relData || !_relData.length) return;
+  try {
+    var payload = JSON.stringify(_relData);
+    fetch(SB_URL + '/configuracoes', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ chave: 'tms_relatorio', valor: payload, atualizado_em: new Date().toISOString() })
+    }).then(function(){ showToast('☁️ Relatório sincronizado para todos os usuários', 'success'); })
+    .catch(function(){});
+  } catch(e) {}
+}
+
+function sbCarregarRelatorio() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio&select=valor,atualizado_em', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      if (data && data.length && data[0].valor) {
+        _relData = JSON.parse(data[0].valor);
+        _rcfF = {}; _relSort = {col:null,asc:true}; _rowCache = [];
+        if (typeof _hubTree !== 'undefined') _hubTree = null;
+        var ts = data[0].atualizado_em ? new Date(data[0].atualizado_em).toLocaleString('pt-BR') : '';
+        var u = document.getElementById('rel-updated');
+        if (u) u.textContent = 'Sincronizado: '+ts+' · '+_relData.length+' registros';
+        relFiltrar();
+        if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
+        if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
+      }
+    }).catch(function(){});
+  } catch(e) {}
+}
+
+// ── SYNC PLANEJAMENTO ──
+function sbSalvarPlanejamento() {
+  if (!_cgData) return;
+  try {
+    fetch(SB_URL + '/configuracoes', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ chave: 'tms_planejamento', valor: JSON.stringify(_cgData), atualizado_em: new Date().toISOString() })
+    }).catch(function(){});
+  } catch(e) {}
+}
+
+function sbCarregarPlanejamento() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.tms_planejamento&select=valor,atualizado_em', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      if (data && data.length && data[0].valor) {
+        // Só carrega se não tem dados locais mais recentes
+        var remoto = JSON.parse(data[0].valor);
+        if (!_cgData || !_cgData.ts || new Date(remoto.ts) > new Date(_cgData.ts)) {
+          _cgData = remoto;
+          try { localStorage.setItem('cg_data', JSON.stringify(_cgData)); } catch(e){}
+          cgRenderizar(_cgData);
+        }
+      }
+    }).catch(function(){});
+  } catch(e) {}
+}
+
+function cgCarregarCritSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.cg_data_crit&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      if (data && data.length && data[0].valor) {
+        var mapa = JSON.parse(data[0].valor);
+        // Mescla com o que já temos (não sobrescreve se já tem dados mais recentes)
+        if (!window._cgDataCrit) window._cgDataCrit = {};
+        Object.keys(mapa).forEach(function(k){
+          if (!window._cgDataCrit[k]) window._cgDataCrit[k] = mapa[k];
+        });
+        try { localStorage.setItem('cg_data_crit', JSON.stringify(window._cgDataCrit)); } catch(e){}
+        // Preenche data_crit nas programações
+        if (typeof autoPreencherDataCrit === 'function') autoPreencherDataCrit();
+      }
+    }).catch(function(){});
+  } catch(e) {}
+}
+
 function autoPreencherDataCrit() {
   if (!window._cgDataCrit || !progData || !progData.length) return;
   var count = 0;
