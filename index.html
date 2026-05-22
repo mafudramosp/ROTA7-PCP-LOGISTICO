@@ -3940,13 +3940,19 @@ function sbSalvarRelatorio() {
   if (!_relData || !_relData.length) return;
   try {
     var payload = JSON.stringify(_relData);
+    showToast('⏳ Sincronizando relatório...', 'info');
     fetch(SB_URL + '/configuracoes', {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
       body: JSON.stringify({ chave: 'tms_relatorio', valor: payload, atualizado_em: new Date().toISOString() })
-    }).then(function(){ showToast('☁️ Relatório sincronizado para todos os usuários', 'success'); })
-    .catch(function(){});
-  } catch(e) {}
+    }).then(function(r){
+      if (r.ok || r.status === 201 || r.status === 200 || r.status === 204) {
+        showToast('☁️ Relatório sincronizado para todos os usuários!', 'success');
+      } else {
+        r.text().then(function(t){ showToast('⚠️ Erro sync: ' + r.status + ' ' + t.substring(0,80), 'error'); });
+      }
+    }).catch(function(e){ showToast('⚠️ Sem conexão: ' + e.message, 'error'); });
+  } catch(e) { showToast('⚠️ Erro: ' + e.message, 'error'); }
 }
 
 function sbCarregarRelatorio() {
