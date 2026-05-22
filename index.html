@@ -2263,6 +2263,7 @@ function cgImportar(input) {
       var cBQ     = c['FIM_DESCARREGAMENTO'];
       var cSit    = c['SITUACAO_PREV_EMBARQUE'];
       var cMotivo = c['Motivo'];
+      var cAgendCG= c['Agendamento'] !== undefined ? c['Agendamento'] : (c['FL_AGENDAMENTO'] !== undefined ? c['FL_AGENDAMENTO'] : 42); // col AQ
       var cPeso   = c['P_Operacional']!==undefined ? c['P_Operacional'] : c['P_Calculo'];
       var cDtPrev = c['DT_PREV_EMBARQUE'] !== undefined ? c['DT_PREV_EMBARQUE'] : 32; // col AG
 
@@ -2280,8 +2281,9 @@ function cgImportar(input) {
         var sit  = String(row[cSit]||'').trim();
         var peso = parseFloat(row[cPeso]||0);
 
-        // Ignorar Ocor.Aberta e linhas sem destino
-        if (mot === 'Ocor.Aberta' || !dest) continue;
+        // Ignorar Ocor.Aberta somente se Agendamento != SIM
+        var agendCG = String(row[cAgendCG]||'').trim().toUpperCase();
+        if ((mot === 'Ocor.Aberta' && agendCG !== 'SIM') || !dest) continue;
 
         // Lógica de status
         var status;
@@ -3294,7 +3296,8 @@ function relProcessarRows(rows) {
       // Pula linha se coluna N (índice 13) estiver vazia — linha sem dado relevante
       var colN = row[13]; if(colN===null||colN===undefined||String(colN).trim()==='') continue;
       var ok=false; for(var x=0;x<row.length;x++){if(row[x]!==null&&row[x]!==''){ok=true;break;}} if(!ok) continue;
-      if(String(row[cMotivo]||'').trim()==='Ocor.Aberta') continue;
+      if(String(row[cMotivo]||'').trim()==='Ocor.Aberta' &&
+         String(row[cAgend]||'').trim().toUpperCase()!=='SIM') continue;
       var origem=String(row[cOrigem]||'').trim().toUpperCase();
       var aeP=!!(row[cPlan]&&String(row[cPlan]).trim()&&String(row[cPlan]).trim()!=='0');
       var alP=!!(row[cIniDes]&&String(row[cIniDes]).trim());
