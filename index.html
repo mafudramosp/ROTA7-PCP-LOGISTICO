@@ -2182,29 +2182,6 @@
 
 <!-- SIDEBAR DE INDICADORES -->
 <div class="cg-sidebar" id="cg-sidebar" style="display:none">
-
-  <div class="cg-ind-card">
-    <div class="cg-ind-label">Carretas necessárias</div>
-    <div class="cg-ind-value" id="cg-ind-carretas" style="color:#ea580c">—</div>
-    <div class="cg-ind-sub" id="cg-ind-carretas-sub"></div>
-    <div class="cg-ind-cap">Capacidade padrão: 25 t</div>
-  </div>
-
-  <div class="cg-ind-card">
-    <div class="cg-ind-label">Carretas carregando</div>
-    <div class="cg-ind-value" id="cg-ind-carregando" style="color:#2563eb">—</div>
-    <div class="cg-ind-sub" id="cg-ind-carregando-sub"></div>
-    <div class="cg-ind-cap">Veículos Programados</div>
-  </div>
-
-  <div class="cg-ind-card">
-    <div class="cg-ind-label">Eficiência crítica</div>
-    <div class="cg-ind-value" id="cg-ind-efic" style="color:#ea580c">—</div>
-    <div class="cg-ind-sub" id="cg-ind-efic-sub"></div>
-    <div class="cg-ind-cap">Crítico ÷ disponível (programados)</div>
-  </div>
-
-
 </div><!-- /cg-sidebar -->
 
 </div><!-- /cg-wrap -->
@@ -2285,13 +2262,14 @@ function cgImportar(input) {
         var agendCG = String(row[cAgendCG]||'').trim().toUpperCase();
         if ((mot === 'Ocor.Aberta' && agendCG !== 'SIM') || !dest) continue;
 
-        // Lógica de status
+        // Lógica de status — mesmas regras do relatório
+        // AC=bg (Equipamento), AE=bi (Mercadoria_Planejada), AL=bp (Inicio_Descarregamento), AM=bq (Fim_Descarregamento)
+        var bgPreench = !!(bg !== null && bg !== undefined && String(bg).trim() !== '' && parseFloat(String(bg).replace(',','.')) !== 0 && !isNaN(parseFloat(String(bg).replace(',','.'))));
         var status;
-        if (bp && !bi && !bg)       status = 'descarregando';
-        else if (!bp && bg && !bi)  status = 'disponivel';
-        else if (bi)                status = 'planejado';
-        else if (!bg && !bi && !bp && !bq) status = 'patio';
-        else                        status = 'outros';
+        if (bi)                                    status = 'planejado';        // AE preenchida
+        else if (bp && !bq && !bgPreench && !bi)   status = 'descarregando';   // AL preencha, AM vazia, AC=0, AE vazia
+        else if (!bi && !bgPreench && !bp && !bq)  status = 'patio';           // tudo vazio
+        else                                       status = 'disponivel';       // AC preenchido + AE vazia
 
         if (!destMap[dest]) destMap[dest] = {
           sigla: dest,
@@ -2566,47 +2544,39 @@ function cgRenderizar(data) {
 
 // ── CARDS LATERAIS DE INDICADORES ──
 function cgAtualizarCards(totalGeral, totalCrit, destinos) {
-  var sidebar = document.getElementById('cg-sidebar');
-  if (!sidebar) return;
-  sidebar.style.display = 'flex';
+  function setEl(id, val) { var e = document.getElementById(id); if (e) e.textContent = val; }
+  function setStyle(id, prop, val) { var e = document.getElementById(id); if (e) e.style[prop] = val; }
 
-  var CAP_CARRETA = 25; // toneladas
+  var CAP_CARRETA = 25;
 
   // Card 1 — Carretas necessárias
   var carrNec = totalGeral > 0 ? Math.ceil(totalGeral / CAP_CARRETA) : 0;
-  document.getElementById('cg-ind-carretas').textContent = carrNec > 0 ? carrNec : '—';
-  document.getElementById('cg-ind-carretas-sub').textContent =
-    totalGeral > 0 ? totalGeral.toFixed(1) + ' t disponível' : '';
+  setEl('cg-ind-carretas', carrNec > 0 ? carrNec : '—');
+  setEl('cg-ind-carretas-sub', totalGeral > 0 ? totalGeral.toFixed(1) + ' t disponível' : '');
 
-  // Card 2 — Carretas carregando (mesmo filtro da aba Programados: gerado hoje, com frota ou ocup)
-  var _hoje = getDataHoje(); // dd/MM/yyyy
+  // Card 2 — Carretas carregando
+  var _hoje = getDataHoje();
   var carregando = 0;
   if (typeof progData !== 'undefined') {
     carregando = progData.filter(function(r) {
       if (!r.frota && !r.ocup) return false;
-      var gd = (r.gerado || '').substring(0, 10); // yyyy-MM-dd ou dd/MM/yyyy
-      // Normaliza para dd/MM/yyyy
-      var gdBR = gd.indexOf('-') !== -1
-        ? gd.split('-')[2] + '/' + gd.split('-')[1] + '/' + gd.split('-')[0]
-        : gd;
+      var gd = (r.gerado || '').substring(0, 10);
+      var gdBR = gd.indexOf('-') !== -1 ? gd.split('-')[2]+'/'+gd.split('-')[1]+'/'+gd.split('-')[0] : gd;
       return gdBR === _hoje;
     }).length;
   }
-  document.getElementById('cg-ind-carregando').textContent = carregando;
-  document.getElementById('cg-ind-carregando-sub').textContent = '';
+  setEl('cg-ind-carregando', carregando);
+  setEl('cg-ind-carregando-sub', '');
 
-  // Card 3 — Eficiência crítica: peso crítico ÷ peso disponível das composições em Programados
+  // Card 3 — Eficiência crítica
   var pesoDispProg = 0, pesoCritProg2 = 0;
   if (typeof progData !== 'undefined' && destinos) {
-    // Monta set de siglas cobertas por progData (destino OU composição)
     var siglasProgSet = {};
     progData.forEach(function(p) {
       var dest = String(p.destino || '').toUpperCase().trim();
       if (dest) siglasProgSet[dest] = true;
-      // Composição pode ter múltiplas siglas separadas por vírgula
       String(p.composicao || '').split(',').forEach(function(s) {
-        var sig = s.trim().toUpperCase();
-        if (sig) siglasProgSet[sig] = true;
+        var sig = s.trim().toUpperCase(); if (sig) siglasProgSet[sig] = true;
       });
     });
     destinos.forEach(function(d) {
@@ -2617,14 +2587,9 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
     });
   }
   var efic = pesoDispProg > 0 ? Math.round(pesoCritProg2 / pesoDispProg * 100) : 0;
-  var eficEl = document.getElementById('cg-ind-efic');
-  eficEl.textContent = efic + '%';
-  eficEl.style.color = efic >= 80 ? '#16a34a' : efic >= 50 ? '#d97706' : '#ea580c';
-  document.getElementById('cg-ind-efic-sub').textContent =
-    pesoDispProg > 0
-      ? pesoCritProg2.toFixed(1) + ' t plan. de ' + pesoDispProg.toFixed(1) + ' t crit.'
-      : 'Sem crítico programado';
-
+  setEl('cg-ind-efic', efic + '%');
+  setStyle('cg-ind-efic', 'color', efic >= 80 ? '#16a34a' : efic >= 50 ? '#d97706' : '#ea580c');
+  setEl('cg-ind-efic-sub', pesoDispProg > 0 ? pesoCritProg2.toFixed(1)+' t plan. de '+pesoDispProg.toFixed(1)+' t crit.' : 'Sem crítico programado');
 }
 
 
@@ -3278,6 +3243,7 @@ function relProcessarRows(rows) {
   var cOcorr=colFallback('AV','Ocorrência aberta','OCORRENCIA_ABERTA');
   var cPlan=colFallback('AE','Mercadoria_Planejada','Frota planejada');
   var cMac=colFallback('W','Nr_Mac','NR_MAC');
+  var cMacDest=colFallback('V','DESTINO_MAC','MAC_DESTINO','FILIAL_MAC');
   var cReboque=colFallback('AS','Reboque transfer.','REBOQUE_TRANSFER');
   var cVols=colFallback('I','Volumes','QT_VOLUMES','QTDE_VOLUMES');
   var cPeso=colFallback('M','P_Operacional','P_Calculo','Peso operacional');
@@ -3302,8 +3268,23 @@ function relProcessarRows(rows) {
       var aeP=!!(row[cPlan]&&String(row[cPlan]).trim()&&String(row[cPlan]).trim()!=='0');
       var alP=!!(row[cIniDes]&&String(row[cIniDes]).trim());
       var amP=!!(row[cFimDes]&&String(row[cFimDes]).trim());
-      var eqP=!!(row[cEquip]&&parseFloat(String(row[cEquip]).replace(',','.')));
-      var disp=aeP?'Planejado':alP&&!amP&&!eqP?'Em descarregamento':!eqP&&!alP&&!amP?'Patio':'Disponível';
+      var eqRaw = row[cEquip];
+      var eqP=!!(eqRaw!==null&&eqRaw!==undefined&&String(eqRaw).trim()!==''&&parseFloat(String(eqRaw).replace(',','.'))!==0&&!isNaN(parseFloat(String(eqRaw).replace(',','.'))));
+      // Regras em ordem de prioridade:
+      // 1. Planejado: AE preenchida
+      // 2. Em descarregamento: AL preenchida + AM vazia + AC=0 + AE vazia
+      // 3. Pátio: AE vazia + AC=0 + AL vazia + AM vazia
+      // 4. Disponível: AC preenchido (>0) + AE vazia
+      var disp;
+      if (aeP) {
+        disp = 'Planejado';
+      } else if (alP && !amP && !eqP && !aeP) {
+        disp = 'Em descarregamento';
+      } else if (!aeP && !eqP && !alP && !amP) {
+        disp = 'Patio';
+      } else {
+        disp = 'Disponível';
+      }
       var cnpj=String(row[cCnpj]||'').replace(/[.\-\/\s]/g,'');
       var sit=String(row[cSit]||'').trim();
       var cli=REL_CNPJ_PRIORIDADE.has(cnpj)||sit==='Hoje'||sit==='Atrasado'?'⚠ Cliente critico':String(row[cAgend]||'').trim().toUpperCase()==='SIM'?'⚠ Agendamento':'Fluxo';
@@ -3317,8 +3298,11 @@ function relProcessarRows(rows) {
         ctrc:String(row[cCtrc]||'').trim(),remetente:String(row[cRem]||'').trim(),
         destinatario:String(row[cDest2]||'').trim(),
         modal:String(row[cModal]||'').trim().toUpperCase()==='PADRAO'?'Terrestre':'Aéreo',
-        ocorr:String(row[cOcorr]||'').trim(),frotaPlan:String(row[cPlan]||'').trim(),
-        mac:String(row[cMac]||'').trim(),reboque:String(row[cReboque]||'').trim(),
+        ocorr:String(row[cOcorr]||'').trim(),
+        motivo:String(row[cMotivo]||'').trim(),frotaPlan:String(row[cPlan]||'').trim(),
+        mac:String(row[cMac]||'').trim(),
+        macDest:String(row[cMacDest]||'').trim(),
+        reboque:String(row[cReboque]||'').trim(),
         vols:row[cVols]!=null?String(row[cVols]).trim():'',
         peso:parseFloat(String(row[cPeso]||'0').replace(',','.'))||0,valor:val,
         sitAH:sit
@@ -3654,130 +3638,91 @@ document.addEventListener('click',function(e){
 <!-- ── TAB RESUMO HUB ── -->
 <div id="tab-hub-content" class="tab-content" style="background:#f1f5f9;min-height:calc(100vh - 52px);padding:20px 24px;box-sizing:border-box">
 
-  <div style="margin-bottom:18px">
-    <div style="font-size:16px;font-weight:700;color:#1e293b">📊 Resumo de Estoque</div>
-    <div style="font-size:11px;color:#94a3b8">Painel HUB</div>
+  <div style="margin-bottom:16px">
+    <div style="font-size:16px;font-weight:700;color:#1e293b">📊 Painel HUB — Prioridades</div>
+    <div style="font-size:11px;color:#94a3b8">GRU · Guarulhos · Tragetta Transportes</div>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:20px;align-items:start">
-
-    <!-- LEFT: SLA gauges + tabela estoque -->
-    <div style="grid-column:1/4;display:flex;flex-direction:column;gap:16px">
-
-      <!-- SLA Gauges -->
-      <div style="display:flex;gap:20px">
-        <div class="hub-gauge-card" id="hub-g-out">
-          <div class="hub-gauge-label">SLA – <span style="color:#ea580c">Outbound</span></div>
-          <canvas id="hub-cv-out" width="240" height="145" style="display:block;margin:0 auto;width:240px;height:145px"></canvas>
-          <div class="hub-gauge-pct" id="hub-pct-out" style="display:none">0%</div>
-          <div class="hub-gauge-sub" style="display:none"></div>
-        </div>
-        <div class="hub-gauge-card" id="hub-g-arm">
-          <div class="hub-gauge-label">SLA – <span style="color:#16a34a">Armazém</span></div>
-          <canvas id="hub-cv-arm" width="240" height="145" style="display:block;margin:0 auto;width:240px;height:145px"></canvas>
-          <div class="hub-gauge-pct" id="hub-pct-arm" style="display:none">0%</div>
-          <div class="hub-gauge-sub" style="display:none"></div>
-        </div>
-        <div class="hub-gauge-card" id="hub-g-in">
-          <div class="hub-gauge-label">SLA – <span style="color:#2563eb">Inbound</span></div>
-          <canvas id="hub-cv-in" width="240" height="145" style="display:block;margin:0 auto;width:240px;height:145px"></canvas>
-          <div class="hub-gauge-pct" id="hub-pct-in" style="display:none">0%</div>
-          <div class="hub-gauge-sub" style="display:none"></div>
-        </div>
-      </div>
-
-      <!-- Tabela estoque -->
-      <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden">
-        <div style="padding:10px 14px;font-size:12px;font-weight:700;color:#ea580c;border-bottom:1px solid #f1f5f9">Resumo de estoque</div>
-        <table style="width:100%;border-collapse:collapse;font-size:11px">
-          <thead>
-            <tr style="background:#000 !important">
-              <th style="padding:7px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em">STATUS DE DISPONI.</th>
-              <th style="padding:7px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em">ATRASADO</th>
-              <th style="padding:7px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em">HOJE</th>
-              <th style="padding:7px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em">NO PRAZO</th>
-              <th style="padding:7px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em">PESO OPERACIONAL</th>
-              <th style="padding:7px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em">VALOR MERCADORIA</th>
-            </tr>
-          </thead>
-          <tbody id="hub-estoque-tbody">
-            <tr><td colspan="6" style="padding:20px;text-align:center;color:#94a3b8">Importe o TMS em Planejamento para ver os dados</td></tr>
-          </tbody>
-        </table>
-      </div>
-
+  <!-- Cards de peso + indicadores de planejamento -->
+  <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <div class="hub-kpi-card" style="">
+      <div class="hub-kpi-label">PESO TOTAL ARMAZÉM</div>
+      <div class="hub-kpi-val" id="hub-kpi-total">—</div>
+      <div style="font-size:10px;color:#94a3b8">Excl. Ocor.Aberta</div>
     </div>
-
-    <!-- RIGHT: Cards -->
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div class="hub-card hub-card-gray">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="font-size:24px">🚛</div>
-          <div><div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase">Ton. fila descarga</div><div class="hub-card-val" id="hub-ton-desc">—</div></div>
-        </div>
-      </div>
-      <div class="hub-card hub-card-blue">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="font-size:24px">🚚</div>
-          <div><div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase">Ton. Planejado</div><div class="hub-card-val" id="hub-ton-plan">—</div></div>
-        </div>
-      </div>
-      <div class="hub-card hub-card-green">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="font-size:24px">📦</div>
-          <div><div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase">Ton. Disponível</div><div class="hub-card-val" id="hub-ton-disp">—</div></div>
-        </div>
-      </div>
-      <div class="hub-card hub-card-purple">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="font-size:24px">🏭</div>
-          <div><div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase">Ton. Geral do armazém</div><div class="hub-card-val" id="hub-ton-geral">—</div></div>
-        </div>
-      </div>
-      <div class="hub-card hub-card-orange">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="font-size:24px">⚠️</div>
-          <div><div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase">Qtd. Atrasados</div><div class="hub-card-val" id="hub-qtd-atras">—</div></div>
-        </div>
-      </div>
-      <div class="hub-card hub-card-red">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="font-size:24px">📅</div>
-          <div><div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase">Data mais antiga</div><div class="hub-card-val" style="font-size:18px" id="hub-data-antiga">—</div></div>
-        </div>
-      </div>
+    <div class="hub-kpi-card" style="">
+      <div class="hub-kpi-label">DISPONÍVEL</div>
+      <div class="hub-kpi-val" style="color:#2563eb" id="hub-kpi-disp">—</div>
+      <div style="font-size:10px;color:#94a3b8">Peso operacional</div>
     </div>
-
+    <div class="hub-kpi-card" style="">
+      <div class="hub-kpi-label">EM DESCARREGAMENTO</div>
+      <div class="hub-kpi-val" style="color:#16a34a" id="hub-kpi-desc">—</div>
+      <div style="font-size:10px;color:#94a3b8">Peso operacional</div>
+    </div>
+    <div class="hub-kpi-card" style="">
+      <div class="hub-kpi-label">CARRETAS NECESSÁRIAS</div>
+      <div class="hub-kpi-val" style="color:#ea580c" id="cg-ind-carretas">—</div>
+      <div style="font-size:10px;color:#94a3b8" id="cg-ind-carretas-sub">Capacidade padrão: 25 t</div>
+    </div>
+    <div class="hub-kpi-card" style="">
+      <div class="hub-kpi-label">CARRETAS CARREGANDO</div>
+      <div class="hub-kpi-val" style="color:#2563eb" id="cg-ind-carregando">—</div>
+      <div style="font-size:10px;color:#94a3b8">Veículos Programados</div>
+    </div>
+    <div class="hub-kpi-card" style="">
+      <div class="hub-kpi-label">EFICIÊNCIA CRÍTICA</div>
+      <div class="hub-kpi-val" style="color:#ea580c" id="cg-ind-efic">—</div>
+      <div style="font-size:10px;color:#94a3b8" id="cg-ind-efic-sub">Crítico ÷ disponível</div>
+    </div>
   </div>
 
-  <!-- Resumo por data -->
-  <div style="margin-top:20px;background:#fff;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden">
-    <div style="padding:10px 14px;font-size:12px;font-weight:700;color:#ea580c;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between">
-      <span>Resumo por data</span>
-      <span style="font-size:10px;color:#94a3b8;font-weight:400" id="hub-resumo-total"></span>
+  <!-- Grid principal: MACs | Destinos -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+    <!-- ESQUERDA: TIME-A -->
+    <div>
+      <div style="text-align:center;font-size:26px;font-weight:900;color:#dc2626;margin-bottom:6px;letter-spacing:.05em">TIME - A</div>
+      <div style="font-size:11px;font-weight:700;color:#dc2626;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">🔴 MACs — Prioridade de Descarga</div>
+      <div id="hub-mac-ranking" style="display:flex;flex-direction:column;gap:5px">
+        <div style="color:#94a3b8;font-size:12px;padding:20px;text-align:center;background:#fff;border-radius:8px">Importe o TMS para ver os dados</div>
+      </div>
+      <div style="text-align:center;margin-top:16px">
+        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Eficiência Time A</div>
+        <div id="hub-efic-a" style="font-size:42px;font-weight:900;color:#dc2626">—</div>
+        <div id="hub-efic-a-sub" style="font-size:10px;color:#94a3b8">Em descarga ÷ (descarga + pátio)</div>
+      </div>
     </div>
-    <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead style="position:sticky;top:0;z-index:2">
-          <tr style="background:#000 !important">
-            <th style="padding:7px 10px;color:#fff;font-size:10px;font-weight:700;width:30px"></th>
-            <th style="padding:7px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em">DATAS / DESTINO / REMETENTE</th>
-            <th style="padding:7px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em">EQUIPAMENTO</th>
-            <th style="padding:7px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;font-family:monospace">CTRC</th>
-            <th style="padding:7px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;width:60px">QTD.</th>
-            <th style="padding:7px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;min-width:160px">ANOTAÇÕES</th>
-          </tr>
-        </thead>
-        <tbody id="hub-resumo-tbody">
-          <tr><td colspan="6" style="padding:20px;text-align:center;color:#94a3b8">Importe o TMS em Planejamento para ver os dados</td></tr>
-        </tbody>
-      </table>
+
+    <!-- DIREITA: TIME-B -->
+    <div>
+      <div style="text-align:center;font-size:26px;font-weight:900;color:#2563eb;margin-bottom:6px;letter-spacing:.05em">TIME - B</div>
+      <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">📍 Destinos — Prioridade de Atendimento</div>
+      <div id="hub-dest-ranking" style="display:flex;flex-direction:column;gap:5px">
+        <div style="color:#94a3b8;font-size:12px;padding:20px;text-align:center;background:#fff;border-radius:8px">Importe o TMS para ver os dados</div>
+      </div>
+      <div style="text-align:center;margin-top:16px">
+        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Eficiência Time B</div>
+        <div id="hub-efic-b" style="font-size:42px;font-weight:900;color:#2563eb">—</div>
+        <div id="hub-efic-b-sub" style="font-size:10px;color:#94a3b8">Crítico planejado ÷ crítico disponível</div>
+      </div>
     </div>
+
   </div>
 
 </div>
 
-
+<style>
+.hub-kpi-card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; flex:1; min-width:180px; }
+.hub-kpi-label { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+.hub-kpi-val { font-size:22px; font-weight:800; color:#1e293b; }
+.hub-rank-card { border-radius:8px; padding:9px 14px; display:flex; align-items:center; justify-content:space-between; color:#fff; font-size:11px; }
+.hub-rank-pos { font-size:10px; font-weight:700; opacity:.8; min-width:24px; }
+.hub-rank-title { font-size:12px; font-weight:800; flex:1; margin:0 8px; }
+.hub-rank-right { text-align:right; }
+.hub-rank-pct { font-size:14px; font-weight:800; }
+.hub-rank-sub { font-size:9px; opacity:.85; margin-top:1px; }
+</style>
 </div><!-- /sb-content -->
 </div><!-- /app-layout -->
 
@@ -7575,11 +7520,8 @@ showTab = function(tab) {
   if (tab === 'frotas' && typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 50);
   // Hub
   if (tab === 'hub' && typeof hubRenderizar === 'function') setTimeout(function(){
-    // Always draw gauges even with no data
-    hubDrawGauge('hub-cv-out', 0, '#ea580c');
-    hubDrawGauge('hub-cv-arm', 0, '#16a34a');
-    hubDrawGauge('hub-cv-in',  0, '#2563eb');
     hubRenderizar();
+    if (typeof cgRenderizar === 'function' && typeof _cgData !== 'undefined' && _cgData) cgRenderizar(_cgData);
   }, 50);
 };
 </script>
@@ -8454,253 +8396,258 @@ function frotasRenderizar() {
 
 <script>
 // ── HUB MODULE ──
-var _hubOpen = {}; // estado de expand/collapse
-var _hubNotes = JSON.parse(localStorage.getItem('hub_notes') || '{}');
-
-function hubDrawGauge(canvasId, pct, color) {
-  var cv = document.getElementById(canvasId);
-  if (!cv) return;
-  var ctx = cv.getContext('2d');
-  var W = 240, H = 145;
-  cv.width = W; cv.height = H;
-  ctx.clearRect(0,0,W,H);
-  var cx = W/2, cy = H - 28, r = 84;
-  // Background arc
-  ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,2*Math.PI);
-  ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=18; ctx.lineCap='round'; ctx.stroke();
-  // Value arc
-  if (pct > 0) {
-    var fillA = Math.PI + (Math.min(pct,100)/100)*Math.PI;
-    ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,fillA);
-    ctx.strokeStyle=color; ctx.lineWidth=18; ctx.lineCap='round'; ctx.stroke();
-  }
-  // Labels below arc tips
-  ctx.fillStyle='#94a3b8'; ctx.font='bold 8px Arial'; ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.fillText('0,00%',  cx - r, cy + 12);
-  ctx.fillText('100,0%', cx + r, cy + 12);
-  // Percentage centered below arc
-  ctx.fillStyle='#1e293b'; ctx.font='bold 28px Arial';
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(Math.round(pct)+'%', cx, cy + 8);
-}
+var _hubOpen = {};
 
 function hubRenderizar() {
   if (typeof _relData === 'undefined' || !_relData.length) return;
 
-  var data = _relData;
-  // Counters per status + situação
-  var stats = {
-    'Disponível':        {atras:0, hoje:0, prazo:0, peso:0, valor:0, total:0},
-    'Em descarregamento':{atras:0, hoje:0, prazo:0, peso:0, valor:0, total:0},
-    'Patio':             {atras:0, hoje:0, prazo:0, peso:0, valor:0, total:0},
-    'Planejado':         {atras:0, hoje:0, prazo:0, peso:0, valor:0, total:0}
-  };
-  var totAtras=0, oldestDate=null;
-  var tonDesc=0, tonPlan=0, tonDisp=0, tonGeral=0;
+  // Exclui Ocor.Aberta
+  var dataHub = _relData.filter(function(r){ return r.motivo !== 'Ocor.Aberta'; });
 
-  data.forEach(function(r) {
-    var s = r.disp;
-    if (!stats[s]) return;
-    var sit = String(r.cliente||''); // coluna AH via situacao_prev_embarque
-    // Situação vem do campo que setamos no parsing — mas precisamos da situação original
-    // Vamos usar o campo que o usuário mencionou: AH = SITUACAO_PREV_EMBARQUE
-    // No _relData não guardamos sit diretamente, mas guardamos em r.cliente indiretamente
-    // Precisamos rever: vamos guardar sit no _relData
-    var sitAH = r.sitAH || '';
-    if (sitAH === 'Atrasado') { stats[s].atras++; totAtras++; }
-    else if (sitAH === 'Hoje') stats[s].hoje++;
-    else stats[s].prazo++;
-    stats[s].peso  += r.peso  || 0;
-    stats[s].valor += r.valor || 0;
-    stats[s].total++;
-    tonGeral += r.peso || 0;
-    if (s === 'Em descarregamento') tonDesc  += r.peso || 0;
-    if (s === 'Planejado')          tonPlan  += r.peso || 0;
-    if (s === 'Disponível')         tonDisp  += r.peso || 0;
-    // Data mais antiga
-    if (s === 'Disponível' && r.dtPrev && r.dtPrev !== '—') {
-      var parts = r.dtPrev.split('/');
-      if (parts.length === 3) {
-        var d = new Date(parts[2], parts[1]-1, parts[0]);
-        if (!oldestDate || d < oldestDate) oldestDate = d;
-      }
+  // KPI cards — peso total, disponível, em descarga (deduplicado por CTRC)
+  var pesoCtrcMap = {};
+  dataHub.forEach(function(r){
+    var ctrc = r.ctrc || '';
+    var key  = ctrc ? ctrc+'|'+r.disp : '_nokey_'+Math.random();
+    if (!pesoCtrcMap[key]) pesoCtrcMap[key] = {disp:r.disp, peso:r.peso||0};
+  });
+  var pesoTotal=0, pesoDisp=0, pesoDesc=0, pesoPatio=0;
+  Object.values(pesoCtrcMap).forEach(function(v){
+    pesoTotal += v.peso;
+    if (v.disp==='Disponível')          pesoDisp += v.peso;
+    if (v.disp==='Em descarregamento')  pesoDesc += v.peso;
+    if (v.disp==='Patio')               pesoPatio += v.peso;
+  });
+  // Se não há peso em descarga, usa o do Pátio
+  var pesoDescCard = pesoDesc > 0 ? pesoDesc : pesoPatio;
+  function fmtKg(v){ return v.toLocaleString('pt-BR',{maximumFractionDigits:0})+' kg'; }
+  function setEl(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
+  setEl('hub-kpi-total', fmtKg(pesoTotal));
+  setEl('hub-kpi-disp',  fmtKg(pesoDisp));
+  setEl('hub-kpi-desc',  fmtKg(pesoDescCard));
+
+  // Eficiência TIME-A: Em descarregamento ÷ (Em descarregamento + Pátio)
+  var eficA = (pesoDesc + pesoPatio) > 0 ? Math.round(pesoDesc / (pesoDesc + pesoPatio) * 100) : 0;
+  var eficAEl = document.getElementById('hub-efic-a');
+  if (eficAEl) { eficAEl.textContent = eficA + '%'; eficAEl.style.color = eficA >= 50 ? '#16a34a' : '#dc2626'; }
+  setEl('hub-efic-a-sub', pesoDesc > 0
+    ? fmtKg(pesoDesc) + ' descarga · ' + fmtKg(pesoPatio) + ' pátio'
+    : 'Sem Em descarregamento · '+fmtKg(pesoPatio)+' pátio');
+
+  // Eficiência TIME-B: vem do cg-ind-efic (Crítico planejado ÷ crítico disponível)
+  var eficBEl = document.getElementById('hub-efic-b');
+  if (eficBEl) {
+    var eficBSrc = document.getElementById('cg-ind-efic');
+    var eficBVal = eficBSrc ? eficBSrc.textContent : '—';
+    eficBEl.textContent = eficBVal;
+    var pctB = parseInt(eficBVal) || 0;
+    eficBEl.style.color = pctB >= 80 ? '#16a34a' : pctB >= 50 ? '#d97706' : '#2563eb';
+  }
+  var eficBSubSrc = document.getElementById('cg-ind-efic-sub');
+  setEl('hub-efic-b-sub', eficBSubSrc ? eficBSubSrc.textContent : 'Crítico planejado ÷ crítico disponível');
+
+  // Tabela de estoque deduplicada por CTRC
+  var sitPrioH = {'Atrasado':2,'Hoje':1};
+  var statsMap = {};
+  ['Disponível','Em descarregamento','Patio','Planejado'].forEach(function(k){
+    statsMap[k]={atras:0,hoje:0,prazo:0,peso:0,total:0};
+  });
+  var ctrcStatsMap = {};
+  dataHub.forEach(function(r){
+    var s = r.disp; if (!statsMap[s]) return;
+    var ctrc = r.ctrc || '';
+    var key  = ctrc ? ctrc+'|'+s : '_nk_'+Math.random();
+    if (!ctrcStatsMap[key]) {
+      ctrcStatsMap[key] = {disp:s, sitAH:r.sitAH||'', peso:r.peso||0};
+    } else {
+      if ((sitPrioH[r.sitAH]||0) > (sitPrioH[ctrcStatsMap[key].sitAH]||0))
+        ctrcStatsMap[key].sitAH = r.sitAH;
     }
   });
-
-  // SLA cálculos
-  var totalDisp  = stats['Disponível'].total;
-  var atrasDisp  = stats['Disponível'].atras;
-  var totalDesc  = stats['Em descarregamento'].total;
-  var atrasDesc  = stats['Em descarregamento'].atras;
-  var totalAll   = data.length;
-
-  var slaOut = totalDisp  > 0 ? Math.round((1 - atrasDisp/totalDisp)  * 100) : 0;
-  var slaIn  = totalDesc  > 0 ? Math.round((1 - atrasDesc/totalDesc)  * 100) : 0;
-  var slaGeral= totalAll  > 0 ? Math.round((1 - totAtras/totalAll)   * 100) : 0;
-
-  document.getElementById('hub-pct-out').textContent = slaOut + '%';
-  document.getElementById('hub-pct-arm').textContent = slaGeral + '%';
-  document.getElementById('hub-pct-in').textContent  = slaIn + '%';
-  hubDrawGauge('hub-cv-out', slaOut,   '#ea580c');
-  hubDrawGauge('hub-cv-arm', slaGeral, '#16a34a');
-  hubDrawGauge('hub-cv-in',  slaIn,    '#2563eb');
-
-  // Cards
-  var fmtTon = function(v){ return (v/1000).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3}); };
-  document.getElementById('hub-ton-desc').textContent  = fmtTon(tonDesc);
-  document.getElementById('hub-ton-plan').textContent  = fmtTon(tonPlan);
-  document.getElementById('hub-ton-disp').textContent  = fmtTon(tonDisp);
-  document.getElementById('hub-ton-geral').textContent = fmtTon(tonGeral);
-  document.getElementById('hub-qtd-atras').textContent = totAtras.toLocaleString('pt-BR');
-  document.getElementById('hub-data-antiga').textContent = oldestDate
-    ? ('0'+oldestDate.getDate()).slice(-2)+'/'+('0'+(oldestDate.getMonth()+1)).slice(-2)+'/'+oldestDate.getFullYear()
-    : '—';
-  document.getElementById('hub-data-antiga').style.color = oldestDate ? '#dc2626' : '#1e293b';
-
-  // Tabela estoque
-  var rows = ['Disponível','Em descarregamento','Patio','Planejado'];
-  var labels = {'Disponível':'Disponível','Em descarregamento':'Em descarregamento','Patio':'Pátio','Planejado':'Planejado'};
-  var totRow = {atras:0,hoje:0,prazo:0,peso:0,valor:0};
-  var tbody = '';
-  rows.forEach(function(k) {
-    var s = stats[k];
-    totRow.atras+=s.atras; totRow.hoje+=s.hoje; totRow.prazo+=s.prazo; totRow.peso+=s.peso; totRow.valor+=s.valor;
-    tbody += '<tr class="hub-estoque-row"><td style="padding:6px 10px;font-weight:600;color:#374151">'+labels[k]+'</td>' +
-      '<td style="padding:6px 10px;text-align:right;color:'+(s.atras>0?'#ea580c':'#374151')+'">'+s.atras.toLocaleString('pt-BR')+'</td>' +
-      '<td style="padding:6px 10px;text-align:right">'+s.hoje.toLocaleString('pt-BR')+'</td>' +
-      '<td style="padding:6px 10px;text-align:right">'+s.prazo.toLocaleString('pt-BR')+'</td>' +
-      '<td style="padding:6px 10px;text-align:right">'+s.peso.toLocaleString('pt-BR',{maximumFractionDigits:0})+'</td>' +
-      '<td style="padding:6px 10px;text-align:right">R$ '+s.valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td></tr>';
+  Object.values(ctrcStatsMap).forEach(function(v){
+    var s=statsMap[v.disp]; if(!s) return;
+    s.total++; s.peso+=v.peso;
+    if(v.sitAH==='Atrasado') s.atras++;
+    else if(v.sitAH==='Hoje') s.hoje++;
+    else s.prazo++;
   });
-  tbody += '<tr class="hub-estoque-row"><td style="padding:6px 10px;font-weight:700">Total Geral</td>' +
-    '<td style="padding:6px 10px;text-align:right;font-weight:700;color:#ea580c">'+totRow.atras.toLocaleString('pt-BR')+'</td>' +
-    '<td style="padding:6px 10px;text-align:right;font-weight:700">'+totRow.hoje.toLocaleString('pt-BR')+'</td>' +
-    '<td style="padding:6px 10px;text-align:right;font-weight:700">'+totRow.prazo.toLocaleString('pt-BR')+'</td>' +
-    '<td style="padding:6px 10px;text-align:right;font-weight:700">'+totRow.peso.toLocaleString('pt-BR',{maximumFractionDigits:0})+'</td>' +
-    '<td style="padding:6px 10px;text-align:right;font-weight:700">R$ '+totRow.valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td></tr>';
-  document.getElementById('hub-estoque-tbody').innerHTML = tbody;
-
-  // Resumo por data
-  hubRenderizarResumo();
-}
-
-var _hubTree = null; // cached tree
-
-function hubRenderizarResumo() {
-  var totalCte = 0;
-  // Build tree only if data changed
-  if (!_hubTree) {
-    _hubTree = {};
-    (_relData||[]).forEach(function(r) {
-      var dt   = r.dtPrev || '(sem data)';
-      var dest = r.destino || '—';
-      var rem  = r.remetente || '—';
-      if (!_hubTree[dt]) _hubTree[dt] = {};
-      if (!_hubTree[dt][dest]) _hubTree[dt][dest] = {};
-      if (!_hubTree[dt][dest][rem]) _hubTree[dt][dest][rem] = [];
-      _hubTree[dt][dest][rem].push({ctrc:r.ctrc, equip:r.equip||'—'});
-      totalCte++;
+  var tbody=document.getElementById('hub-estoque-tbody');
+  if(tbody){
+    var labels={'Disponível':'Disponível','Em descarregamento':'Em descarregamento','Patio':'Pátio','Planejado':'Planejado'};
+    var tot={atras:0,hoje:0,prazo:0,peso:0,total:0};
+    var rows=['Disponível','Em descarregamento','Patio','Planejado'];
+    var html='';
+    rows.forEach(function(k){
+      var s=statsMap[k];
+      tot.atras+=s.atras;tot.hoje+=s.hoje;tot.prazo+=s.prazo;tot.peso+=s.peso;tot.total+=s.total;
+      html+='<tr class="hub-estoque-row"><td style="padding:6px 10px;font-weight:600;color:#374151">'+labels[k]+'</td>'+
+        '<td style="padding:6px 10px;text-align:right;color:'+(s.atras>0?'#ea580c':'#374151')+'">'+s.atras.toLocaleString('pt-BR')+'</td>'+
+        '<td style="padding:6px 10px;text-align:right">'+s.hoje.toLocaleString('pt-BR')+'</td>'+
+        '<td style="padding:6px 10px;text-align:right">'+s.prazo.toLocaleString('pt-BR')+'</td>'+
+        '<td style="padding:6px 10px;text-align:right">'+s.peso.toLocaleString('pt-BR',{maximumFractionDigits:0})+'</td>'+
+        '<td style="padding:6px 10px;text-align:right">R$ '+s.peso>0?(s.peso/1000).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3})+' t':'—'+'</td></tr>';
     });
-    // Count total
-    Object.keys(_hubTree).forEach(function(dt){
-      Object.keys(_hubTree[dt]).forEach(function(dest){
-        Object.keys(_hubTree[dt][dest]).forEach(function(rem){
-          totalCte += _hubTree[dt][dest][rem].length;
-        });
-      });
-    });
-    totalCte = (_relData||[]).length;
-  } else {
-    totalCte = (_relData||[]).length;
+    html+='<tr style="background:#f8fafc;font-weight:700"><td style="padding:6px 10px">Total Geral</td>'+
+      '<td style="padding:6px 10px;text-align:right;color:#ea580c">'+tot.atras.toLocaleString('pt-BR')+'</td>'+
+      '<td style="padding:6px 10px;text-align:right">'+tot.hoje.toLocaleString('pt-BR')+'</td>'+
+      '<td style="padding:6px 10px;text-align:right">'+tot.prazo.toLocaleString('pt-BR')+'</td>'+
+      '<td style="padding:6px 10px;text-align:right">'+tot.peso.toLocaleString('pt-BR',{maximumFractionDigits:0})+'</td>'+
+      '<td style="padding:6px 10px;text-align:right">'+tot.total.toLocaleString('pt-BR')+' CTRCs</td></tr>';
+    tbody.innerHTML=html;
   }
 
-  document.getElementById('hub-resumo-total').textContent = totalCte.toLocaleString('pt-BR')+' CTEs';
-  hubRenderResumoRows();
+  hubRenderMacRanking(dataHub);
+  hubRenderDestRanking(dataHub);
 }
 
-function hubRenderResumoRows() {
-  if (!_hubTree) return;
-  var html = '';
-  var hoje = new Date(); hoje.setHours(0,0,0,0);
-
-  var datas = Object.keys(_hubTree).sort(function(a,b){
-    var pa=a.split('/'), pb=b.split('/');
-    if(pa.length===3&&pb.length===3) return new Date(pa[2],pa[1]-1,pa[0])-new Date(pb[2],pb[1]-1,pb[0]);
-    return a.localeCompare(b);
+function hubRenderMacRanking(dataHub) {
+  var wrap = document.getElementById('hub-mac-ranking');
+  if (!wrap) return;
+  var candidatos = dataHub.filter(function(r){
+    return (r.disp === 'Em descarregamento' || r.disp === 'Patio') && r.mac && r.mac.trim() !== '' && r.mac !== '—';
   });
-
-  datas.forEach(function(dt) {
-    var dtKey = 'dt__'+dt;
-    var dtOpen = _hubOpen[dtKey] === true; // collapsed by default
-    var dtQtd = 0;
-    Object.keys(_hubTree[dt]).forEach(function(dest){
-      Object.keys(_hubTree[dt][dest]).forEach(function(rem){ dtQtd += _hubTree[dt][dest][rem].length; });
-    });
-    var isExpired = false;
-    if (dt !== '(sem data)') {
-      var parts = dt.split('/');
-      if (parts.length===3){ var d=new Date(parts[2],parts[1]-1,parts[0]); isExpired=d<hoje; }
+  if (!candidatos.length) {
+    wrap.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:20px;text-align:center;background:#fff;border-radius:8px">Nenhum MAC em descarga</div>';
+    return;
+  }
+  var agora = new Date(); var h24 = 24*60*60*1000;
+  var macMap = {};
+  candidatos.forEach(function(r) {
+    var mac = r.mac.trim();
+    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', pesoTotal:0, _ctrcs:{}, _temSJK:false, remetente:r.remetente||'' };
+    var m = macMap[mac];
+    // Marca se qualquer CTRC deste MAC vai para SJK
+    if ((r.destino||'').toUpperCase()==='SJK' || (r.macDest||'').toUpperCase().indexOf('SJK')!==-1) m._temSJK=true;
+    // Guarda remetente para EXA
+    if (!m.remetente && r.remetente) m.remetente = r.remetente;
+    var m = macMap[mac];
+    var ctrc = r.ctrc || '';
+    // Dedup por CTRC
+    if (ctrc && m._ctrcs[ctrc]) {
+      var cur = {'Atrasado':2,'Hoje':1}[m._ctrcs[ctrc]]||0;
+      var nov = {'Atrasado':2,'Hoje':1}[r.sitAH]||0;
+      if (nov > cur) m._ctrcs[ctrc] = r.sitAH;
+    } else {
+      m._ctrcs[ctrc||('__'+m.ctrcs)] = r.sitAH||'';
+      m.pesoTotal += r.peso||0;
     }
-    var dtBg = isExpired ? '#7f1d1d' : '#1e293b';
-    var dtColor = isExpired ? '#fca5a5' : '#f1f5f9';
-    html += '<tr class="hub-resumo-date" style="background:'+dtBg+'" onclick="hubToggle(\''+dtKey+'\')">' +
-      '<td style="padding:6px 8px;font-size:11px;color:'+dtColor+'">'+(dtOpen?'▼':'▶')+'</td>' +
-      '<td style="padding:6px 10px;font-weight:700;font-size:11px;color:'+dtColor+'" colspan="3">'+dt+(isExpired?' ⚠':'')+'</td>' +
-      '<td style="padding:6px 10px;text-align:right;font-weight:700;font-size:11px;color:'+dtColor+'">'+dtQtd+'</td>' +
-      '<td style="padding:6px 10px"></td></tr>';
-
-    if (!dtOpen) return;
-
-    Object.keys(_hubTree[dt]).sort().forEach(function(dest) {
-      var destKey = dtKey+'__'+dest;
-      var destOpen = _hubOpen[destKey] === true;
-      var destQtd = 0;
-      Object.keys(_hubTree[dt][dest]).forEach(function(rem){ destQtd += _hubTree[dt][dest][rem].length; });
-      html += '<tr class="hub-resumo-dest" onclick="hubToggle(\''+destKey+'\')">' +
-        '<td style="padding:5px 8px 5px 22px;font-size:11px">'+(destOpen?'▼':'▶')+'</td>' +
-        '<td style="padding:5px 10px;font-weight:700;font-size:11px;color:#2563eb" colspan="3">'+dest+'</td>' +
-        '<td style="padding:5px 10px;text-align:right;font-size:11px">'+destQtd+'</td>' +
-        '<td style="padding:5px 10px"></td></tr>';
-      if (!destOpen) return;
-
-      Object.keys(_hubTree[dt][dest]).sort().forEach(function(rem) {
-        var remKey = destKey+'__'+rem;
-        var remOpen = _hubOpen[remKey] === true;
-        var items = _hubTree[dt][dest][rem];
-        html += '<tr class="hub-resumo-rem" onclick="hubToggle(\''+remKey+'\')">' +
-          '<td style="padding:4px 8px 4px 36px;font-size:11px">'+(remOpen?'▼':'▶')+'</td>' +
-          '<td style="padding:4px 10px;font-size:11px;color:#374151" colspan="3">'+rem+'</td>' +
-          '<td style="padding:4px 10px;text-align:right;font-size:11px">'+items.length+'</td>' +
-          '<td style="padding:4px 10px"><input class="hub-note-input" placeholder="Anotação..." value="'+((_hubNotes[remKey]||'').replace(/"/g,'&quot;'))+'" onchange="hubSaveNote(\''+remKey+'\',this.value)" onclick="event.stopPropagation()"></td></tr>';
-        if (!remOpen) return;
-        items.forEach(function(it) {
-          var ctrcKey = remKey+'__'+it.ctrc;
-          html += '<tr class="hub-resumo-ctrc">' +
-            '<td style="padding:3px 8px 3px 52px"></td>' +
-            '<td style="padding:3px 10px;font-family:monospace;font-size:10px;color:#64748b">'+it.ctrc+'</td>' +
-            '<td style="padding:3px 10px;font-size:10px;color:#64748b">'+it.equip+'</td>' +
-            '<td style="padding:3px 10px"></td>' +
-            '<td style="padding:3px 10px;text-align:right;font-size:10px;color:#94a3b8">1</td>' +
-            '<td style="padding:3px 10px"><input class="hub-note-input" placeholder="" value="'+((_hubNotes[ctrcKey]||'').replace(/"/g,'&quot;'))+'" onchange="hubSaveNote(\''+ctrcKey+'\',this.value)" onclick="event.stopPropagation()"></td></tr>';
-        });
-      });
+    if (r.dtUlt && r.dtUlt!=='—') {
+      var pts=r.dtUlt.split('/');
+      if(pts.length>=3){ var dt=new Date(pts[2].substring(0,4),pts[1]-1,pts[0]); if(!m.menorDt||dt<m.menorDt){m.menorDt=dt;m.menorDtStr=r.dtUlt;} }
+    }
+  });
+  // Conta atras/hoje/ctrcs dos CTRCs deduplicados
+  Object.values(macMap).forEach(function(m){
+    m.ctrcs=0; m.atras=0; m.hoje=0;
+    Object.values(m._ctrcs).forEach(function(sit){
+      m.ctrcs++;
+      if(sit==='Atrasado') m.atras++;
+      else if(sit==='Hoje') m.hoje++;
     });
   });
+  var ranking = Object.values(macMap).map(function(m){
+    var diff = m.menorDt ? (agora-m.menorDt) : 999*h24;
+    var temSJK = (m.dest||'').toUpperCase().indexOf('SJK') !== -1 || m._temSJK;
+    m.score = m.atras*3 + m.hoje*2 + (diff<=h24?5:0) + m.ctrcs*0.1 + (temSJK?10:0);
+    m.urgente = m.atras>0 || diff<=h24 || temSJK;
+    return m;
+  }).sort(function(a,b){return b.score-a.score;});
 
-  document.getElementById('hub-resumo-tbody').innerHTML = html || '<tr><td colspan="6" style="padding:20px;text-align:center;color:#94a3b8">Sem dados</td></tr>';
+  var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º'];
+  wrap.innerHTML = ranking.slice(0,10).map(function(m,i){
+    var bg = m.urgente?'#dc2626':'#ea580c';
+    var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
+    var destLabel = (m.dest||'').toUpperCase()==='EXA' && m.remetente ? m.remetente : m.dest;
+    return '<div class="hub-rank-card" style="background:'+bg+'">'+
+      '<span class="hub-rank-pos">'+pos[i]+'</span>'+
+      '<span class="hub-rank-title">MAC: '+m.mac+' – '+destLabel+'</span>'+
+      '<div class="hub-rank-right">'+
+        '<div class="hub-rank-pct">'+pct+'%</div>'+
+        '<div class="hub-rank-sub">'+m.menorDtStr+' · ⚠'+m.atras+' 📅'+m.hoje+'</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
 }
 
+function hubRenderDestRanking(dataHub) {
+  var wrap = document.getElementById('hub-dest-ranking');
+  if (!wrap) return;
 
-function hubToggle(key) {
-  _hubOpen[key] = !_hubOpen[key];
-  hubRenderResumoRows();
+  // Deduplicar por CTRC+destino — mesmo CTRC conta apenas 1x por destino
+  var sitPrio = {'Atrasado':2,'Hoje':1};
+  var ctrcDestMap = {}; // key: ctrc|dest → melhor sitAH
+  var destPeso = {};    // key: dest → soma peso (sem dedup pois peso é por CTRC único)
+  var ctrcsPorDest = {};// key: dest → Set de CTRCs
+
+  var DEST_EXCL = new Set(['GR2','GRU','SAO2']);
+  var critMap = window._cgDataCrit || {};
+
+  dataHub.forEach(function(r) {
+    var dest = r.destino || '—';
+    if (DEST_EXCL.has(dest.toUpperCase())) return;
+    var ctrc = r.ctrc || '';
+    if (!ctrcsPorDest[dest]) ctrcsPorDest[dest] = {};
+    if (!destPeso[dest]) destPeso[dest] = 0;
+
+    // Peso: soma apenas uma vez por CTRC por destino
+    if (ctrc && !ctrcsPorDest[dest][ctrc]) {
+      destPeso[dest] += r.peso || 0;
+      ctrcsPorDest[dest][ctrc] = {sitAH: r.sitAH || ''};
+    } else if (ctrc && ctrcsPorDest[dest][ctrc]) {
+      // Atualiza para sitAH mais urgente
+      var cur = sitPrio[ctrcsPorDest[dest][ctrc].sitAH] || 0;
+      var nov = sitPrio[r.sitAH] || 0;
+      if (nov > cur) ctrcsPorDest[dest][ctrc].sitAH = r.sitAH;
+    } else if (!ctrc) {
+      // Sem CTRC: conta direto
+      destPeso[dest] += r.peso || 0;
+      if (!ctrcsPorDest[dest]['__sem_ctrc__']) ctrcsPorDest[dest]['__sem_ctrc__'] = {sitAH:''};
+    }
+  });
+
+  // Agrega por destino
+  var destMap = {};
+  Object.keys(ctrcsPorDest).forEach(function(dest) {
+    var atras=0, hoje=0, ctrcs=0;
+    Object.values(ctrcsPorDest[dest]).forEach(function(v){
+      ctrcs++;
+      if (v.sitAH==='Atrasado') atras++;
+      else if (v.sitAH==='Hoje') hoje++;
+    });
+    destMap[dest] = {dest:dest, peso:destPeso[dest]||0, atras:atras, hoje:hoje, ctrcs:ctrcs};
+  });
+
+  var ranking = Object.values(destMap).map(function(d){
+    d.score = d.peso*0.001 + d.atras*3 + d.hoje*2;
+    d.urgente = d.atras > 0;
+    return d;
+  }).sort(function(a,b){return b.score-a.score;});
+
+  if (!ranking.length) {
+    wrap.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:20px;text-align:center;background:#fff;border-radius:8px">Sem dados</div>';
+    return;
+  }
+  var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º'];
+  wrap.innerHTML = ranking.slice(0,10).map(function(d,i){
+    var bg = d.urgente ? '#1d4ed8' : '#2563eb';
+    var pesoStr = (d.peso/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' t';
+    var dataCrit = critMap[d.dest.toUpperCase()] || '';
+    var dataCritStr = dataCrit ? ' · 📌 '+dataCrit : '';
+    return '<div class="hub-rank-card" style="background:'+bg+'">'+
+      '<span class="hub-rank-pos">'+pos[i]+'</span>'+
+      '<span class="hub-rank-title">'+d.dest+'</span>'+
+      '<div class="hub-rank-right">'+
+        '<div class="hub-rank-pct">'+pesoStr+'</div>'+
+        '<div class="hub-rank-sub">⚠'+d.atras+' atras · 📅'+d.hoje+' hoje · '+d.ctrcs+' CTRCs'+dataCritStr+'</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
 }
 
-function hubSaveNote(key, val) {
-  if (val) _hubNotes[key] = val; else delete _hubNotes[key];
-  try { localStorage.setItem('hub_notes', JSON.stringify(_hubNotes)); } catch(e){}
-}
+function hubRenderizarResumo() {}
+function hubToggle(key) {}
+function hubSaveNote(key,val) {}
 
-// Precisa guardar sitAH no parsing — patch retroativo
 // Hook showTab
+
 </script>
