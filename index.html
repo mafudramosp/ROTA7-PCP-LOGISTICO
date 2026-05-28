@@ -8506,8 +8506,9 @@ function hubRenderizar() {
 function hubRenderMacRanking(dataHub) {
   var wrap = document.getElementById('hub-mac-ranking');
   if (!wrap) return;
+  // Inclui todos os registros do MAC (independente do disp) para calcular score correto
   var candidatos = dataHub.filter(function(r){
-    return (r.disp === 'Em descarregamento' || r.disp === 'Patio') && r.mac && r.mac.trim() !== '' && r.mac !== '—';
+    return r.mac && r.mac.trim() !== '' && r.mac !== '—';
   });
   if (!candidatos.length) {
     wrap.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:20px;text-align:center;background:#fff;border-radius:8px">Nenhum MAC em descarga</div>';
@@ -8515,8 +8516,19 @@ function hubRenderMacRanking(dataHub) {
   }
   var agora = new Date(); var h24 = 24*60*60*1000;
   var macMap = {};
+  var hojeMs = new Date(); hojeMs.setHours(0,0,0,0);
   candidatos.forEach(function(r) {
     var mac = r.mac.trim();
+    // sitAH fallback: se vazio, tenta inferir por dataMax
+    var sitAH = r.sitAH || '';
+    if (!sitAH && r.dataMax && r.dataMax !== '—') {
+      var pm = r.dataMax.split('/');
+      if (pm.length===3) {
+        var dm = new Date(pm[2].substring(0,4), pm[1]-1, pm[0]);
+        if (dm < hojeMs) sitAH = 'Atrasado';
+        else if (dm.getTime()===hojeMs.getTime()) sitAH = 'Hoje';
+      }
+    }
     if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', pesoTotal:0, _ctrcs:{}, _temSJK:false, remetente:r.remetente||'' };
     var m = macMap[mac];
     // Marca se qualquer CTRC deste MAC vai para SJK
@@ -8525,13 +8537,21 @@ function hubRenderMacRanking(dataHub) {
     if (!m.remetente && r.remetente) m.remetente = r.remetente;
     var m = macMap[mac];
     var ctrc = r.ctrc || '';
+    var sitAHr = sitAH; // já enriquecido com fallback acima
     // Dedup por CTRC
-    if (ctrc && m._ctrcs[ctrc]) {
-      var cur = {'Atrasado':2,'Hoje':1}[m._ctrcs[ctrc]]||0;
-      var nov = {'Atrasado':2,'Hoje':1}[r.sitAH]||0;
-      if (nov > cur) m._ctrcs[ctrc] = r.sitAH;
+    if (ctrc) {
+      if (m._ctrcs[ctrc] !== undefined) {
+        var cur = {'Atrasado':2,'Hoje':1}[m._ctrcs[ctrc]]||0;
+        var nov = {'Atrasado':2,'Hoje':1}[sitAHr]||0;
+        if (nov > cur) m._ctrcs[ctrc] = sitAHr;
+      } else {
+        m._ctrcs[ctrc] = sitAHr;
+        m.pesoTotal += r.peso||0;
+      }
     } else {
-      m._ctrcs[ctrc||('__'+m.ctrcs)] = r.sitAH||'';
+      // Sem CTRC: usa chave única baseada em remetente+nota
+      var noKey = '__' + (r.remetente||'') + '_' + (r.vols||'') + '_' + Math.random().toString(36).slice(2,6);
+      m._ctrcs[noKey] = sitAHr;
       m.pesoTotal += r.peso||0;
     }
     if (r.dtUlt && r.dtUlt!=='—') {
@@ -8607,34 +8627,77 @@ function hubRenderDestRanking(dataHub) {
   var wrap = document.getElementById('hub-dest-ranking');
   if (!wrap) return;
 
-  // Deduplicar por CTRC+destino — mesmo CTRC conta apenas 1x por destino
+  // Agrupamentos fixos: primeiro item é o destino principal
+  var GRUPOS_FIXOS = [
+    ['FEC','PNZ','BAR','JDO'],
+    ['FLN','CCM'],
+    ['JLL','BNU','XAP','JCB'],
+    ['PFB','CXJ','RIA'],
+    ['POA','PET','SCZ'],
+    ['CWB','CAC','IGU','FBE'],
+    ['CGR','MSI'],
+    ['CGB','MAN','MTS'],
+    ['VDC','ENP'],
+    ['LDO','MGF','UMU'],
+    ['JDI','PPB','BGI','SOD','ITP'],
+    ['BHZ','MOC','TFL','GVR','IPN']
+  ];
+
+  // Também incorpora composições do progData se existirem
+  var GRUPOS_PROG = [];
+  if (typeof progData !== 'undefined') {
+    var compMap = {};
+    progData.forEach(function(p) {
+      if (!p.destino || !p.composicao) return;
+      var dests = p.composicao.split(',').map(function(s){return s.trim().toUpperCase();}).filter(Boolean);
+      var key = p.destino.toUpperCase();
+      if (dests.length > 1 && !compMap[key]) {
+        compMap[key] = dests;
+      }
+    });
+    Object.keys(compMap).forEach(function(k){ GRUPOS_PROG.push(compMap[k]); });
+  }
+
+  var TODOS_GRUPOS = GRUPOS_FIXOS.concat(GRUPOS_PROG);
+
+  // Mapa: destino → destino principal do grupo
+  var destParaGrupo = {};
+  TODOS_GRUPOS.forEach(function(grupo) {
+    var principal = grupo[0].toUpperCase();
+    grupo.forEach(function(d){
+      var du = d.toUpperCase();
+      if (!destParaGrupo[du]) destParaGrupo[du] = principal;
+    });
+  });
+
+  function resolveGrupo(dest) {
+    return destParaGrupo[dest.toUpperCase()] || dest.toUpperCase();
+  }
+
   var sitPrio = {'Atrasado':2,'Hoje':1};
-  var ctrcDestMap = {}; // key: ctrc|dest → melhor sitAH
-  var destPeso = {};    // key: dest → soma peso (sem dedup pois peso é por CTRC único)
-  var ctrcsPorDest = {};// key: dest → Set de CTRCs
+  var ctrcsPorDest = {};
+  var destPeso = {};
 
   var DEST_EXCL = new Set(['GR2','GRU','SAO2']);
   var critMap = window._cgDataCrit || {};
 
   dataHub.forEach(function(r) {
-    var dest = r.destino || '—';
-    if (DEST_EXCL.has(dest.toUpperCase())) return;
+    var destOrig = (r.destino || '—').toUpperCase();
+    if (DEST_EXCL.has(destOrig)) return;
+    var dest = resolveGrupo(destOrig); // unifica no grupo
     var ctrc = r.ctrc || '';
     if (!ctrcsPorDest[dest]) ctrcsPorDest[dest] = {};
     if (!destPeso[dest]) destPeso[dest] = 0;
 
-    // Peso: soma apenas uma vez por CTRC por destino
     if (ctrc && !ctrcsPorDest[dest][ctrc]) {
-      destPeso[dest] += r.peso || 0;
+      if (r.disp === 'Disponível') destPeso[dest] += r.peso || 0;
       ctrcsPorDest[dest][ctrc] = {sitAH: r.sitAH || ''};
     } else if (ctrc && ctrcsPorDest[dest][ctrc]) {
-      // Atualiza para sitAH mais urgente
       var cur = sitPrio[ctrcsPorDest[dest][ctrc].sitAH] || 0;
       var nov = sitPrio[r.sitAH] || 0;
       if (nov > cur) ctrcsPorDest[dest][ctrc].sitAH = r.sitAH;
     } else if (!ctrc) {
-      // Sem CTRC: conta direto
-      destPeso[dest] += r.peso || 0;
+      if (r.disp === 'Disponível') destPeso[dest] += r.peso || 0;
       if (!ctrcsPorDest[dest]['__sem_ctrc__']) ctrcsPorDest[dest]['__sem_ctrc__'] = {sitAH:''};
     }
   });
@@ -8665,11 +8728,16 @@ function hubRenderDestRanking(dataHub) {
   wrap.innerHTML = ranking.slice(0,10).map(function(d,i){
     var bg = d.urgente ? '#1d4ed8' : '#2563eb';
     var pesoStr = (d.peso/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' t';
-    var dataCrit = critMap[d.dest.toUpperCase()] || '';
+    var dataCrit = critMap[d.dest] || critMap[d.dest.toUpperCase()] || '';
     var dataCritStr = dataCrit ? ' · 📌 '+dataCrit : '';
+    // Mostra membros do grupo se houver
+    var grupoLabel = '';
+    TODOS_GRUPOS.forEach(function(g){
+      if(g[0].toUpperCase()===d.dest && g.length>1) grupoLabel = ' <span style="font-size:9px;opacity:.75">('+g.join('/')+')</span>';
+    });
     return '<div class="hub-rank-card" style="background:'+bg+'">'+
       '<span class="hub-rank-pos">'+pos[i]+'</span>'+
-      '<span class="hub-rank-title">'+d.dest+'</span>'+
+      '<span class="hub-rank-title">'+d.dest+grupoLabel+'</span>'+
       '<div class="hub-rank-right">'+
         '<div class="hub-rank-pct">'+pesoStr+'</div>'+
         '<div class="hub-rank-sub">⚠'+d.atras+' atras · 📅'+d.hoje+' hoje · '+d.ctrcs+' CTRCs'+dataCritStr+'</div>'+
