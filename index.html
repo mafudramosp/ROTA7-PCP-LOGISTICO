@@ -3286,6 +3286,11 @@ function relProcessarRows(rows) {
       } else {
         disp = 'Disponível';
       }
+      // Desconsiderar do ranking MACs se:
+      // - AL+AM ambas preenchidas (descarga concluída sem fechamento)
+      // - AC > 0 (equipamento — descarregado, ficha não fechada)
+      // - AE preenchida (planejado — já embarcado)
+      var descCompleta = (alP && amP) || eqP || aeP;
       var cnpj=String(row[cCnpj]||'').replace(/[.\-\/\s]/g,'');
       var sit=String(row[cSit]||'').trim();
       var cli=REL_CNPJ_PRIORIDADE.has(cnpj)||sit==='Hoje'||sit==='Atrasado'?'⚠ Cliente critico':String(row[cAgend]||'').trim().toUpperCase()==='SIM'?'⚠ Agendamento':'Fluxo';
@@ -3306,7 +3311,8 @@ function relProcessarRows(rows) {
         reboque:String(row[cReboque]||'').trim(),
         vols:row[cVols]!=null?String(row[cVols]).trim():'',
         peso:parseFloat(String(row[cPeso]||'0').replace(',','.'))||0,valor:val,
-        sitAH:sit
+        sitAH:sit,
+        descCompleta:descCompleta
       });
     }
     if(e2<total) setTimeout(function(){parseChunk(e2);},0);
@@ -8581,9 +8587,15 @@ function hubRenderizar() {
 function hubRenderMacRanking(dataHub) {
   var wrap = document.getElementById('hub-mac-ranking');
   if (!wrap) return;
-  // Inclui todos os registros do MAC (independente do disp) para calcular score correto
+  // Primeiro: marca MACs inválidos se QUALQUER linha tiver AC>0 ou AE preenchida
+  var invalidMacs = new Set();
+  dataHub.forEach(function(r) {
+    if (r.mac && r.mac.trim() && r.descCompleta) invalidMacs.add(r.mac.trim());
+  });
+
+  // Inclui apenas registros de MACs válidos (sem descCompleta em nenhuma linha)
   var candidatos = dataHub.filter(function(r){
-    return r.mac && r.mac.trim() !== '' && r.mac !== '—';
+    return r.mac && r.mac.trim() !== '' && r.mac !== '—' && !invalidMacs.has(r.mac.trim());
   });
   if (!candidatos.length) {
     wrap.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:20px;text-align:center;background:#fff;border-radius:8px">Nenhum MAC em descarga</div>';
@@ -8604,8 +8616,10 @@ function hubRenderMacRanking(dataHub) {
         else if (dm.getTime()===hojeMs.getTime()) sitAH = 'Hoje';
       }
     }
-    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', pesoTotal:0, _ctrcs:{}, _temSJK:false, remetente:r.remetente||'' };
+    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', pesoTotal:0, _ctrcs:{}, _temSJK:false, remetente:r.remetente||'', _invalido:false };
     var m = macMap[mac];
+    // Se qualquer linha do MAC tiver AC>0 ou AE preenchida → MAC inteiro inválido
+    if (r.descCompleta) { m._invalido = true; }
     // Marca se qualquer CTRC deste MAC vai para SJK
     if ((r.destino||'').toUpperCase()==='SJK' || (r.macDest||'').toUpperCase().indexOf('SJK')!==-1) m._temSJK=true;
     // Guarda remetente para EXA
@@ -8849,11 +8863,17 @@ function descargaRenderizar() {
   var dataHub = _relData.filter(function(r){ return r.motivo !== 'Ocor.Aberta'; });
   var agora = new Date(); var h24 = 24*60*60*1000;
 
-  // Build mac map — all records
+  // Marca MACs inválidos se QUALQUER linha tiver AC>0 ou AE preenchida
+  var invalidMacsD = new Set();
+  dataHub.forEach(function(r) {
+    if (r.mac && r.mac.trim() && r.descCompleta) invalidMacsD.add(r.mac.trim());
+  });
+
+  // Build mac map — exceto MACs inválidos
   var macMap = {};
   dataHub.forEach(function(r) {
     var mac = r.mac && r.mac.trim();
-    if (!mac || mac === '—') return;
+    if (!mac || mac === '—' || invalidMacsD.has(mac)) return;
     if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'' };
     var m = macMap[mac];
     if ((m.dest||'').toUpperCase()==='EXA' && r.remetente && !m.remetente) m.remetente = r.remetente;
@@ -8875,7 +8895,7 @@ function descargaRenderizar() {
   });
 
   // Score
-  _descMacRanking = Object.values(macMap).map(function(m) {
+  _descMacRanking = Object.values(macMap).filter(function(m){ return !m._invalido; }).map(function(m) {
     m.atras=0; m.hoje=0; m.ctrcs=0;
     Object.values(m._ctrcs).forEach(function(sit){
       m.ctrcs++;
