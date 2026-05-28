@@ -1285,6 +1285,7 @@
       <button class="sb-item" id="tab-frotas" onclick="showTab('frotas')" data-tip="Frotas"><span class="sb-text">Frotas</span></button>
       <button class="sb-item" id="tab-relatorio" onclick="showTab('relatorio')" data-tip="Relatório"><span class="sb-text">Relatório</span></button>
       <button class="sb-item" id="tab-hub" onclick="showTab('hub')" data-tip="Resumo HUB"><span class="sb-text">Resumo HUB</span></button>
+      <button class="sb-item" id="tab-descarga" onclick="showTab('descarga')" data-tip="Descarga"><span class="sb-text">Descarga</span></button>
     </div>
   </div>
   <!-- Grupo: Análise -->
@@ -3315,6 +3316,7 @@ function relProcessarRows(rows) {
       relFiltrar();
       if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 100);
       if (typeof hubRenderizar === 'function') { _hubTree = null; setTimeout(hubRenderizar, 150); }
+      if (typeof descargaRenderizar === 'function') setTimeout(descargaRenderizar, 200);
       // Salva no Supabase para outros usuários
       setTimeout(sbSalvarRelatorio, 500);
     }
@@ -3726,6 +3728,79 @@ document.addEventListener('click',function(e){
 .hub-rank-pct { font-size:14px; font-weight:800; }
 .hub-rank-sub { font-size:9px; opacity:.85; margin-top:1px; }
 </style>
+
+<!-- ── TAB DESCARGA ── -->
+<div id="tab-descarga-content" class="tab-content" style="background:#f1f5f9;min-height:calc(100vh - 52px);padding:20px 24px;box-sizing:border-box">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div>
+      <div style="font-size:16px;font-weight:700;color:#1e293b">🔴 Prioridade de Descarga</div>
+      <div style="font-size:11px;color:#94a3b8">Clique em um MAC para ver os CTRCs</div>
+    </div>
+    <button onclick="descargaImprimir()" style="padding:7px 16px;background:#475569;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">🖨 Imprimir</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start">
+
+    <!-- LISTA DE MACs -->
+    <div>
+      <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">MACs — Inbound Priority</div>
+      <div id="desc-mac-list" style="display:flex;flex-direction:column;gap:5px">
+        <div style="color:#94a3b8;font-size:12px;padding:20px;text-align:center;background:#fff;border-radius:8px">Importe o TMS para ver</div>
+      </div>
+    </div>
+
+    <!-- RELATÓRIO DO MAC SELECIONADO -->
+    <div>
+      <div id="desc-rel-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:#1e293b" id="desc-rel-title">Selecione um MAC</div>
+        <div style="font-size:10px;color:#94a3b8" id="desc-rel-count"></div>
+      </div>
+      <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;background:#fff;max-height:calc(100vh - 180px);overflow-y:auto">
+        <table id="desc-rel-table" style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead style="position:sticky;top:0;z-index:3">
+            <tr style="background:#111827 !important">
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">PREV. EMBARQUE</th>
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">DT. ENT. MÁX.</th>
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">CLIENTE</th>
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">ORIGEM</th>
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">DESTINO</th>
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;font-family:monospace;background:#111827">CTRC</th>
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">REMETENTE</th>
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">DESTINATÁRIO</th>
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">MODAL</th>
+              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">NR. MAC</th>
+              <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;background:#111827">VOLS.</th>
+              <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">PESO (KG)</th>
+              <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">VALOR (R$)</th>
+            </tr>
+            <tr style="background:#1e293b" id="desc-filter-row">
+              <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="0" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
+              <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="1" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
+              <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="2" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
+              <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="3" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
+              <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="4" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
+              <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="5" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
+              <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="6" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
+              <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="7" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
+              <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="8" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
+              <th style="padding:3px 4px;background:#1e293b"></th>
+              <th style="padding:3px 4px;background:#1e293b"></th>
+              <th style="padding:3px 4px;background:#1e293b"></th>
+              <th style="padding:3px 4px;background:#1e293b"></th>
+            </tr>
+          </thead>
+          <tbody id="desc-rel-tbody">
+            <tr><td colspan="13" style="padding:40px;text-align:center;color:#94a3b8">Selecione um MAC à esquerda</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
 </div><!-- /sb-content -->
 </div><!-- /app-layout -->
 
@@ -7484,7 +7559,7 @@ function toggleSbGroup(name) {
 var _sbGroupMap = {
   'programacao': 'programar', 'nova': 'programar',
   'historico': 'programar', 'grade': 'programar', 'plataforma': 'programar',
-  'cargas': 'estoque', 'relatorio': 'estoque', 'frotas': 'estoque', 'hub': 'estoque',
+  'cargas': 'estoque', 'relatorio': 'estoque', 'frotas': 'estoque', 'hub': 'estoque', 'descarga': 'estoque',
   'dashboard': 'analise'
 };
 
@@ -8752,4 +8827,179 @@ function hubSaveNote(key,val) {}
 
 // Hook showTab
 
+</script>
+
+<style>
+.desc-mac-item { border-radius:8px; padding:9px 14px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; color:#fff; font-size:11px; transition:opacity .15s; }
+.desc-mac-item:hover { opacity:.88; }
+.desc-mac-item.selected { outline:3px solid #fff; outline-offset:2px; }
+.desc-rel-row td { padding:6px 10px; border-bottom:1px solid #f1f5f9; }
+.desc-rel-row:last-child td { border-bottom:none; }
+.desc-rel-row.crit { background:#fff7ed; }
+.desc-rel-row.atras { background:#fef2f2; }
+</style>
+
+<script>
+var _descMacSel = null;
+var _descMacRanking = [];
+
+function descargaRenderizar() {
+  if (!_relData || !_relData.length) return;
+
+  var dataHub = _relData.filter(function(r){ return r.motivo !== 'Ocor.Aberta'; });
+  var agora = new Date(); var h24 = 24*60*60*1000;
+
+  // Build mac map — all records
+  var macMap = {};
+  dataHub.forEach(function(r) {
+    var mac = r.mac && r.mac.trim();
+    if (!mac || mac === '—') return;
+    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'' };
+    var m = macMap[mac];
+    if ((m.dest||'').toUpperCase()==='EXA' && r.remetente && !m.remetente) m.remetente = r.remetente;
+    var sitAH = r.sitAH || '';
+    var ctrc = r.ctrc || '';
+    if (ctrc) {
+      if (m._ctrcs[ctrc] !== undefined) {
+        var cur = {'Atrasado':2,'Hoje':1}[m._ctrcs[ctrc]]||0;
+        var nov = {'Atrasado':2,'Hoje':1}[sitAH]||0;
+        if (nov > cur) m._ctrcs[ctrc] = sitAH;
+      } else {
+        m._ctrcs[ctrc] = sitAH;
+      }
+    }
+    if (r.dtUlt && r.dtUlt !== '—') {
+      var pts = r.dtUlt.split('/');
+      if (pts.length >= 3) { var dt = new Date(pts[2].substring(0,4),pts[1]-1,pts[0]); if (!m.menorDt||dt<m.menorDt){m.menorDt=dt;m.menorDtStr=r.dtUlt;} }
+    }
+  });
+
+  // Score
+  _descMacRanking = Object.values(macMap).map(function(m) {
+    m.atras=0; m.hoje=0; m.ctrcs=0;
+    Object.values(m._ctrcs).forEach(function(sit){
+      m.ctrcs++;
+      if(sit==='Atrasado') m.atras++;
+      else if(sit==='Hoje') m.hoje++;
+    });
+    var diff = m.menorDt ? (agora - m.menorDt) : 999*h24;
+    var temSJK = (m.dest||'').toUpperCase().indexOf('SJK')!==-1;
+    m.score = m.atras*3 + m.hoje*2 + (diff<=h24?5:0) + m.ctrcs*0.1 + (temSJK?10:0);
+    m.urgente = m.atras>0 || diff<=h24;
+    return m;
+  }).sort(function(a,b){return b.score-a.score;});
+
+  var list = document.getElementById('desc-mac-list');
+  if (!list) return;
+  var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º','11º','12º','13º','14º','15º'];
+  list.innerHTML = _descMacRanking.slice(0,15).map(function(m,i) {
+    var bg = m.urgente?'#dc2626':'#ea580c';
+    var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
+    var destLabel = (m.dest||'').toUpperCase()==='EXA' && m.remetente ? m.remetente : m.dest;
+    return '<div class="desc-mac-item'+(m.mac===_descMacSel?' selected':'')+'" style="background:'+bg+'" onclick="descargaSelectMac(\''+m.mac.replace(/'/g,"\\'")+'\')">' +
+      '<div><span style="font-size:10px;opacity:.8">'+pos[i]+'</span>' +
+      '<span style="font-weight:800;margin-left:6px">MAC: '+m.mac+' – '+destLabel+'</span></div>' +
+      '<div style="text-align:right"><div style="font-size:13px;font-weight:800">'+pct+'%</div>' +
+      '<div style="font-size:9px;opacity:.85">'+m.menorDtStr+' · ⚠'+m.atras+' 📅'+m.hoje+'</div></div>' +
+    '</div>';
+  }).join('');
+
+  // Auto-select first if none selected
+  if (!_descMacSel && _descMacRanking.length) descargaSelectMac(_descMacRanking[0].mac);
+}
+
+var _descRows = []; // stores all rows for current MAC
+
+function descFiltrar() {
+  var filters = [];
+  document.querySelectorAll('.desc-filter-inp').forEach(function(inp) {
+    filters[parseInt(inp.getAttribute('data-col'))] = inp.value.toLowerCase().trim();
+  });
+
+  var critBadge = {'⚠ Cliente critico':'#ea580c','⚠ Agendamento':'#d97706','Fluxo':'#64748b'};
+  var sitColor  = {'Atrasado':'#dc2626','Hoje':'#d97706','':'#374151'};
+
+  var html = _descRows.filter(function(r) {
+    var cells = [r.dtPrev||'', r.dataMax||'', r.cliente||'', r.origem||'', r.destino||'',
+                 r.ctrc||'', r.remetente||'', r.destinatario||'', r.modal||''];
+    for (var i=0; i<filters.length; i++) {
+      if (filters[i] && cells[i].toLowerCase().indexOf(filters[i]) === -1) return false;
+    }
+    return true;
+  }).map(function(r) {
+    var rowCls = r.sitAH==='Atrasado'?'atras':r.cliente==='⚠ Cliente critico'?'crit':'';
+    var sitC = sitColor[r.sitAH]||'#374151';
+    return '<tr class="desc-rel-row '+rowCls+'">' +
+      '<td style="white-space:nowrap;color:'+sitC+';font-weight:'+(r.sitAH?'700':'400')+'">'+(r.dtPrev||'—')+'</td>' +
+      '<td style="white-space:nowrap">'+(r.dataMax||'—')+'</td>' +
+      '<td><span style="font-size:10px;color:'+( critBadge[r.cliente]||'#64748b')+'">'+( r.cliente||'Fluxo')+'</span></td>' +
+      '<td style="white-space:nowrap">'+(r.origem||'—')+'</td>' +
+      '<td style="white-space:nowrap;font-weight:700">'+(r.destino||'—')+'</td>' +
+      '<td style="font-family:monospace;font-size:10px;white-space:nowrap">'+(r.ctrc||'—')+'</td>' +
+      '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.remetente||'').replace(/"/g,'&quot;')+'">'+(r.remetente||'—')+'</td>' +
+      '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.destinatario||'').replace(/"/g,'&quot;')+'">'+(r.destinatario||'—')+'</td>' +
+      '<td>'+(r.modal||'—')+'</td>' +
+      '<td style="font-family:monospace">'+(r.mac||'—')+'</td>' +
+      '<td style="text-align:right">'+(r.vols||'—')+'</td>' +
+      '<td style="text-align:right;white-space:nowrap">'+(r.peso?r.peso.toLocaleString('pt-BR',{maximumFractionDigits:1}):'—')+'</td>' +
+      '<td style="text-align:right;white-space:nowrap">'+(r.valor?'R$ '+r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—')+'</td>' +
+    '</tr>';
+  }).join('');
+
+  var tbody = document.getElementById('desc-rel-tbody');
+  if (tbody) tbody.innerHTML = html || '<tr><td colspan="13" style="padding:20px;text-align:center;color:#94a3b8">Nenhum resultado</td></tr>';
+}
+
+function descargaSelectMac(mac) {
+  _descMacSel = mac;
+  // Re-render list to update selected state
+  var items = document.querySelectorAll('#desc-mac-list .desc-mac-item');
+  items.forEach(function(el) {
+    var elMac = el.getAttribute('onclick').match(/'([^']+)'/);
+    if (elMac) el.classList.toggle('selected', elMac[1] === mac);
+  });
+
+  // Build table rows for this MAC
+  _descRows = (_relData||[]).filter(function(r){
+    return String(r.mac||'').trim() === mac;
+  });
+
+  var title = document.getElementById('desc-rel-title');
+  var count = document.getElementById('desc-rel-count');
+  if (title) title.textContent = 'MAC: ' + mac + ' — ' + (_descRows[0] && _descRows[0].macDest ? _descRows[0].macDest : '');
+  if (count) count.textContent = _descRows.length + ' registros';
+
+  // Clear filters
+  document.querySelectorAll('.desc-filter-inp').forEach(function(i){ i.value=''; });
+  descFiltrar();
+}
+
+function descargaImprimir() {
+  if (!_descMacSel) { if(typeof showToast==='function') showToast('Selecione um MAC primeiro','error'); return; }
+  var title = document.getElementById('desc-rel-title');
+  var count = document.getElementById('desc-rel-count');
+  var table = document.getElementById('desc-rel-table');
+  if (!table) return;
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Descarga '+_descMacSel+'</title>' +
+    '<style>body{font-family:Arial,sans-serif;font-size:10px;margin:12px}table{border-collapse:collapse;width:100%}' +
+    'th{background:#111827!important;color:#fff!important;padding:6px 8px;text-align:left;font-size:9px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    'td{padding:5px 8px;border-bottom:1px solid #f1f5f9;font-size:9px}.atras{background:#fef2f2}.crit{background:#fff7ed}' +
+    '@page{size:landscape;margin:10mm}@media print{button{display:none}}</style></head><body>' +
+    '<div style="display:flex;justify-content:space-between;margin-bottom:10px">' +
+    '<strong style="font-size:13px">'+(title?title.textContent:'')+'</strong>' +
+    '<span style="color:#64748b">'+(count?count.textContent:'')+'</span></div>' +
+    '<button onclick="window.print()" style="margin-bottom:8px;padding:4px 12px;background:#475569;color:#fff;border:none;border-radius:4px;cursor:pointer">Imprimir</button>' +
+    table.outerHTML + '</body></html>';
+
+  var w = window.open('','_blank','width=1200,height=800');
+  w.document.write(html); w.document.close();
+}
+
+// Hook showTab
+var _stDesc = showTab;
+showTab = function(tab) {
+  _stDesc(tab);
+  if (tab === 'descarga' && typeof descargaRenderizar === 'function') setTimeout(descargaRenderizar, 50);
+};
 </script>
