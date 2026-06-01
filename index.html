@@ -2602,7 +2602,7 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
   }
   var efic = pesoDispProg > 0 ? Math.round(pesoCritProg2 / pesoDispProg * 100) : 0;
   setEl('cg-ind-efic', efic + '%');
-  setStyle('cg-ind-efic', 'color', efic >= 80 ? '#16a34a' : efic >= 50 ? '#d97706' : '#ea580c');
+  setStyle('cg-ind-efic', 'color', '#ffffff');
   setEl('cg-ind-efic-sub', pesoDispProg > 0 ? pesoCritProg2.toFixed(1)+' t plan. de '+pesoDispProg.toFixed(1)+' t crit.' : 'Sem crítico programado');
 }
 
@@ -3669,32 +3669,32 @@ document.addEventListener('click',function(e){
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">PESO TOTAL ARMAZÉM</div>
       <div class="hub-kpi-val" id="hub-kpi-total">—</div>
-      <div style="font-size:10px;color:#94a3b8">Excl. Ocor.Aberta</div>
+      <div style="font-size:10px;color:#ffffff">Excl. Ocor.Aberta</div>
     </div>
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">DISPONÍVEL</div>
-      <div class="hub-kpi-val" style="color:#2563eb" id="hub-kpi-disp">—</div>
-      <div style="font-size:10px;color:#94a3b8">Peso operacional</div>
+      <div class="hub-kpi-val" id="hub-kpi-disp">—</div>
+      <div style="font-size:10px;color:#ffffff">Peso operacional</div>
     </div>
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">EM DESCARREGAMENTO</div>
-      <div class="hub-kpi-val" style="color:#16a34a" id="hub-kpi-desc">—</div>
-      <div style="font-size:10px;color:#94a3b8">Peso operacional</div>
+      <div class="hub-kpi-val" id="hub-kpi-desc">—</div>
+      <div style="font-size:10px;color:#ffffff">Peso operacional</div>
     </div>
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">CARRETAS NECESSÁRIAS</div>
-      <div class="hub-kpi-val" style="color:#ea580c" id="cg-ind-carretas">—</div>
-      <div style="font-size:10px;color:#94a3b8" id="cg-ind-carretas-sub">Capacidade padrão: 25 t</div>
+      <div class="hub-kpi-val" id="cg-ind-carretas">—</div>
+      <div style="font-size:10px;color:#ffffff" id="cg-ind-carretas-sub">Capacidade padrão: 25 t</div>
     </div>
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">CARRETAS CARREGANDO</div>
-      <div class="hub-kpi-val" style="color:#2563eb" id="cg-ind-carregando">—</div>
-      <div style="font-size:10px;color:#94a3b8">Veículos Programados</div>
+      <div class="hub-kpi-val" id="cg-ind-carregando">—</div>
+      <div style="font-size:10px;color:#ffffff">Veículos Programados</div>
     </div>
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">EFICIÊNCIA CRÍTICA</div>
-      <div class="hub-kpi-val" style="color:#ea580c" id="cg-ind-efic">—</div>
-      <div style="font-size:10px;color:#94a3b8" id="cg-ind-efic-sub">Crítico ÷ disponível</div>
+      <div class="hub-kpi-val" id="cg-ind-efic">—</div>
+      <div style="font-size:10px;color:#ffffff" id="cg-ind-efic-sub">Crítico ÷ disponível</div>
     </div>
   </div>
 
@@ -3737,9 +3737,9 @@ document.addEventListener('click',function(e){
 </div>
 
 <style>
-.hub-kpi-card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; flex:1; min-width:180px; }
-.hub-kpi-label { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
-.hub-kpi-val { font-size:22px; font-weight:800; color:#1e293b; }
+.hub-kpi-card { background:#333333; border:1px solid #222; border-radius:10px; padding:12px 16px; flex:1; min-width:180px; color:#fff; }
+.hub-kpi-label { font-size:10px; font-weight:700; color:#ffffff; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+.hub-kpi-val { font-size:22px; font-weight:800; color:#ffffff; }
 .hub-rank-card { border-radius:8px; padding:9px 14px; display:flex; align-items:center; justify-content:space-between; color:#fff; font-size:11px; }
 .hub-rank-pos { font-size:10px; font-weight:700; opacity:.8; min-width:24px; }
 .hub-rank-title { font-size:12px; font-weight:800; flex:1; margin:0 8px; }
@@ -3773,7 +3773,7 @@ document.addEventListener('click',function(e){
     <div>
       <div id="desc-rel-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:#1e293b" id="desc-rel-title">Selecione um MAC</div>
-        <div style="font-size:10px;color:#94a3b8" id="desc-rel-count"></div>
+        <div style="font-size:10px;color:#ffffff" id="desc-rel-count"></div>
       </div>
       <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;background:#fff;max-height:calc(100vh - 180px);overflow-y:auto">
         <table id="desc-rel-table" style="width:100%;border-collapse:collapse;font-size:11px">
@@ -8526,7 +8526,7 @@ function hubRenderizar() {
   // Eficiência TIME-A: Em descarregamento ÷ (Em descarregamento + Pátio)
   var eficA = (pesoDesc + pesoPatio) > 0 ? Math.round(pesoDesc / (pesoDesc + pesoPatio) * 100) : 0;
   var eficAEl = document.getElementById('hub-efic-a');
-  if (eficAEl) { eficAEl.textContent = eficA + '%'; eficAEl.style.color = eficA >= 50 ? '#16a34a' : '#dc2626'; }
+  if (eficAEl) { eficAEl.textContent = eficA + '%'; eficAEl.style.color = '#1e293b'; }
   setEl('hub-efic-a-sub', pesoDesc > 0
     ? fmtKg(pesoDesc) + ' descarga · ' + fmtKg(pesoPatio) + ' pátio'
     : 'Sem Em descarregamento · '+fmtKg(pesoPatio)+' pátio');
@@ -8538,7 +8538,7 @@ function hubRenderizar() {
     var eficBVal = eficBSrc ? eficBSrc.textContent : '—';
     eficBEl.textContent = eficBVal;
     var pctB = parseInt(eficBVal) || 0;
-    eficBEl.style.color = pctB >= 80 ? '#16a34a' : pctB >= 50 ? '#d97706' : '#2563eb';
+    eficBEl.style.color = '#1e293b';
   }
   var eficBSubSrc = document.getElementById('cg-ind-efic-sub');
   setEl('hub-efic-b-sub', eficBSubSrc ? eficBSubSrc.textContent : 'Crítico planejado ÷ crítico disponível');
@@ -8680,7 +8680,7 @@ function hubRenderMacRanking(dataHub) {
 
   var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º'];
   wrap.innerHTML = ranking.slice(0,10).map(function(m,i){
-    var bg = m.urgente?'#dc2626':'#ea580c';
+    var bg = '#111111';
     var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
     var destLabel = (m.dest||'').toUpperCase()==='EXA' && m.remetente ? m.remetente : m.dest;
     return '<div class="hub-rank-card" style="background:'+bg+'">'+
@@ -8828,7 +8828,7 @@ function hubRenderDestRanking(dataHub) {
   }
   var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º'];
   wrap.innerHTML = ranking.slice(0,10).map(function(d,i){
-    var bg = d.urgente ? '#1d4ed8' : '#2563eb';
+    var bg = '#00B200';
     var pesoStr = (d.peso/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' t';
     var dataCrit = critMap[d.dest] || critMap[d.dest.toUpperCase()] || '';
     var dataCritStr = dataCrit ? ' · 📌 '+dataCrit : '';
@@ -8926,7 +8926,7 @@ function descargaRenderizar() {
   if (!list) return;
   var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º','11º','12º','13º','14º','15º'];
   list.innerHTML = _descMacRanking.slice(0,15).map(function(m,i) {
-    var bg = m.urgente?'#dc2626':'#ea580c';
+    var bg = '#111111';
     var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
     var destLabel = (m.dest||'').toUpperCase()==='EXA' && m.remetente ? m.remetente : m.dest;
     return '<div class="desc-mac-item'+(m.mac===_descMacSel?' selected':'')+'" style="background:'+bg+'" onclick="descargaSelectMac(\''+m.mac.replace(/'/g,"\\'")+'\')">' +
