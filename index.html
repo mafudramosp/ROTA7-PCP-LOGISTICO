@@ -3257,6 +3257,12 @@ function relProcessarRows(rows) {
   var cOcorr=colFallback('AV','Ocorrência aberta','OCORRENCIA_ABERTA');
   var cPlan=colFallback('AE','Mercadoria_Planejada','Frota planejada');
   var cMac=colFallback('W','Nr_Mac','NR_MAC');
+  var cColA=colFallback('A','DT_POSICAO_A','DATA_A');
+  var cColB=colFallback('B','TIPO_B','COD_B');
+  var cMacAN=colFallback('AN','MAC_AN','NR_MAC_AN','REBOQUE_AN');
+  // DEBUG: logar índices reais das colunas
+  console.log('[DEBUG COLS] cColA='+cColA+' cColB='+cColB+' cMac(W)='+cMac+' cMacAN(AN)='+cMacAN);
+  console.log('[DEBUG HEADER] hdr[cColB]='+hdr[cColB]+' hdr[cMac]='+hdr[cMac]+' hdr[cMacAN]='+hdr[cMacAN]);
   var cMacDest=colFallback('V','DESTINO_MAC','MAC_DESTINO','FILIAL_MAC');
   var cReboque=colFallback('AS','Reboque transfer.','REBOQUE_TRANSFER');
   var cVols=colFallback('I','Volumes','QT_VOLUMES','QTDE_VOLUMES');
@@ -3273,8 +3279,32 @@ function relProcessarRows(rows) {
     var e2=Math.min(s+3000,total);
     for(var i=s;i<e2;i++){
       var row=dataRows[i]; if(!row) continue;
+      // DEBUG: primeiras 3 linhas com B=510 ou 540
+      var _b510 = parseInt(String(row[cColB]||'').trim())||0;
+      if ((_b510===510||_b510===540) && i < 20) {
+        console.log('[DEBUG B510] linha '+i+':', {
+          colA: row[cColA], colB: row[cColB], colB_raw: row[1],
+          macW: row[cMac], macAN: row[cMacAN], macAN_raw: row[39],
+          colN: row[13]
+        });
+      }
       // Pula linha se coluna N (índice 13) estiver vazia — linha sem dado relevante
-      var colN = row[13]; if(colN===null||colN===undefined||String(colN).trim()==='') continue;
+      var colN = row[13];
+      var _macANcheck = String(row[39]||'').trim(); // coluna AN=índice 39
+      var _colBcheck = parseInt(String(row[1]||'').trim())||0;
+      // Pula linha se coluna N vazia — EXCETO se tiver MAC na coluna AN e B=510/540
+      if((colN===null||colN===undefined||String(colN).trim()==='') && !(_macANcheck && (_colBcheck===510||_colBcheck===540))) continue;
+      // DEBUG: log todas as linhas com AN preenchido
+      if (_macANcheck) {
+        console.log('[DEBUG AN] linha encontrada:', {
+          colN: colN,
+          colB: row[1], colBNum: _colBcheck,
+          macW: String(row[22]||'').trim(),
+          macAN: _macANcheck,
+          colA: row[0],
+          passou_colN: !(colN===null||colN===undefined||String(colN).trim()==='')
+        });
+      }
       var ok=false; for(var x=0;x<row.length;x++){if(row[x]!==null&&row[x]!==''){ok=true;break;}} if(!ok) continue;
       if(String(row[cMotivo]||'').trim()==='Ocor.Aberta' &&
          String(row[cAgend]||'').trim().toUpperCase()!=='SIM') continue;
@@ -3299,11 +3329,68 @@ function relProcessarRows(rows) {
       } else {
         disp = 'Disponível';
       }
+
+      // ── NOVA REGRA: W vazio → verificar coluna AN como MAC alternativo ──
+      // Apenas para linhas onde coluna B = 510 ou 540
+      var macW = String(row[cMac]||'').trim();
+      var colBRaw = row[cColB];
+      var colBNum = parseInt(String(colBRaw||'').trim()) || 0;
+      var macAN = String(row[cMacAN]||'').trim();
+      var usaMacAN = false;
+      if (!macW && macAN && (colBNum === 510 || colBNum === 540)) {
+        // Validar data da coluna A: apenas ontem, hoje e futuro
+        var colAVal = row[cColA];
+        var dataValida = false;
+        if (colAVal !== null && colAVal !== undefined && String(colAVal).trim() !== '') {
+          var dtStr = String(colAVal).trim().split(' ')[0];
+          // Suporte a serial do Excel (número)
+          var colANum = parseFloat(dtStr.replace(',','.'));
+          if (!isNaN(colANum) && colANum > 40000) {
+            // Converter serial Excel → Date
+            var dtSerial = new Date((colANum - 25569) * 86400000);
+            var hoje0 = new Date(); hoje0.setHours(0,0,0,0);
+            var ontem0 = new Date(hoje0); ontem0.setDate(ontem0.getDate()-1);
+            dataValida = dtSerial >= ontem0;
+          } else {
+            // Normalizar dd/mm/yyyy ou yyyy-mm-dd
+            if (dtStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+              var dp = dtStr.split('-');
+              dtStr = dp[2]+'/'+dp[1]+'/'+dp[0];
+            }
+            var pts = dtStr.split('/');
+            if (pts.length === 3) {
+              var dtData = new Date(parseInt(pts[2].substring(0,4)), parseInt(pts[1])-1, parseInt(pts[0]), 0, 0, 0);
+              var hoje1 = new Date(); hoje1.setHours(0,0,0,0);
+              var ontem1 = new Date(hoje1); ontem1.setDate(ontem1.getDate()-1);
+              dataValida = dtData >= ontem1;
+            }
+          }
+        }
+        if (dataValida) {
+          // Só Patio ou Em descarregamento — AC=0 e AE vazio
+          if (!aeP && !eqP) {
+            usaMacAN = true;
+          }
+        }
+      }
       // Desconsiderar do ranking MACs se:
       // - AL+AM ambas preenchidas (descarga concluída sem fechamento)
       // - AC > 0 (equipamento — descarregado, ficha não fechada)
       // - AE preenchida (planejado — já embarcado)
       var descCompleta = (alP && amP) || eqP || aeP;
+      // DEBUG: log linhas com W vazio e AN preenchido
+      if (!String(row[cMac]||'').trim() && String(row[cMacAN]||'').trim()) {
+        console.log('[DEBUG AN]', {
+          macW: String(row[cMac]||'').trim(),
+          macAN: String(row[cMacAN]||'').trim(),
+          colB: row[cColB],
+          colBNum: parseInt(String(row[cColB]||'').trim())||0,
+          colA: row[cColA],
+          usaMacAN: usaMacAN,
+          aeP: aeP, eqP: eqP, alP: alP, amP: amP,
+          disp: disp
+        });
+      }
       var cnpj=String(row[cCnpj]||'').replace(/[.\-\/\s]/g,'');
       var sit=String(row[cSit]||'').trim();
       var cli=REL_CNPJ_PRIORIDADE.has(cnpj)||sit==='Hoje'||sit==='Atrasado'?'⚠ Cliente critico':String(row[cAgend]||'').trim().toUpperCase()==='SIM'?'⚠ Agendamento':'Fluxo';
@@ -3319,7 +3406,8 @@ function relProcessarRows(rows) {
         modal:String(row[cModal]||'').trim().toUpperCase()==='PADRAO'?'Terrestre':'Aéreo',
         ocorr:String(row[cOcorr]||'').trim(),
         motivo:String(row[cMotivo]||'').trim(),frotaPlan:String(row[cPlan]||'').trim(),
-        mac:String(row[cMac]||'').trim(),
+        mac: usaMacAN ? macAN : String(row[cMac]||'').trim(),
+        isAN: usaMacAN,
         macDest:String(row[cMacDest]||'').trim(),
         reboque:String(row[cReboque]||'').trim(),
         vols:row[cVols]!=null?String(row[cVols]).trim():'',
@@ -8629,7 +8717,7 @@ function hubRenderMacRanking(dataHub) {
         else if (dm.getTime()===hojeMs.getTime()) sitAH = 'Hoje';
       }
     }
-    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', pesoTotal:0, _ctrcs:{}, _temSJK:false, remetente:r.remetente||'', _invalido:false };
+    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', pesoTotal:0, _ctrcs:{}, _temSJK:false, remetente:r.remetente||'', _invalido:false, _isAN: r.isAN||false };
     var m = macMap[mac];
     // Se qualquer linha do MAC tiver AC>0 ou AE preenchida → MAC inteiro inválido
     if (r.descCompleta) { m._invalido = true; }
@@ -8680,10 +8768,12 @@ function hubRenderMacRanking(dataHub) {
 
   var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º'];
   wrap.innerHTML = ranking.slice(0,10).map(function(m,i){
-    var bg = '#111111';
+    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
+    var bg = usaRemetente ? '#f97316' : '#111111';
+    var txtColor = usaRemetente ? '#000000' : '#ffffff';
     var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
-    var destLabel = (m.dest||'').toUpperCase()==='EXA' && m.remetente ? m.remetente : m.dest;
-    return '<div class="hub-rank-card" style="background:'+bg+'">'+
+    var destLabel = usaRemetente ? m.remetente : m.dest;
+    return '<div class="hub-rank-card" style="background:'+bg+';color:'+txtColor+'">'+
       '<span class="hub-rank-pos">'+pos[i]+'</span>'+
       '<span class="hub-rank-title">MAC: '+m.mac+' – '+destLabel+'</span>'+
       '<div class="hub-rank-right">'+
@@ -8700,7 +8790,7 @@ function hubRenderMacRanking(dataHub) {
     ranking.forEach(function(m) {
       var dt = m.menorDtStr && m.menorDtStr !== '—' ? m.menorDtStr.substring(0,5) : '(sem data)'; // dd/mm
       if (!byDate[dt]) byDate[dt] = [];
-      var destLabel = (m.dest||'').toUpperCase()==='EXA' && m.remetente ? m.remetente.split(' ')[0] : m.dest;
+      var destLabel = m._isAN && m.remetente ? m.remetente.split(' ')[0] : (m.dest||'').toUpperCase()==='EXA' && m.remetente ? m.remetente.split(' ')[0] : m.dest;
       byDate[dt].push(destLabel);
     });
     // Ordena datas
@@ -8887,7 +8977,7 @@ function descargaRenderizar() {
   dataHub.forEach(function(r) {
     var mac = r.mac && r.mac.trim();
     if (!mac || mac === '—' || invalidMacsD.has(mac)) return;
-    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'' };
+    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'', _isAN:r.isAN||false };
     var m = macMap[mac];
     if ((m.dest||'').toUpperCase()==='EXA' && r.remetente && !m.remetente) m.remetente = r.remetente;
     var sitAH = r.sitAH || '';
@@ -8926,10 +9016,12 @@ function descargaRenderizar() {
   if (!list) return;
   var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º','11º','12º','13º','14º','15º'];
   list.innerHTML = _descMacRanking.slice(0,15).map(function(m,i) {
-    var bg = '#111111';
+    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
+    var bg = usaRemetente ? '#f97316' : '#111111';
+    var txtColor = usaRemetente ? '#000000' : '#ffffff';
     var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
-    var destLabel = (m.dest||'').toUpperCase()==='EXA' && m.remetente ? m.remetente : m.dest;
-    return '<div class="desc-mac-item'+(m.mac===_descMacSel?' selected':'')+'" style="background:'+bg+'" onclick="descargaSelectMac(\''+m.mac.replace(/'/g,"\\'")+'\')">' +
+    var destLabel = usaRemetente ? m.remetente : m.dest;
+    return '<div class="desc-mac-item'+(m.mac===_descMacSel?' selected':'')+'" style="background:'+bg+';color:'+txtColor+'" onclick="descargaSelectMac(\''+m.mac.replace(/'/g,"\\'")+'\')">' +
       '<div><span style="font-size:10px;opacity:.8">'+pos[i]+'</span>' +
       '<span style="font-weight:800;margin-left:6px">MAC: '+m.mac+' – '+destLabel+'</span></div>' +
       '<div style="text-align:right"><div style="font-size:13px;font-weight:800">'+pct+'%</div>' +
