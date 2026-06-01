@@ -2550,10 +2550,23 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
 
   var CAP_CARRETA = 25;
 
-  // Card 1 — Carretas necessárias
-  var carrNec = totalGeral > 0 ? Math.ceil(totalGeral / CAP_CARRETA) : 0;
+  // Card 1 — Carretas necessárias (usa peso Disponível do _relData se disponível)
+  var pesoDisponivel = 0;
+  if (typeof _relData !== 'undefined' && _relData.length > 0) {
+    var ctrcDispMap = {};
+    _relData.forEach(function(r) {
+      if (r.disp === 'Disponível') {
+        var key = r.ctrc || ('_nk_' + Math.random());
+        if (!ctrcDispMap[key]) ctrcDispMap[key] = r.peso || 0;
+      }
+    });
+    Object.keys(ctrcDispMap).forEach(function(k){ pesoDisponivel += ctrcDispMap[k]; });
+  }
+  // Fallback para totalGeral da aba Cargas se _relData não disponível
+  var baseCarretas = pesoDisponivel > 0 ? pesoDisponivel / 1000 : totalGeral;
+  var carrNec = baseCarretas > 0 ? Math.ceil(baseCarretas / CAP_CARRETA) : 0;
   setEl('cg-ind-carretas', carrNec > 0 ? carrNec : '—');
-  setEl('cg-ind-carretas-sub', totalGeral > 0 ? totalGeral.toFixed(1) + ' t disponível' : '');
+  setEl('cg-ind-carretas-sub', baseCarretas > 0 ? baseCarretas.toFixed(1) + ' t disponível' : '');
 
   // Card 2 — Carretas carregando
   var _hoje = getDataHoje();
