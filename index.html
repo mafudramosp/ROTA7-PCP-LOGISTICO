@@ -8510,6 +8510,12 @@ function hubRenderizar() {
   setEl('hub-kpi-disp',  fmtKg(pesoDisp));
   setEl('hub-kpi-desc',  fmtKg(pesoDescCard));
 
+  // Carretas necessárias: baseado no peso DISPONÍVEL do HUB (mesma fonte do card DISPONÍVEL)
+  var CAP_CARRETA_HUB = 25000; // kg
+  var carrNecHub = pesoDisp > 0 ? Math.ceil(pesoDisp / CAP_CARRETA_HUB) : 0;
+  setEl('cg-ind-carretas', carrNecHub > 0 ? carrNecHub : '—');
+  setEl('cg-ind-carretas-sub', pesoDisp > 0 ? (pesoDisp/1000).toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' t disponível' : 'Capacidade padrão: 25 t');
+
   // Eficiência TIME-A: Em descarregamento ÷ (Em descarregamento + Pátio)
   var eficA = (pesoDesc + pesoPatio) > 0 ? Math.round(pesoDesc / (pesoDesc + pesoPatio) * 100) : 0;
   var eficAEl = document.getElementById('hub-efic-a');
