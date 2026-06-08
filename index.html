@@ -2332,11 +2332,13 @@ function cgImportar(input) {
         if (bi) {
           destMap[dest].peso_planejado += peso;
         }
-        // Ton. Crítico total = todos os atrasados (independente de status)
-        if (sit === 'Atrasado') {
+        // Ton. Crítico = AH in [Atrasado, Hoje] + AC (Equipamento) != 0
+        // Ocor.Aberta: só conta se AQ (Agendamento) = SIM
+        var isCrit = (sit === 'Atrasado' || sit === 'Hoje') && bgPreench;
+        if (isCrit) {
           destMap[dest].peso_critico_total += peso;
           destMap[dest].atrasados++;
-          // Crítico planejado = atrasado E Mercadoria_Planejada preenchida
+          // Crítico planejado = crítico E Mercadoria_Planejada preenchida
           if (bi) {
             destMap[dest].peso_critico_plan += peso;
           }
@@ -2609,6 +2611,10 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
   function setStyle(id, prop, val) { var e = document.getElementById(id); if (e) e.style[prop] = val; }
 
   var CAP_CARRETA = 25;
+
+  // Atualizar cards de KPI com os valores do Excel TMS (peso_geral = disponível real)
+  function fmtKgLocal(v){ return (v*1000).toLocaleString('pt-BR',{maximumFractionDigits:0})+' kg'; }
+  setEl('pc-kpi-disp', fmtKgLocal(totalGeral));
 
   // Card 1 — Carretas necessárias (usa peso Disponível do _relData se disponível)
   var pesoDisponivel = 0;
@@ -2970,7 +2976,7 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(cgCarregarCritSupabase, 1000);
   // Carregar relatório e planejamento do Supabase
   setTimeout(sbCarregarPlanejamento, 1200);
-  setTimeout(sbCarregarRelatorio, 1500);
+  setTimeout(function(){ sbCarregarRelatorio(true); }, 1500);
   // Limpar baselines de dias anteriores
   try {
     var hoje = new Date().toISOString().slice(0,10);
@@ -4153,45 +4159,227 @@ function cgSalvarCritSupabase() {
 }
 
 // ── SYNC RELATÓRIO ──
+// ── Helpers de compressão para sync do relatório ──
+function _relComprimir(r) {
+  // Salva somente os campos usados pelo sistema, chaves curtas
+  var o = {
+    dp:r.dtPrev||null, dm:r.dataMax||null, du:r.dtUlt||null,
+    dc:r.dtColA||null, fd:r.fimDes||null,
+    dv:r.disp, cl:r.cliente,
+    or:r.origem, de:r.destino,
+    eq:r.equip, ag:r.agend,
+    et:r.etiq, ct:r.ctrc,
+    rm:(r.remetente||'').substring(0,40),
+    ds:(r.destinatario||'').substring(0,40),
+    md:r.modal, oc:r.ocorr||'',
+    mo:r.motivo||'', fp:r.frotaPlan||'',
+    mc:r.mac||'', pe:r.peso||0,
+    vl:r.valor||0, sh:r.sitAH||''
+  };
+  // Remove nulos/vazios para economizar espaço
+  Object.keys(o).forEach(function(k){ if(o[k]===null||o[k]==='') delete o[k]; });
+  return o;
+}
+function _relDescomprimir(o) {
+  return {
+    dtPrev:o.dp||'', dataMax:o.dm||'', dtUlt:o.du||'',
+    dtColA:o.dc||'', fimDes:o.fd||'',
+    disp:o.dv||'', cliente:o.cl||'',
+    origem:o.or||'', destino:o.de||'',
+    equip:o.eq||'', agend:o.ag||'',
+    etiq:o.et||'', ctrc:o.ct||'',
+    remetente:o.rm||'', destinatario:o.ds||'',
+    modal:o.md||'', ocorr:o.oc||'',
+    motivo:o.mo||'', frotaPlan:o.fp||'',
+    mac:o.mc||'', peso:o.pe||0,
+    valor:o.vl||0, sitAH:o.sh||''
+  };
+}
+
 function sbSalvarRelatorio() {
   if (!_relData || !_relData.length) return;
   try {
-    var payload = JSON.stringify(_relData);
+    var agora = new Date().toISOString();
     showToast('⏳ Sincronizando relatório...', 'info');
-    fetch(SB_URL + '/configuracoes', {
-      method: 'POST',
-      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: 'tms_relatorio', valor: payload, atualizado_em: new Date().toISOString() })
-    }).then(function(r){
-      if (r.ok || r.status === 201 || r.status === 200 || r.status === 204) {
-        showToast('☁️ Relatório sincronizado para todos os usuários!', 'success');
-      } else {
-        r.text().then(function(t){ showToast('⚠️ Erro sync: ' + r.status + ' ' + t.substring(0,80), 'error'); });
+
+    // Comprimir registros
+    var comprimidos = _relData.map(_relComprimir);
+    var payload = JSON.stringify(comprimidos);
+
+    // Dividir em chunks de ~800KB
+    var CHUNK_SIZE = 800000;
+    var chunks = [];
+    if (payload.length <= CHUNK_SIZE) {
+      chunks.push(payload);
+    } else {
+      // Dividir o array em pedaços
+      var por_chunk = Math.ceil(comprimidos.length / Math.ceil(payload.length / CHUNK_SIZE));
+      for (var i = 0; i < comprimidos.length; i += por_chunk) {
+        chunks.push(JSON.stringify(comprimidos.slice(i, i + por_chunk)));
       }
-    }).catch(function(e){ showToast('⚠️ Sem conexão: ' + e.message, 'error'); });
+    }
+
+    var totalChunks = chunks.length;
+    var salvos = 0;
+    var erros = 0;
+
+    function salvarChunk(idx) {
+      var chave = totalChunks === 1 ? 'tms_relatorio' : 'tms_relatorio_' + idx;
+      var body = { chave: chave, valor: chunks[idx], atualizado_em: agora };
+      // PATCH primeiro (atualiza timestamp), depois POST se não existir
+      fetch(SB_URL + '/configuracoes?chave=eq.' + chave, {
+        method: 'PATCH', headers: SB_HEADERS,
+        body: JSON.stringify({ valor: chunks[idx], atualizado_em: agora })
+      }).then(function(r) {
+        // PATCH retorna 204 se atualizou, 200 com array vazio se não existia
+        return r.text().then(function(t) {
+          var naoExiste = (t === '[]' || t === '' || r.status === 404);
+          if (naoExiste) {
+            return fetch(SB_URL + '/configuracoes', {
+              method: 'POST',
+              headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+              body: JSON.stringify(body)
+            });
+          }
+        });
+      }).then(function() {
+        salvos++;
+        if (salvos + erros === totalChunks) {
+          if (erros === 0) {
+            // Salvar metadado com total de chunks e timestamp
+            var meta = JSON.stringify({ total: totalChunks, ts: agora, n: _relData.length });
+            fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio_meta', {
+              method: 'PATCH', headers: SB_HEADERS,
+              body: JSON.stringify({ valor: meta, atualizado_em: agora })
+            }).then(function(r){ return r.text(); }).then(function(t){
+              if (t === '[]' || t === '') {
+                fetch(SB_URL + '/configuracoes', {
+                  method: 'POST',
+                  headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+                  body: JSON.stringify({ chave: 'tms_relatorio_meta', valor: meta, atualizado_em: agora })
+                });
+              }
+            });
+            showToast('☁️ Relatório sincronizado (' + _relData.length + ' registros, ' + totalChunks + ' parte(s))!', 'success');
+          } else {
+            showToast('⚠️ Sincronização parcial: ' + erros + ' erro(s)', 'error');
+          }
+        }
+      }).catch(function() {
+        erros++;
+        if (salvos + erros === totalChunks) showToast('⚠️ Erro na sincronização', 'error');
+      });
+    }
+
+    for (var ci = 0; ci < totalChunks; ci++) salvarChunk(ci);
   } catch(e) { showToast('⚠️ Erro: ' + e.message, 'error'); }
 }
 
-function sbCarregarRelatorio() {
+// Timestamp da última versão do relatório carregada do Supabase
+var _relSupabaseTs = null;
+
+function _relAplicarDados(registros, ts, forcar) {
+  _relData = registros.map(_relDescomprimir);
+  _rcfF = {}; _relSort = {col:null,asc:true}; _rowCache = [];
+  if (typeof _hubTree !== 'undefined') _hubTree = null;
+  _relDataTs = ts;
+  _relSupabaseTs = ts;
+  var u = document.getElementById('rel-updated');
+  if (u) u.textContent = 'Sincronizado: '+ts.toLocaleString('pt-BR')+' · '+_relData.length+' registros';
+  relFiltrar();
+  if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
+  if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
+  if (typeof cgRenderizar === 'function' && _cgData) setTimeout(function(){ cgRenderizar(_cgData); }, 400);
+  if (forcar !== true) showToast('🔄 Relatório atualizado automaticamente (' + ts.toLocaleString('pt-BR') + ')', 'info');
+}
+
+function sbCarregarRelatorio(forcar) {
   try {
-    fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio&select=valor,atualizado_em', {
+    // Primeiro verifica o metadado para saber quantos chunks existem e o timestamp
+    fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio_meta&select=valor,atualizado_em', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(data) {
-      if (data && data.length && data[0].valor) {
+    }).then(function(r){ return r.json(); }).then(function(metaArr) {
+      var meta = null;
+      var tsRemoto = null;
+
+      if (metaArr && metaArr.length && metaArr[0].valor) {
+        try { meta = JSON.parse(metaArr[0].valor); } catch(e){}
+        tsRemoto = metaArr[0].atualizado_em ? new Date(metaArr[0].atualizado_em) : null;
+      }
+
+      // Verificar se precisa atualizar
+      if (!forcar && _relSupabaseTs && tsRemoto && tsRemoto.getTime() <= _relSupabaseTs.getTime()) return;
+
+      var totalChunks = (meta && meta.total) ? meta.total : 1;
+      var ts = tsRemoto || new Date();
+
+      if (totalChunks === 1) {
+        // Compatibilidade com versão antiga (chunk único)
+        fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio&select=valor', {
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+        }).then(function(r){ return r.json(); }).then(function(data) {
+          if (!data || !data.length || !data[0].valor) return;
+          var parsed = JSON.parse(data[0].valor);
+          // Detectar se é formato comprimido (chave curta 'dv') ou antigo
+          if (parsed.length && parsed[0].dv !== undefined) {
+            _relAplicarDados(parsed, ts, forcar);
+          } else {
+            // Formato antigo — aplicar diretamente sem descomprimir
+            _relData = parsed;
+            _rcfF = {}; _relSort = {col:null,asc:true}; _rowCache = [];
+            if (typeof _hubTree !== 'undefined') _hubTree = null;
+            _relDataTs = ts; _relSupabaseTs = ts;
+            var u = document.getElementById('rel-updated');
+            if (u) u.textContent = 'Sincronizado: '+ts.toLocaleString('pt-BR')+' · '+_relData.length+' registros';
+            relFiltrar();
+            if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
+            if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
+          }
+        }).catch(function(){});
+      } else {
+        // Carregar múltiplos chunks em paralelo
+        var chaves = [];
+        for (var i = 0; i < totalChunks; i++) chaves.push('tms_relatorio_' + i);
+        var filtro = 'chave=in.(' + chaves.join(',') + ')';
+        fetch(SB_URL + '/configuracoes?' + filtro + '&select=chave,valor', {
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+        }).then(function(r){ return r.json(); }).then(function(data) {
+          if (!data || data.length < totalChunks) return;
+          // Ordenar por chave
+          data.sort(function(a,b){ return a.chave < b.chave ? -1 : 1; });
+          var todos = [];
+          data.forEach(function(d) {
+            try { todos = todos.concat(JSON.parse(d.valor)); } catch(e){}
+          });
+          _relAplicarDados(todos, ts, forcar);
+        }).catch(function(){});
+      }
+    }).catch(function(){
+      // Fallback: tentar carregar sem meta (versão antiga)
+      fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio&select=valor,atualizado_em', {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+      }).then(function(r){ return r.json(); }).then(function(data) {
+        if (!data || !data.length || !data[0].valor) return;
+        var ts = data[0].atualizado_em ? new Date(data[0].atualizado_em) : new Date();
+        if (!forcar && _relSupabaseTs && ts.getTime() <= _relSupabaseTs.getTime()) return;
         _relData = JSON.parse(data[0].valor);
         _rcfF = {}; _relSort = {col:null,asc:true}; _rowCache = [];
         if (typeof _hubTree !== 'undefined') _hubTree = null;
-        var ts = data[0].atualizado_em ? new Date(data[0].atualizado_em) : new Date();
-        _relDataTs = ts;
+        _relDataTs = ts; _relSupabaseTs = ts;
         var u = document.getElementById('rel-updated');
         if (u) u.textContent = 'Sincronizado: '+ts.toLocaleString('pt-BR')+' · '+_relData.length+' registros';
         relFiltrar();
         if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
         if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
-      }
-    }).catch(function(){});
+      }).catch(function(){});
+    });
   } catch(e) {}
 }
+
+// Polling automático: verifica a cada 2 minutos se há versão mais nova do relatório
+setInterval(function() {
+  sbCarregarRelatorio(false);
+}, 120000);
 
 // ── SYNC PLANEJAMENTO ──
 function sbSalvarPlanejamento() {
