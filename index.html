@@ -2380,64 +2380,62 @@ function cgImportar(input) {
       _cgData = { destinos: destinos, ts: new Date() };
       try { localStorage.setItem('cg_data', JSON.stringify(_cgData)); } catch(ex){}
 
-      // ── BASELINE + MERGE ─────────────────────────────────────────────────────
-      var hoje = new Date().toISOString().slice(0,10); // yyyy-mm-dd
-      var blKey = 'cg_baseline_' + hoje;
-
-      // Carrega ou cria baseline do dia
-      var baseline = null;
-      try { var blRaw = localStorage.getItem(blKey); if (blRaw) baseline = JSON.parse(blRaw); } catch(ex){}
-
-      if (!baseline) {
-        // Primeiro import do dia → este É a baseline
-        baseline = { destinos: JSON.parse(JSON.stringify(destinos)), ts: new Date() };
-        try { localStorage.setItem(blKey, JSON.stringify(baseline)); } catch(ex){}
-        showToast('📌 Baseline do dia gravada!', 'info');
-      } else {
-        // Imports subsequentes → merge
+      // ── BASELINE DE TURNO (Supabase) ────────────────────────────────────────
+      // Usa baseline já carregada na memória (cgBaselineMemoria) ou cria nova
+      function cgAplicarMerge(blDestinos) {
         var blMap = {};
-        baseline.destinos.forEach(function(d){ blMap[d.sigla] = d; });
+        blDestinos.forEach(function(d){ blMap[d.sigla] = d; });
 
         var destAtual = {};
         destinos.forEach(function(d){ destAtual[d.sigla] = true; });
 
-        // Destinos que estavam na baseline mas SUMIRAM do TMS = planejados 100%
-        baseline.destinos.forEach(function(bd) {
+        // Destinos que saíram do TMS desde a baseline = concluídos
+        blDestinos.forEach(function(bd) {
           if (!destAtual[bd.sigla] && bd.peso_critico_total > 0) {
-            // Clonar e forçar 100% planejado
             var concluido = JSON.parse(JSON.stringify(bd));
             concluido.peso_critico_plan  = concluido.peso_critico_total;
             concluido.perc_critico       = 100;
             concluido.perc_plan_crit     = 100;
             concluido.peso_planejado     = concluido.peso_geral;
             concluido.perc_plan_geral    = 100;
-            concluido._concluido         = true; // marcador visual
+            concluido._concluido         = true;
             destinos.push(concluido);
           }
         });
 
-        // Destinos existentes: se % crítico regrediu, manter o melhor resultado
-        destinos.forEach(function(d) {
-          var bl = blMap[d.sigla];
-          if (bl && d.perc_critico < bl.perc_critico) {
-            // Não deixa regredir — mantém o maior % já atingido
-            d.peso_critico_plan  = Math.max(d.peso_critico_plan, bl.peso_critico_plan);
-            d.perc_critico       = bl.perc_critico;
-            d.perc_plan_crit     = bl.perc_critico;
-          }
-        });
-
-        // Re-ordenar por peso_geral
+        // Destinos presentes: usa os valores do import atual (mais frescos)
+        // O painel mostra o que RESTA — não protege contra regressão
         destinos.sort(function(a,b){ return b.peso_geral - a.peso_geral; });
         _cgData = { destinos: destinos, ts: new Date() };
         try { localStorage.setItem('cg_data', JSON.stringify(_cgData)); } catch(ex){}
+        cgRenderizar(_cgData);
+        showToast('✅ ' + destinos.length + ' destinos — painel atualizado (turno em andamento)', 'success');
+        cgAtualizarUISnapshot();
+        if (_cgModoComp) cgRenderizarComparativo();
+        cgAtualizarCards();
+      }
+
+      var chaveAtual = cgChaveTurno();
+
+      if (cgBaselineMemoria && cgBaselineChave === chaveAtual) {
+        // Baseline deste turno já existe no Supabase → aplicar merge imediato
+        cgAplicarMerge(cgBaselineMemoria);
+      } else {
+        // Sem baseline para este turno → este import É a baseline
+        cgBaselineMemoria = JSON.parse(JSON.stringify(destinos));
+        cgBaselineChave   = chaveAtual;
+        cgSalvarBaselineSupabase(cgBaselineMemoria, chaveAtual);
+        _cgData = { destinos: destinos, ts: new Date() };
+        try { localStorage.setItem('cg_data', JSON.stringify(_cgData)); } catch(ex){}
+        cgRenderizar(_cgData);
+        showToast('📌 Baseline do turno gravada para todos os usuários!', 'info');
+        cgAtualizarUISnapshot();
+        if (_cgModoComp) cgRenderizarComparativo();
+        cgAtualizarCards();
       }
       // ─────────────────────────────────────────────────────────────────────────
 
-      cgRenderizar(_cgData);
-      showToast('✅ ' + destinos.length + ' destinos carregados!', 'success');
-      cgAtualizarUISnapshot();
-      if (_cgModoComp) cgRenderizarComparativo();
+      // cgRenderizar já chamado dentro do bloco de baseline acima
       // ── Construir mapa destino → data mais antiga para autopreenchimento ──
       window._cgDataCrit = {};
       destinos.forEach(function(d) {
@@ -2975,6 +2973,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // Carregar mapa atualizado do Supabase (compartilhado entre usuários)
   setTimeout(cgCarregarCritSupabase, 1000);
   // Carregar relatório e planejamento do Supabase
+  // Carregar baseline do turno atual do Supabase (antes de sbCarregarPlanejamento)
+  setTimeout(function(){ cgCarregarBaselineSupabase(function(){}); }, 900);
   setTimeout(sbCarregarPlanejamento, 1200);
   setTimeout(function(){ sbCarregarRelatorio(true); }, 1500);
   // Limpar baselines de dias anteriores
@@ -3514,17 +3514,20 @@ function relProcessarRows(rows) {
       var amP=!!(row[cFimDes]&&String(row[cFimDes]).trim());
       var eqRaw = row[cEquip];
       var eqP=!!(eqRaw!==null&&eqRaw!==undefined&&String(eqRaw).trim()!==''&&parseFloat(String(eqRaw).replace(',','.'))!==0&&!isNaN(parseFloat(String(eqRaw).replace(',','.'))));
+      // AL e AM: 0 se em branco, 1 se preenchido
+      var alVal = (row[cIniDes]!==null&&row[cIniDes]!==undefined&&String(row[cIniDes]).trim()!=='') ? 1 : 0;
+      var amVal = (row[cFimDes]!==null&&row[cFimDes]!==undefined&&String(row[cFimDes]).trim()!=='') ? 1 : 0;
       // Regras em ordem de prioridade:
-      // 1. Planejado: AE preenchida
-      // 2. Em descarregamento: AL preenchida + AM vazia + AC=0 + AE vazia
-      // 3. Pátio: AE vazia + AC=0 + AL vazia + AM vazia
-      // 4. Disponível: AC preenchido (>0) + AE vazia
+      // 1. Planejado:          AE preenchida
+      // 2. Em descarregamento: AL=1 + AM=0 + AC=0 + AE vazia
+      // 3. Pátio:              AL=0 + AM=0 + AC=0 + AE vazia
+      // 4. Disponível:         demais
       var disp;
       if (aeP) {
         disp = 'Planejado';
-      } else if (alP && !amP && !eqP && !aeP) {
+      } else if (alVal===1 && amVal===0 && !eqP) {
         disp = 'Em descarregamento';
-      } else if (!aeP && !eqP && !alP && !amP) {
+      } else if (alVal===0 && amVal===0 && !eqP) {
         disp = 'Patio';
       } else {
         disp = 'Disponível';
@@ -4381,7 +4384,119 @@ setInterval(function() {
   sbCarregarRelatorio(false);
 }, 120000);
 
+// Polling da baseline de turno: a cada 90s recarrega do Supabase para sincronizar
+// outros usuários que ainda não importaram o Excel
+setInterval(function() {
+  var chaveAtual = cgChaveTurno();
+  // Só recarrega se ainda não tem baseline desta chave em memória
+  cgCarregarBaselineSupabase(function(bl) {
+    if (bl && _cgData) {
+      // Aplicar merge silencioso com dados atuais
+      var destinos = JSON.parse(JSON.stringify(_cgData.destinos));
+      var blMap = {};
+      bl.forEach(function(d){ blMap[d.sigla] = d; });
+      var destAtual = {};
+      destinos.forEach(function(d){ destAtual[d.sigla] = true; });
+      bl.forEach(function(bd) {
+        if (!destAtual[bd.sigla] && bd.peso_critico_total > 0) {
+          var concluido = JSON.parse(JSON.stringify(bd));
+          concluido.peso_critico_plan = concluido.peso_critico_total;
+          concluido.perc_critico = 100; concluido.perc_plan_crit = 100;
+          concluido.peso_planejado = concluido.peso_geral;
+          concluido.perc_plan_geral = 100; concluido._concluido = true;
+          destinos.push(concluido);
+        }
+      });
+      destinos.sort(function(a,b){ return b.peso_geral - a.peso_geral; });
+      _cgData = { destinos: destinos, ts: _cgData.ts };
+      cgRenderizar(_cgData);
+    }
+  });
+}, 90000);
+
 // ── SYNC PLANEJAMENTO ──
+
+// ══════════════════════════════════════════════════════════════════════════
+// CONTROLE DE TURNO — baseline compartilhada para o painel de Planejamento
+// Turnos: 1º 07:00–14:40 | 2º 15:00–22:30 | 3º 23:00–06:50
+// ══════════════════════════════════════════════════════════════════════════
+
+function cgTurnoAtual() {
+  var agora = new Date();
+  var h = agora.getHours();
+  var m = agora.getMinutes();
+  var hm = h * 60 + m;
+  // Turno 1: 07:00 (420) – 14:40 (880)
+  if (hm >= 420 && hm <= 880) return { turno: 1, inicio: '07:00', fim: '14:40' };
+  // Turno 2: 15:00 (900) – 22:30 (1350)
+  if (hm >= 900 && hm <= 1350) return { turno: 2, inicio: '15:00', fim: '22:30' };
+  // Turno 3: 23:00 (1380) – 06:50 (410) — cruza meia-noite
+  return { turno: 3, inicio: '23:00', fim: '06:50' };
+}
+
+function cgChaveTurno() {
+  // Chave única por turno + data: ex "cg_baseline_2026-06-08_T1"
+  var agora = new Date();
+  var t = cgTurnoAtual();
+  var data;
+  // Turno 3 após meia-noite pertence ao dia anterior
+  if (t.turno === 3 && agora.getHours() < 7) {
+    var ontem = new Date(agora); ontem.setDate(ontem.getDate() - 1);
+    data = ontem.toISOString().slice(0, 10);
+  } else {
+    data = agora.toISOString().slice(0, 10);
+  }
+  return 'cg_baseline_' + data + '_T' + t.turno;
+}
+
+function cgBaselineAtiva() {
+  // Retorna true se estamos DENTRO de um turno (baseline deve estar congelada)
+  // A baseline já foi gravada para essa chave = turno em andamento
+  return !!cgBaselineMemoria;
+}
+
+// Memória da baseline ativa (carregada do Supabase)
+var cgBaselineMemoria = null;
+var cgBaselineChave   = null;
+
+function cgSalvarBaselineSupabase(baseline, chave) {
+  var payload = JSON.stringify({ chave_turno: chave, destinos: baseline, gravado_em: new Date().toISOString() });
+  // PATCH primeiro
+  fetch(SB_URL + '/configuracoes?chave=eq.' + chave, {
+    method: 'PATCH', headers: SB_HEADERS,
+    body: JSON.stringify({ valor: payload, atualizado_em: new Date().toISOString() })
+  }).then(function(r){ return r.text(); }).then(function(t){
+    if (t === '[]' || t === '') {
+      // Não existia — inserir
+      fetch(SB_URL + '/configuracoes', {
+        method: 'POST',
+        headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+        body: JSON.stringify({ chave: chave, valor: payload, atualizado_em: new Date().toISOString() })
+      }).catch(function(){});
+    }
+  }).catch(function(){});
+}
+
+function cgCarregarBaselineSupabase(callback) {
+  var chave = cgChaveTurno();
+  fetch(SB_URL + '/configuracoes?chave=eq.' + chave + '&select=valor', {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  }).then(function(r){ return r.json(); }).then(function(data) {
+    if (data && data.length && data[0].valor) {
+      try {
+        var obj = JSON.parse(data[0].valor);
+        cgBaselineMemoria = obj.destinos;
+        cgBaselineChave   = chave;
+        if (typeof callback === 'function') callback(cgBaselineMemoria);
+      } catch(e) { if (typeof callback === 'function') callback(null); }
+    } else {
+      cgBaselineMemoria = null;
+      cgBaselineChave   = null;
+      if (typeof callback === 'function') callback(null);
+    }
+  }).catch(function(){ if (typeof callback === 'function') callback(null); });
+}
+// ══════════════════════════════════════════════════════════════════════════
 function sbSalvarPlanejamento() {
   if (!_cgData) return;
   try {
@@ -8995,7 +9110,7 @@ function hubRenderMacRanking(dataHub) {
         else if (dm.getTime()===hojeMs.getTime()) sitAH = 'Hoje';
       }
     }
-    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', pesoTotal:0, _ctrcs:{}, _temSJK:false, remetente:r.remetente||'', _invalido:false, _isAN: r.isAN||false };
+    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', pesoTotal:0, _ctrcs:{}, _temSJK:false, remetente:r.remetente||'', _invalido:false, _isAN: r.isAN||false, _isColeta: (r.etiq||'')==='Coleta' };
     var m = macMap[mac];
     // Se qualquer linha do MAC tiver AC>0 ou AE preenchida → MAC inteiro inválido
     if (r.descCompleta) { m._invalido = true; }
@@ -9026,7 +9141,7 @@ function hubRenderMacRanking(dataHub) {
       var pts=r.dtUlt.split('/');
       if(pts.length>=3){ var dt=new Date(pts[2].substring(0,4),pts[1]-1,pts[0]); if(!m.menorDt||dt<m.menorDt){m.menorDt=dt;m.menorDtStr=r.dtUlt;} }
       // Se isAN, guardar data da coluna A
-      if (r.isAN && r.dtColA) m._dtAN = r.dtColA;
+      if ((r.isAN || (r.etiq||'')=='Coleta') && r.dtColA) m._dtAN = r.dtColA;
     }
   });
   // Conta atras/hoje/ctrcs dos CTRCs deduplicados
@@ -9041,14 +9156,14 @@ function hubRenderMacRanking(dataHub) {
   var ranking = Object.values(macMap).map(function(m){
     var diff = m.menorDt ? (agora-m.menorDt) : 999*h24;
     var temSJK = (m.dest||'').toUpperCase().indexOf('SJK') !== -1 || m._temSJK;
-    m.score = m.atras*3 + m.hoje*2 + (diff<=h24?5:0) + m.ctrcs*0.1 + (temSJK?10:0);
-    m.urgente = m.atras>0 || diff<=h24 || temSJK;
+    m.score = m.atras*3 + m.hoje*2 + (diff<=h24?5:0) + m.ctrcs*0.1 + (temSJK?10:0) + (m._isColeta?1000:0);
+    m.urgente = m.atras>0 || diff<=h24 || temSJK || m._isColeta;
     return m;
-  }).sort(function(a,b){return b.score-a.score;});
+  }).filter(function(m){ return !m._isColeta || m.ctrcs >= 15; }).sort(function(a,b){return b.score-a.score;});
 
   var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º'];
   wrap.innerHTML = ranking.slice(0,10).map(function(m,i){
-    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
+    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente) || (m._isColeta && m.remetente);
     var bg = usaRemetente ? '#f97316' : '#111111';
     var txtColor = usaRemetente ? '#000000' : '#ffffff';
     var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
@@ -9058,7 +9173,7 @@ function hubRenderMacRanking(dataHub) {
       '<span class="hub-rank-title">MAC: '+m.mac+' – '+destLabel+'</span>'+
       '<div class="hub-rank-right">'+
         '<div class="hub-rank-pct">'+pct+'%</div>'+
-        '<div class="hub-rank-sub">'+(usaRemetente && m._dtAN ? m._dtAN.substring(0,5) : m.menorDtStr)+' · ⚠'+m.atras+' 📅'+m.hoje+'</div>'+
+        '<div class="hub-rank-sub">'+(m._isColeta ? (m._dtAN ? m._dtAN.substring(0,5) : '—') : m.menorDtStr)+' · ⚠'+m.atras+' 📅'+m.hoje+'</div>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -9072,8 +9187,8 @@ function hubRenderMacRanking(dataHub) {
     var _limite = new Date(_hoje); _limite.setDate(_limite.getDate()-3);
     ranking.forEach(function(m) {
       // Usar coluna A para MACs com remetente, coluna R para os demais
-      var usaRem = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
-      var dtRaw = usaRem ? (m._dtAN || m.menorDtStr) : m.menorDtStr;
+      var usaRem = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente) || (m._isColeta && m.remetente);
+      var dtRaw = m._isColeta ? (m._dtAN || '—') : m.menorDtStr;
       var dtStr = dtRaw && dtRaw !== '—' ? dtRaw : '';
       if (!dtStr) return; // ignora sem data
       // Converter dd/mm/yyyy ou dd/mm para Date
@@ -9083,7 +9198,7 @@ function hubRenderMacRanking(dataHub) {
       if (dtDate < _limite) return; // ignora mais de 3 dias atrás
       var dt = dtStr.substring(0,5);
       if (!byDate[dt]) byDate[dt] = [];
-      var destLabel = m._isAN && m.remetente ? m.remetente.split(' ')[0] : (m.dest||'').toUpperCase()==='EXA' && m.remetente ? m.remetente.split(' ')[0] : m.dest;
+      var destLabel = (m._isAN || m._isColeta || (m.dest||'').toUpperCase()==='EXA') && m.remetente ? m.remetente.split(' ')[0] : m.dest;
       byDate[dt].push(destLabel);
     });
     // Ordena datas
@@ -9270,7 +9385,7 @@ function descargaRenderizar() {
   dataHub.forEach(function(r) {
     var mac = r.mac && r.mac.trim();
     if (!mac || mac === '—' || invalidMacsD.has(mac)) return;
-    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'', _isAN:r.isAN||false, pesoTotal:0, disp:r.disp||'Patio' };
+    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'', _isAN:r.isAN||false, _isColeta:(r.etiq||'')==='Coleta', pesoTotal:0, disp:r.disp||'Patio' };
     var m = macMap[mac];
     m.pesoTotal = (m.pesoTotal||0) + (r.peso||0);
     m.disp = r.disp || m.disp;
@@ -9289,7 +9404,7 @@ function descargaRenderizar() {
     if (r.dtUlt && r.dtUlt !== '—') {
       var pts = r.dtUlt.split('/');
       if (pts.length >= 3) { var dt = new Date(pts[2].substring(0,4),pts[1]-1,pts[0]); if (!m.menorDt||dt<m.menorDt){m.menorDt=dt;m.menorDtStr=r.dtUlt;} }
-      if (r.isAN && r.dtColA) m._dtAN = r.dtColA;
+      if ((r.isAN || (r.etiq||'')=='Coleta') && r.dtColA) m._dtAN = r.dtColA;
     }
   });
 
@@ -9303,16 +9418,16 @@ function descargaRenderizar() {
     });
     var diff = m.menorDt ? (agora - m.menorDt) : 999*h24;
     var temSJK = (m.dest||'').toUpperCase().indexOf('SJK')!==-1;
-    m.score = m.atras*3 + m.hoje*2 + (diff<=h24?5:0) + m.ctrcs*0.1 + (temSJK?10:0);
-    m.urgente = m.atras>0 || diff<=h24;
+    m.score = m.atras*3 + m.hoje*2 + (diff<=h24?5:0) + m.ctrcs*0.1 + (temSJK?10:0) + (m._isColeta?1000:0);
+    m.urgente = m.atras>0 || diff<=h24 || m._isColeta;
     return m;
-  }).sort(function(a,b){return b.score-a.score;});
+  }).filter(function(m){ return !m._isColeta || m.ctrcs >= 15; }).sort(function(a,b){return b.score-a.score;});
 
   var list = document.getElementById('desc-mac-list');
   if (!list) return;
   var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º','11º','12º','13º','14º','15º'];
   list.innerHTML = _descMacRanking.slice(0,15).map(function(m,i) {
-    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
+    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente) || (m._isColeta && m.remetente);
     var bg = usaRemetente ? '#f97316' : '#111111';
     var txtColor = usaRemetente ? '#000000' : '#ffffff';
     var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
@@ -9321,7 +9436,7 @@ function descargaRenderizar() {
       '<div><span style="font-size:10px;opacity:.8">'+pos[i]+'</span>' +
       '<span style="font-weight:800;margin-left:6px">MAC: '+m.mac+' – '+destLabel+'</span></div>' +
       '<div style="text-align:right"><div style="font-size:13px;font-weight:800">'+pct+'%</div>' +
-      '<div style="font-size:9px;opacity:.85">'+(usaRemetente && m._dtAN ? m._dtAN.substring(0,5) : m.menorDtStr)+' · ⚠'+m.atras+' 📅'+m.hoje+'</div></div>' +
+      '<div style="font-size:9px;opacity:.85">'+(m._isColeta ? (m._dtAN ? m._dtAN.substring(0,5) : '—') : m.menorDtStr)+' · ⚠'+m.atras+' 📅'+m.hoje+'</div></div>' +
     '</div>';
   }).join('');
 
@@ -9427,7 +9542,7 @@ function imprimirListaDescarga() {
   // Montar linhas da tabela
   var linhas = lista.map(function(m, i) {
     var macLabel = 'MAC: ' + m.mac;
-    var destLabel = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente)
+    var destLabel = (m._isAN && m.remetente) || (m._isColeta && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente) || (m._isColeta && m.remetente)
       ? m.remetente : (m.dest || '—');
     var macDest = macLabel + ' – ' + destLabel;
     var status = m.disp || 'Patio';
@@ -9441,7 +9556,7 @@ function imprimirListaDescarga() {
     return '<tr>' +
       '<td style="text-align:center;font-weight:700">' + (pos[i]||((i+1)+'°')) + '</td>' +
       '<td style="font-weight:600">' + macDest + '</td>' +
-      '<td style="text-align:center">' + (m._dtAN || m.menorDtStr || '—') + '</td>' +
+      '<td style="text-align:center">' + (m._isColeta ? (m._dtAN || '—') : (m.menorDtStr || '—')) + '</td>' +
       '<td></td>' +
       '<td style="text-align:center">' + status + '</td>' +
       '<td style="text-align:center">' + tempo + '</td>' +
