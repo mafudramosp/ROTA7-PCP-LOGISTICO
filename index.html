@@ -2512,23 +2512,35 @@ function cgRenderizar(data) {
     // Top destinos por peso para mostrar como paletes
     var topDest = rd.destinos.slice().sort(function(a,b){ return b.peso_geral - a.peso_geral; });
 
-    var paletesHTML = topDest.map(function(d) {
+    // Cabeçalho sutil das colunas
+      var colHeader =
+        '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:2px;padding:2px 4px 3px 4px;border-bottom:1px solid rgba(148,163,184,0.25);margin-bottom:3px">' +
+          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px"></span>' +
+          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:right">Geral</span>' +
+          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:right">Disp.</span>' +
+          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:right">Crítico</span>' +
+        '</div>';
+
+      var paletesHTML = topDest.map(function(d) {
       var temCrit  = d.peso_critico > 0;
       var concluido = d._concluido || (d.perc_critico >= 96 && temCrit);
       var semCrit  = !temCrit;
       var planejado = !semCrit && !concluido && (d.peso_planejado > 0);
       var verde    = concluido || semCrit || planejado;
-      var critStr  = temCrit ? d.peso_critico.toFixed(1)+'t' : '';
       var bgCrit   = verde
         ? 'background:#dcfce7;border:1.5px solid #86efac;'
         : temCrit ? 'background:#fef2f2;border:1.5px solid #fca5a5;' : '';
       var siglaCor = verde ? 'color:#16a34a;font-weight:800' : temCrit ? 'color:#b91c1c;font-weight:800' : '';
       var iconCrit = concluido ? '✓ ' : planejado ? '📋 ' : '⚠ ';
-      var critBg   = verde ? '#bbf7d0;color:#16a34a' : '#fee2e2;color:#ea580c';
-      return '<div class="palete" style="' + bgCrit + '">' +
+      var critCor  = verde ? 'color:#16a34a' : 'color:#ea580c';
+      var geralStr = d.peso_total_bruto > 0 ? d.peso_total_bruto.toFixed(1)+'t' : '—';
+      var dispStr  = d.peso_geral > 0 ? d.peso_geral.toFixed(1)+'t' : '—';
+      var critStr  = temCrit ? iconCrit + d.peso_critico.toFixed(1)+'t' : '—';
+      return '<div class="palete" style="' + bgCrit + 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:2px;align-items:center">' +
         '<span class="palete-sigla" style="' + siglaCor + '">' + d.sigla + '</span>' +
-        '<span class="palete-ton">' + d.peso_geral.toFixed(1) + 't</span>' +
-        (critStr ? '<span class="palete-crit" style="background:' + critBg + ';font-weight:800">' + iconCrit + critStr + '</span>' : '') +
+        '<span style="font-size:10px;color:#64748b;text-align:right;font-family:monospace">' + geralStr + '</span>' +
+        '<span style="font-size:10px;color:#1e293b;font-weight:600;text-align:right;font-family:monospace">' + dispStr + '</span>' +
+        '<span style="font-size:10px;font-weight:800;text-align:right;font-family:monospace;' + (temCrit ? critCor : 'color:#94a3b8') + '">' + critStr + '</span>' +
         '</div>';
     }).join('');
 
@@ -2539,7 +2551,7 @@ function cgRenderizar(data) {
           '<div class="planta-reg-ton">' + rd.peso_geral.toFixed(1) + '<span class="planta-reg-ton-label"> t</span></div>' +
           (rd.peso_critico > 0 ? '<div class="planta-reg-crit">⚠ ' + rd.peso_critico.toFixed(1) + 't crítico</div>' : '<div class="planta-reg-crit" style="color:#94a3b8">✓ Sem crítico</div>') +
         '</div>' +
-        '<div class="planta-reg-body">' + (paletesHTML || '<div style="font-size:10px;color:#cbd5e1;text-align:center;padding:10px">Sem dados</div>') + '</div>' +
+        '<div class="planta-reg-body">' + colHeader + (paletesHTML || '<div style="font-size:10px;color:#cbd5e1;text-align:center;padding:10px">Sem dados</div>') + '</div>' +
       '</div>';
   });
   document.getElementById('cg-planta-corpo').innerHTML = plantaHTML;
@@ -2585,8 +2597,8 @@ function cgRenderizar(data) {
       '<td style="font-weight:700;color:#1e293b">' + d.sigla + concluidoBadge + '</td>' +
       '<td style="font-weight:700;color:#1e293b">' + (d.peso_total_bruto > 0 ? d.peso_total_bruto.toFixed(2) + ' t' : '—') + '</td>' +
       '<td style="font-weight:600">' + (d.peso_geral > 0 ? d.peso_geral.toFixed(2) + ' t' : '—') + '</td>' +
-      '<td style="font-weight:600;color:#1e293b">' + (d.peso_planejado > 0 ? d.peso_planejado.toFixed(2) + ' t' : '—') + '</td>' +
       '<td style="font-weight:700;color:#1e293b">' + (d.peso_critico > 0 ? d.peso_critico.toFixed(2) + ' t' : '—') + '</td>' +
+      '<td style="font-weight:600;color:#1e293b">' + (d.peso_planejado > 0 ? d.peso_planejado.toFixed(2) + ' t' : '—') + '</td>' +
       '<td><div class="crit-bar">' +
         '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + Math.min(100,d.perc_critico) + '%;background:' + barColor + '"></div></div>' +
         '<div class="crit-pct" style="color:' + barColor + ';font-weight:600">' + (d.perc_critico > 0 ? d.perc_critico.toFixed(1) + '%' : '0%') + '</div>' +
@@ -3102,8 +3114,8 @@ document.addEventListener('DOMContentLoaded', function() {
               <th>Destino</th>
               <th title="Peso total bruto do destino sem filtros">Ton. Geral</th>
               <th>Ton. Disponível</th>
-              <th>Ton. Planejado</th>
               <th>Ton. Crítico</th>
+              <th>Ton. Planejado</th>
               <th title="% do crítico que já está planejado">% Crítico Plan.</th>
               <th title="Ton.Planejado ÷ Ton.Disponível">% Plan./Disp.</th>
             </tr>
