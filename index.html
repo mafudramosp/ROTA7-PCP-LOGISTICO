@@ -4222,7 +4222,7 @@ function sbSalvarRelatorio() {
     var payload = JSON.stringify(comprimidos);
 
     // Dividir em chunks de ~800KB
-    var CHUNK_SIZE = 800000;
+    var CHUNK_SIZE = 600000;
     var chunks = [];
     if (payload.length <= CHUNK_SIZE) {
       chunks.push(payload);
@@ -4310,84 +4310,77 @@ function _relAplicarDados(registros, ts, forcar) {
 
 function sbCarregarRelatorio(forcar) {
   try {
-    // Primeiro verifica o metadado para saber quantos chunks existem e o timestamp
-    fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio_meta&select=valor,atualizado_em', {
+    // Buscar meta E tms_relatorio juntos numa única query com in()
+    fetch(SB_URL + '/configuracoes?chave=in.(tms_relatorio_meta,tms_relatorio)&select=chave,valor,atualizado_em', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(metaArr) {
+    }).then(function(r){ return r.json(); }).then(function(rows) {
+      if (!rows || !rows.length) return;
+
+      var metaRow = rows.find(function(r){ return r.chave === 'tms_relatorio_meta'; });
+      var relRow  = rows.find(function(r){ return r.chave === 'tms_relatorio'; });
+
       var meta = null;
       var tsRemoto = null;
 
-      if (metaArr && metaArr.length && metaArr[0].valor) {
-        try { meta = JSON.parse(metaArr[0].valor); } catch(e){}
-        tsRemoto = metaArr[0].atualizado_em ? new Date(metaArr[0].atualizado_em) : null;
+      if (metaRow && metaRow.valor) {
+        try { meta = JSON.parse(metaRow.valor); } catch(e){}
+        tsRemoto = metaRow.atualizado_em ? new Date(metaRow.atualizado_em) : null;
+      }
+
+      // Se não tem meta, usar timestamp do tms_relatorio direto
+      if (!tsRemoto && relRow && relRow.atualizado_em) {
+        tsRemoto = new Date(relRow.atualizado_em);
       }
 
       // Verificar se precisa atualizar
       if (!forcar && _relSupabaseTs && tsRemoto && tsRemoto.getTime() <= _relSupabaseTs.getTime()) return;
 
-      var totalChunks = (meta && meta.total) ? meta.total : 1;
       var ts = tsRemoto || new Date();
+      var totalChunks = (meta && meta.total) ? meta.total : 1;
 
       if (totalChunks === 1) {
-        // Compatibilidade com versão antiga (chunk único)
-        fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio&select=valor', {
-          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-        }).then(function(r){ return r.json(); }).then(function(data) {
-          if (!data || !data.length || !data[0].valor) return;
-          var parsed = JSON.parse(data[0].valor);
-          // Detectar se é formato comprimido (chave curta 'dv') ou antigo
-          if (parsed.length && parsed[0].dv !== undefined) {
-            _relAplicarDados(parsed, ts, forcar);
-          } else {
-            // Formato antigo — aplicar diretamente sem descomprimir
-            _relData = parsed;
-            _rcfF = {}; _relSort = {col:null,asc:true}; _rowCache = [];
-            if (typeof _hubTree !== 'undefined') _hubTree = null;
-            _relDataTs = ts; _relSupabaseTs = ts;
-            var u = document.getElementById('rel-updated');
-            if (u) u.textContent = 'Sincronizado: '+ts.toLocaleString('pt-BR')+' · '+_relData.length+' registros';
-            relFiltrar();
-            if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
-            if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
+        // Chunk único — pode ser formato novo (comprimido) ou antigo
+        if (!relRow || !relRow.valor) return;
+        var parsed;
+        try { parsed = JSON.parse(relRow.valor); } catch(e){ return; }
+        if (!parsed || !parsed.length) return;
+
+        if (parsed[0].dv !== undefined) {
+          // Formato novo comprimido
+          _relAplicarDados(parsed, ts, forcar);
+        } else {
+          // Formato antigo — campos completos, aplicar direto
+          _relData = parsed;
+          _rcfF = {}; _relSort = {col:null,asc:true}; _rowCache = [];
+          if (typeof _hubTree !== 'undefined') _hubTree = null;
+          _relDataTs = ts; _relSupabaseTs = ts;
+          var u = document.getElementById('rel-updated');
+          if (u) u.textContent = 'Sincronizado: '+ts.toLocaleString('pt-BR')+' · '+_relData.length+' registros';
+          relFiltrar();
+          if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
+          if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
+          if (forcar !== true) showToast('🔄 Relatório atualizado (' + ts.toLocaleString('pt-BR') + ')', 'info');
+          if (parsed.length < 800) {
+            setTimeout(function(){
+              showToast('⚠️ Relatório incompleto (' + parsed.length + ' registros). Reimporte o Excel TMS nesta máquina para sincronizar todos os dados.', 'error');
+            }, 2500);
           }
-        }).catch(function(){});
+        }
       } else {
-        // Carregar múltiplos chunks em paralelo
+        // Múltiplos chunks — buscar todos em paralelo
         var chaves = [];
         for (var i = 0; i < totalChunks; i++) chaves.push('tms_relatorio_' + i);
-        var filtro = 'chave=in.(' + chaves.join(',') + ')';
-        fetch(SB_URL + '/configuracoes?' + filtro + '&select=chave,valor', {
+        fetch(SB_URL + '/configuracoes?chave=in.(' + chaves.join(',') + ')&select=chave,valor', {
           headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
         }).then(function(r){ return r.json(); }).then(function(data) {
           if (!data || data.length < totalChunks) return;
-          // Ordenar por chave
           data.sort(function(a,b){ return a.chave < b.chave ? -1 : 1; });
           var todos = [];
-          data.forEach(function(d) {
-            try { todos = todos.concat(JSON.parse(d.valor)); } catch(e){}
-          });
+          data.forEach(function(d){ try { todos = todos.concat(JSON.parse(d.valor)); } catch(e){} });
           _relAplicarDados(todos, ts, forcar);
         }).catch(function(){});
       }
-    }).catch(function(){
-      // Fallback: tentar carregar sem meta (versão antiga)
-      fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio&select=valor,atualizado_em', {
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-      }).then(function(r){ return r.json(); }).then(function(data) {
-        if (!data || !data.length || !data[0].valor) return;
-        var ts = data[0].atualizado_em ? new Date(data[0].atualizado_em) : new Date();
-        if (!forcar && _relSupabaseTs && ts.getTime() <= _relSupabaseTs.getTime()) return;
-        _relData = JSON.parse(data[0].valor);
-        _rcfF = {}; _relSort = {col:null,asc:true}; _rowCache = [];
-        if (typeof _hubTree !== 'undefined') _hubTree = null;
-        _relDataTs = ts; _relSupabaseTs = ts;
-        var u = document.getElementById('rel-updated');
-        if (u) u.textContent = 'Sincronizado: '+ts.toLocaleString('pt-BR')+' · '+_relData.length+' registros';
-        relFiltrar();
-        if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
-        if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
-      }).catch(function(){});
-    });
+    }).catch(function(){});
   } catch(e) {}
 }
 
