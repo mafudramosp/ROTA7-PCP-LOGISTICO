@@ -1187,7 +1187,7 @@
 .planta-reg-body { flex:1; padding:8px; display:flex; flex-direction:column; gap:4px; min-height:80px; }
 
 /* Paletes/pilhas por destino */
-.palete { border-radius:4px; padding:4px 6px; display:flex; justify-content:space-between; align-items:center; gap:4px; border:1px solid rgba(0,0,0,.08); }
+.palete { border-radius:4px; padding:4px 6px; display:grid; grid-template-columns:2fr 1fr 1fr 1fr; align-items:center; gap:2px; border:1px solid rgba(0,0,0,.08); }
 .palete-sigla { font-size:10px; font-weight:800; }
 .palete-ton { font-size:9px; font-weight:600; opacity:.75; }
 .palete-crit { font-size:8px; font-weight:700; padding:1px 4px; border-radius:3px; background:rgba(0,0,0,.1); }
@@ -2516,9 +2516,9 @@ function cgRenderizar(data) {
       var colHeader =
         '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:2px;padding:2px 4px 3px 4px;border-bottom:1px solid rgba(148,163,184,0.25);margin-bottom:3px">' +
           '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px"></span>' +
-          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:right">Geral</span>' +
-          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:right">Disp.</span>' +
-          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:right">Crítico</span>' +
+          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;display:block;text-align:center">Geral</span>' +
+          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;display:block;text-align:center">Disp.</span>' +
+          '<span style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;display:block;text-align:center">Crítico</span>' +
         '</div>';
 
       var paletesHTML = topDest.map(function(d) {
@@ -2536,11 +2536,11 @@ function cgRenderizar(data) {
       var geralStr = d.peso_total_bruto > 0 ? d.peso_total_bruto.toFixed(1)+'t' : '—';
       var dispStr  = d.peso_geral > 0 ? d.peso_geral.toFixed(1)+'t' : '—';
       var critStr  = temCrit ? iconCrit + d.peso_critico.toFixed(1)+'t' : '—';
-      return '<div class="palete" style="' + bgCrit + 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:2px;align-items:center">' +
+      return '<div class="palete" style="' + bgCrit + '">' +
         '<span class="palete-sigla" style="' + siglaCor + '">' + d.sigla + '</span>' +
-        '<span style="font-size:10px;color:#64748b;text-align:right;font-family:monospace">' + geralStr + '</span>' +
-        '<span style="font-size:10px;color:#1e293b;font-weight:600;text-align:right;font-family:monospace">' + dispStr + '</span>' +
-        '<span style="font-size:10px;font-weight:800;text-align:right;font-family:monospace;' + (temCrit ? critCor : 'color:#94a3b8') + '">' + critStr + '</span>' +
+        '<span style="font-size:10px;color:#64748b;display:block;text-align:center;font-family:monospace">' + geralStr + '</span>' +
+        '<span style="font-size:10px;color:#1e293b;font-weight:600;display:block;text-align:center;font-family:monospace">' + dispStr + '</span>' +
+        '<span style="font-size:10px;font-weight:800;display:block;text-align:center;font-family:monospace;' + (temCrit ? critCor : 'color:#94a3b8') + '">' + critStr + '</span>' +
         '</div>';
     }).join('');
 
