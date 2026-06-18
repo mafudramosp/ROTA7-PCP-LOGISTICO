@@ -2374,6 +2374,11 @@ function cgImportar(input) {
         d.perc_plan_geral = d.peso_geral > 0 ? Math.round(d.peso_planejado/d.peso_geral*1000)/10 : 0;
         // Expor peso_critico para exibição na tabela
         d.peso_critico = d.peso_critico_total;
+        // Crítico RESTANTE = total - já planejado (usado para repriorizar)
+        d.peso_critico_restante = Math.max(0, Math.round((d.peso_critico_total - d.peso_critico_plan)*100)/100);
+        // Disponível RESTANTE = disponível - já planejado (usado para repriorizar)
+        // (peso_geral em si NÃO é alterado, pois é usado no cálculo de % Plan./Disp.)
+        d.peso_disponivel_restante = Math.max(0, Math.round((d.peso_geral - d.peso_planejado)*100)/100);
         return d;
       }).sort(function(a,b){ return b.peso_geral - a.peso_geral; });
 
@@ -2393,12 +2398,14 @@ function cgImportar(input) {
         blDestinos.forEach(function(bd) {
           if (!destAtual[bd.sigla] && bd.peso_critico_total > 0) {
             var concluido = JSON.parse(JSON.stringify(bd));
-            concluido.peso_critico_plan  = concluido.peso_critico_total;
-            concluido.perc_critico       = 100;
-            concluido.perc_plan_crit     = 100;
-            concluido.peso_planejado     = concluido.peso_geral;
-            concluido.perc_plan_geral    = 100;
-            concluido._concluido         = true;
+            concluido.peso_critico_plan        = concluido.peso_critico_total;
+            concluido.peso_critico_restante     = 0;
+            concluido.perc_critico             = 100;
+            concluido.perc_plan_crit           = 100;
+            concluido.peso_planejado           = concluido.peso_geral;
+            concluido.peso_disponivel_restante = 0;
+            concluido.perc_plan_geral          = 100;
+            concluido._concluido               = true;
             destinos.push(concluido);
           }
         });
@@ -2560,18 +2567,152 @@ function cgRenderizar(data) {
 
   // ── TABELA ──
   document.getElementById('cg-tabela-resumo').textContent = destinos.length + ' destinos · ' + totalGeral.toFixed(1) + 't total';
+  // (resumo de composições é atualizado após o agrupamento, mais abaixo)
 
-  // ── SCORE: Peso Crítico(40) + Peso Disponível(30) + Peso Geral(20) + Tem Coleta(10) ──
-  var maxCrit  = Math.max.apply(null, destinos.map(function(d){ return d.peso_critico||0; })) || 1;
-  var maxDisp  = Math.max.apply(null, destinos.map(function(d){ return d.peso_geral||0; })) || 1;
+  // ── SCORE: Crítico RESTANTE(40) + Peso Disponível(30) + Peso Geral(20) + Tem Coleta(10) ──
+  // Crítico restante = crítico total - crítico já planejado.
+  // Conforme o destino é planejado, seu crítico restante cai e ele perde prioridade no ranking.
+  var maxCrit  = Math.max.apply(null, destinos.map(function(d){ return d.peso_critico_restante||0; })) || 1;
+  var maxDisp  = Math.max.apply(null, destinos.map(function(d){ return d.peso_disponivel_restante||0; })) || 1;
   var maxGeral = Math.max.apply(null, destinos.map(function(d){ return d.peso_total_bruto||0; })) || 1;
   destinos = destinos.slice().sort(function(a, b) {
-    var scoreA = ((a.peso_critico||0)/maxCrit)*40 + ((a.peso_geral||0)/maxDisp)*30 + ((a.peso_total_bruto||0)/maxGeral)*20 + (a.qtd_coleta>0?10:0);
-    var scoreB = ((b.peso_critico||0)/maxCrit)*40 + ((b.peso_geral||0)/maxDisp)*30 + ((b.peso_total_bruto||0)/maxGeral)*20 + (b.qtd_coleta>0?10:0);
+    var scoreA = ((a.peso_critico_restante||0)/maxCrit)*40 + ((a.peso_disponivel_restante||0)/maxDisp)*30 + ((a.peso_total_bruto||0)/maxGeral)*20 + (a.qtd_coleta>0?10:0);
+    var scoreB = ((b.peso_critico_restante||0)/maxCrit)*40 + ((b.peso_disponivel_restante||0)/maxDisp)*30 + ((b.peso_total_bruto||0)/maxGeral)*20 + (b.qtd_coleta>0?10:0);
     return scoreB - scoreA;
   });
-  // Adicionar posição
-  destinos.forEach(function(d,i){ d._rank = i+1; });
+  // ══════════════════════════════════════════════════════════════════════
+  // COMPOSIÇÃO POR DOCA — agrupa destinos que saem pela mesma doca física
+  // (somente para a tabela; a planta visual continua por destino individual)
+  // ══════════════════════════════════════════════════════════════════════
+  var CG_COMPOSICOES = [
+    // Doca 91-93
+    ['DEV'],
+    // Doca 97-99
+    ['FOR'],
+    // Doca 100-101
+    ['REC'],
+    // Doca 107-108
+    ['ENP','VDC'],
+    // Doca 109-110
+    ['SRR','VIX'],
+    // Doca 111 (PPY — linha própria no PDF)
+    ['PPY'],
+    // Doca 111 (JDF — linha própria no PDF)
+    ['JDF'],
+    // Doca 103-104
+    ['SSA'],
+    // Doca 113-114 (FEC — linha própria)
+    ['FEC'],
+    // Doca 113-114 (BAR-JDO-PNZ)
+    ['BAR','JDO','PNZ'],
+    // Doca 115
+    ['THE'],
+    // Doca 116
+    ['NAT'],
+    // Doca 118
+    ['JPA'],
+    // Doca 119
+    ['IMP'],
+    // Doca 120
+    ['SLZ'],
+    // Doca 122
+    ['AJU'],
+    // Doca 123
+    ['MCZ'],
+    // Doca 124
+    ['CAU'],
+    // Doca 129
+    ['UDI','UD2'],
+    // Doca 127
+    ['BSB'],
+    // Doca 144
+    ['CPQ','RAO','BAU','SJP','SCA'],
+    // Doca 126
+    ['CGB','MTN','MTS'],
+    // Doca 128-129
+    ['CGR','MSI'],
+    // Doca 145
+    ['PVH','RBR','JPR'],
+    // Doca 146
+    ['RIO','RSD','CAW'],
+    // Doca 147
+    ['GYN','GOI'],
+    // Doca 148-149
+    ['PMW'],
+    // Doca 150
+    ['MAO','BVB','AMI'],
+    // Doca 151
+    ['BEL','STM','MCP'],
+    // Doca 152-153
+    ['POA','PET','RIA','SCZ'],
+    // Doca 154
+    ['FLN','CCM'],
+    // Doca 155
+    ['JLL','BNU','XAP','JCB'],
+    // Doca 156
+    ['CWB','CAC','PFB','FBE','CXJ'],
+    // Doca 158
+    ['LDO','UMU','MGF'],
+    // Doca 159 (primeira linha do PDF)
+    ['BHZ','DIV','MOC','IPN'],
+    // Doca 159 (segunda linha do PDF: TFL-GVR-BHZ)
+    ['TFL','GVR'],
+    // Doca 160
+    ['SSZ','SOD'],
+    // Doca 161
+    ['SJK'],
+    // Doca 162 (JDI-PPB-BGI-MEU-SOD — removendo PPB duplicado do PDF)
+    ['JDI','PPB','BGI','MEU','SOD'],
+    // Doca 163
+    ['SAO']
+  ];
+  // Mapa sigla → índice do grupo de composição
+  var siglaParaGrupo = {};
+  CG_COMPOSICOES.forEach(function(grupo, gi) {
+    grupo.forEach(function(s){ siglaParaGrupo[s] = gi; });
+  });
+
+  // Agrupar destinos calculados (destinos[]) por composição
+  var gruposMap = {};
+  destinos.forEach(function(d) {
+    var sig = (d.sigla||'').toUpperCase();
+    var gi  = siglaParaGrupo.hasOwnProperty(sig) ? siglaParaGrupo[sig] : ('solo_'+sig);
+    if (!gruposMap[gi]) {
+      gruposMap[gi] = {
+        siglas: [], regiao: d.regiao,
+        peso_total_bruto:0, peso_geral:0, peso_critico_restante:0, peso_planejado:0,
+        peso_critico_total:0, peso_disponivel_restante:0, _concluido:true, qtd_coleta:0
+      };
+    }
+    var g = gruposMap[gi];
+    g.siglas.push(d.sigla);
+    g.peso_total_bruto         += d.peso_total_bruto || 0;
+    g.peso_geral               += d.peso_geral || 0;
+    g.peso_critico_restante    += d.peso_critico_restante || 0;
+    g.peso_critico_total       += d.peso_critico_total || 0;
+    g.peso_planejado           += d.peso_planejado || 0;
+    g.peso_disponivel_restante += d.peso_disponivel_restante || 0;
+    g.qtd_coleta                += d.qtd_coleta || 0;
+    if (!d._concluido) g._concluido = false;
+  });
+  var composicoes = Object.keys(gruposMap).map(function(k){ return gruposMap[k]; });
+  // Percentuais agregados por composição
+  composicoes.forEach(function(g) {
+    g.perc_critico    = g.peso_critico_total > 0 ? Math.min(100, Math.round((g.peso_critico_total-g.peso_critico_restante)/g.peso_critico_total*1000)/10) : 0;
+    g.perc_plan_geral = g.peso_geral > 0 ? Math.min(100, Math.round(g.peso_planejado/g.peso_geral*1000)/10) : 0;
+  });
+  // Reordenar composições pelo mesmo critério de score (já calculado por destino,
+  // aqui repetimos a fórmula agregada para manter a priorização coerente)
+  var maxCritC  = Math.max.apply(null, composicoes.map(function(g){ return g.peso_critico_restante||0; })) || 1;
+  var maxDispC  = Math.max.apply(null, composicoes.map(function(g){ return g.peso_disponivel_restante||0; })) || 1;
+  var maxGeralC = Math.max.apply(null, composicoes.map(function(g){ return g.peso_total_bruto||0; })) || 1;
+  composicoes.sort(function(a,b) {
+    var sa = ((a.peso_critico_restante||0)/maxCritC)*40 + ((a.peso_disponivel_restante||0)/maxDispC)*30 + ((a.peso_total_bruto||0)/maxGeralC)*20 + (a.qtd_coleta>0?10:0);
+    var sb = ((b.peso_critico_restante||0)/maxCritC)*40 + ((b.peso_disponivel_restante||0)/maxDispC)*30 + ((b.peso_total_bruto||0)/maxGeralC)*20 + (b.qtd_coleta>0?10:0);
+    return sb - sa;
+  });
+  composicoes.forEach(function(g,i){ g._rank = i+1; });
+  document.getElementById('cg-tabela-resumo').textContent = composicoes.length + ' composições · ' + totalGeral.toFixed(1) + 't total';
 
   var REG_CSS = {
     'NORDESTE':'NORDESTE','NORTE CO':'NORTE-CO','SUDESTE':'SUDESTE',
@@ -2579,25 +2720,24 @@ function cgRenderizar(data) {
   };
 
   var tbody = '';
-  destinos.forEach(function(d) {
-    var css = REG_CSS[d.regiao.toUpperCase()] || 'OUTROS';
-    var critPct = d.perc_critico;
+  composicoes.forEach(function(d) {
+    var css = REG_CSS[(d.regiao||'').toUpperCase()] || 'OUTROS';
     var barColor = '#475569';
 
     var rowCls = (d._concluido || (d.perc_critico >= 96 && d.peso_critico_total > 0))
       ? 'cg-row-green'
       : d.peso_critico_total > 0 ? 'cg-row-red' : '';
-    var borderLeft = '';
-    var concluidoBadge = '';
+
+    var siglaLabel = d.siglas.join(' - ');
 
     tbody +=
-      '<tr class="' + rowCls + '" style="' + borderLeft + '">' +
+      '<tr class="' + rowCls + '">' +
       '<td style="text-align:center;font-weight:700;color:#1e293b;font-size:12px">' + (d._rank||'') + 'º</td>' +
-      '<td><span class="tag-reg tag-' + css + '">' + d.regiao + '</span></td>' +
-      '<td style="font-weight:700;color:#1e293b">' + d.sigla + concluidoBadge + '</td>' +
+      '<td><span class="tag-reg tag-' + css + '">' + (d.regiao||'') + '</span></td>' +
+      '<td style="font-weight:700;color:#1e293b">' + siglaLabel + '</td>' +
       '<td style="font-weight:700;color:#1e293b">' + (d.peso_total_bruto > 0 ? d.peso_total_bruto.toFixed(2) + ' t' : '—') + '</td>' +
-      '<td style="font-weight:600">' + (d.peso_geral > 0 ? d.peso_geral.toFixed(2) + ' t' : '—') + '</td>' +
-      '<td style="font-weight:700;color:#1e293b">' + (d.peso_critico > 0 ? d.peso_critico.toFixed(2) + ' t' : '—') + '</td>' +
+      '<td style="font-weight:600">' + (d.peso_disponivel_restante > 0 ? d.peso_disponivel_restante.toFixed(2) + ' t' : '—') + '</td>' +
+      '<td style="font-weight:700;color:#1e293b">' + (d.peso_critico_restante > 0 ? d.peso_critico_restante.toFixed(2) + ' t' : '—') + '</td>' +
       '<td style="font-weight:600;color:#1e293b">' + (d.peso_planejado > 0 ? d.peso_planejado.toFixed(2) + ' t' : '—') + '</td>' +
       '<td><div class="crit-bar">' +
         '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + Math.min(100,d.perc_critico) + '%;background:' + barColor + '"></div></div>' +
@@ -3000,7 +3140,11 @@ document.addEventListener('DOMContentLoaded', function() {
   } catch(e) {}
   try {
     var saved = localStorage.getItem('cg_data');
-    if (saved) { _cgData = JSON.parse(saved); cgRenderizar(_cgData); }
+    if (saved) {
+      _cgData = JSON.parse(saved);
+      if (typeof cgGarantirCriticoRestante === 'function') _cgData = cgGarantirCriticoRestante(_cgData);
+      cgRenderizar(_cgData);
+    }
   } catch(e) {}
 });
 </script>
@@ -3111,7 +3255,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <tr>
               <th style="text-align:center;width:40px">Pos.</th>
               <th>Região</th>
-              <th>Destino</th>
+              <th>Composição</th>
               <th title="Peso total bruto do destino sem filtros">Ton. Geral</th>
               <th>Ton. Disponível</th>
               <th>Ton. Crítico</th>
@@ -4513,6 +4657,21 @@ function sbSalvarPlanejamento() {
   } catch(e) {}
 }
 
+// Garante que peso_critico_restante e peso_disponivel_restante existem e estão corretos
+// (proteção contra dados antigos salvos no Supabase/localStorage sem esses campos)
+function cgGarantirCriticoRestante(cgData) {
+  if (!cgData || !cgData.destinos) return cgData;
+  cgData.destinos.forEach(function(d) {
+    var total = d.peso_critico_total || 0;
+    var plan  = d.peso_critico_plan  || 0;
+    d.peso_critico_restante = Math.max(0, Math.round((total - plan) * 100) / 100);
+    var disp     = d.peso_geral     || 0;
+    var planGer  = d.peso_planejado || 0;
+    d.peso_disponivel_restante = Math.max(0, Math.round((disp - planGer) * 100) / 100);
+  });
+  return cgData;
+}
+
 function sbCarregarPlanejamento() {
   try {
     fetch(SB_URL + '/configuracoes?chave=eq.tms_planejamento&select=valor,atualizado_em', {
@@ -4522,7 +4681,7 @@ function sbCarregarPlanejamento() {
         // Só carrega se não tem dados locais mais recentes
         var remoto = JSON.parse(data[0].valor);
         if (!_cgData || !_cgData.ts || new Date(remoto.ts) > new Date(_cgData.ts)) {
-          _cgData = remoto;
+          _cgData = cgGarantirCriticoRestante(remoto);
           try { localStorage.setItem('cg_data', JSON.stringify(_cgData)); } catch(e){}
           cgRenderizar(_cgData);
         }
