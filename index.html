@@ -2484,6 +2484,27 @@ function cgImportar(input) {
   reader.readAsArrayBuffer(file);
 }
 
+// Estado: composições destrinchadas (true) ou agrupadas (false)
+// Persiste entre re-renderizações dentro da mesma sessão
+var _cgComposicaoExpandida = true;
+
+function cgToggleExpandir(expandir) {
+  _cgComposicaoExpandida = expandir;
+  var btnExp = document.getElementById('cg-btn-expandir');
+  var btnAgr = document.getElementById('cg-btn-agrupar');
+  if (btnExp && btnAgr) {
+    if (expandir) {
+      btnExp.style.background = '#1e293b'; btnExp.style.color = '#fff';
+      btnAgr.style.background = '#fff';    btnAgr.style.color = '#475569';
+    } else {
+      btnAgr.style.background = '#1e293b'; btnAgr.style.color = '#fff';
+      btnExp.style.background = '#fff';    btnExp.style.color = '#475569';
+    }
+  }
+  // Re-renderiza com o novo estado, sem precisar reimportar nada
+  if (_cgData) cgRenderizar(_cgData);
+}
+
 function cgRenderizar(data) {
   document.getElementById('cg-empty').style.display = 'none';
   document.getElementById('cg-conteudo').style.display = 'block';
@@ -2650,13 +2671,11 @@ function cgRenderizar(data) {
     // Doca 155
     ['JLL','BNU','XAP','JCB'],
     // Doca 156
-    ['CWB','CAC','PFB','FBE','CXJ'],
+    ['CWB','CAC','PFB','FBE','CXJ','IGU'],
     // Doca 158
     ['LDO','UMU','MGF'],
-    // Doca 159 (primeira linha do PDF)
-    ['BHZ','DIV','MOC','IPN'],
-    // Doca 159 (segunda linha do PDF: TFL-GVR-BHZ)
-    ['TFL','GVR'],
+    // Doca 159 (fundido: BHZ-GVR-TFL-MOC-IPN-DIV)
+    ['BHZ','GVR','TFL','MOC','IPN','DIV'],
     // Doca 160
     ['SSZ','SOD'],
     // Doca 161
@@ -2679,13 +2698,14 @@ function cgRenderizar(data) {
     var gi  = siglaParaGrupo.hasOwnProperty(sig) ? siglaParaGrupo[sig] : ('solo_'+sig);
     if (!gruposMap[gi]) {
       gruposMap[gi] = {
-        siglas: [], regiao: d.regiao,
+        siglas: [], itens: [], regiao: d.regiao,
         peso_total_bruto:0, peso_geral:0, peso_critico_restante:0, peso_planejado:0,
         peso_critico_total:0, peso_disponivel_restante:0, _concluido:true, qtd_coleta:0
       };
     }
     var g = gruposMap[gi];
     g.siglas.push(d.sigla);
+    g.itens.push(d); // guarda o destino individual completo p/ exibição destrinchada
     g.peso_total_bruto         += d.peso_total_bruto || 0;
     g.peso_geral               += d.peso_geral || 0;
     g.peso_critico_restante    += d.peso_critico_restante || 0;
@@ -2720,7 +2740,7 @@ function cgRenderizar(data) {
   };
 
   var tbody = '';
-  composicoes.forEach(function(d) {
+  composicoes.forEach(function(d, idxComp) {
     var css = REG_CSS[(d.regiao||'').toUpperCase()] || 'OUTROS';
     var barColor = '#475569';
 
@@ -2730,8 +2750,14 @@ function cgRenderizar(data) {
 
     var siglaLabel = d.siglas.join(' - ');
 
+    // Linha-resumo (com a colocação 1º, 2º, 3º...) sempre BRANCA
+    var faixaResumoBg = '#ffffff';
+    // Linhas destrinchadas (↳ destino individual) sempre CINZA CLARO
+    var faixaItemBg = '#f8fafc';
+
+    // ── Linha-resumo da composição (totais agregados) ──
     tbody +=
-      '<tr class="' + rowCls + '">' +
+      '<tr class="' + rowCls + '" style="background:' + faixaResumoBg + '">' +
       '<td style="text-align:center;font-weight:700;color:#1e293b;font-size:12px">' + (d._rank||'') + 'º</td>' +
       '<td><span class="tag-reg tag-' + css + '">' + (d.regiao||'') + '</span></td>' +
       '<td style="font-weight:700;color:#1e293b">' + siglaLabel + '</td>' +
@@ -2748,6 +2774,42 @@ function cgRenderizar(data) {
         '<div class="crit-pct" style="color:' + barColor + ';font-weight:600">' + (d.perc_plan_geral > 0 ? d.perc_plan_geral.toFixed(1) + '%' : '0%') + '</div>' +
       '</div></td>' +
       '</tr>';
+
+    // ── Linhas destrinchadas: 1 por destino individual dentro da composição ──
+    // Só destrincha se houver mais de 1 destino no grupo (composição real)
+    // E somente quando o usuário está no modo "Expandir Composições"
+    if (_cgComposicaoExpandida && d.itens && d.itens.length > 1) {
+      // Ordena os itens internos pelo mesmo critério de prioridade (crítico restante desc)
+      var itensOrdenados = d.itens.slice().sort(function(a,b){
+        return (b.peso_critico_restante||0) - (a.peso_critico_restante||0);
+      });
+      itensOrdenados.forEach(function(it) {
+        var critPctIt = it.peso_critico_total > 0
+          ? Math.min(100, Math.round((it.peso_critico_total-it.peso_critico_restante)/it.peso_critico_total*1000)/10)
+          : 0;
+        var planPctIt = it.peso_geral > 0
+          ? Math.min(100, Math.round((it.peso_planejado||0)/it.peso_geral*1000)/10)
+          : 0;
+        tbody +=
+          '<tr style="background:' + faixaItemBg + '">' +
+          '<td></td>' +
+          '<td></td>' +
+          '<td style="padding-left:24px;color:#64748b;font-size:12px">↳ ' + it.sigla + '</td>' +
+          '<td style="color:#64748b;font-size:12px">' + (it.peso_total_bruto > 0 ? it.peso_total_bruto.toFixed(2) + ' t' : '—') + '</td>' +
+          '<td style="color:#64748b;font-size:12px">' + (it.peso_disponivel_restante > 0 ? it.peso_disponivel_restante.toFixed(2) + ' t' : '—') + '</td>' +
+          '<td style="color:#64748b;font-size:12px">' + (it.peso_critico_restante > 0 ? it.peso_critico_restante.toFixed(2) + ' t' : '—') + '</td>' +
+          '<td style="color:#64748b;font-size:12px">' + (it.peso_planejado > 0 ? it.peso_planejado.toFixed(2) + ' t' : '—') + '</td>' +
+          '<td><div class="crit-bar">' +
+            '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + critPctIt + '%;background:#94a3b8"></div></div>' +
+            '<div class="crit-pct" style="color:#94a3b8;font-weight:500;font-size:11px">' + (critPctIt > 0 ? critPctIt.toFixed(1) + '%' : '0%') + '</div>' +
+          '</div></td>' +
+          '<td><div class="crit-bar">' +
+            '<div class="crit-bar-bg"><div class="crit-bar-fill" style="width:' + planPctIt + '%;background:#94a3b8"></div></div>' +
+            '<div class="crit-pct" style="color:#94a3b8;font-weight:500;font-size:11px">' + (planPctIt > 0 ? planPctIt.toFixed(1) + '%' : '0%') + '</div>' +
+          '</div></td>' +
+          '</tr>';
+      });
+    }
   });
   document.getElementById('cg-tbody').innerHTML = tbody;
 
@@ -3247,7 +3309,17 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="cg-tabela-wrap" id="cg-tabela-wrap">
       <div class="cg-tabela-header">
         <h3>Estoque por Destino</h3>
-        <span id="cg-tabela-resumo"></span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button id="cg-btn-expandir" onclick="cgToggleExpandir(true)"
+            style="padding:5px 12px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;color:#475569;font-size:11px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif">
+            ↕ Expandir Composições
+          </button>
+          <button id="cg-btn-agrupar" onclick="cgToggleExpandir(false)"
+            style="padding:5px 12px;border-radius:6px;border:1px solid #e2e8f0;background:#1e293b;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif">
+            ↑ Agrupar Composições
+          </button>
+          <span id="cg-tabela-resumo"></span>
+        </div>
       </div>
       <div style="overflow-x:auto">
         <table class="cg-table">
@@ -4286,20 +4358,50 @@ function loadData() {
 
 // Polling automático a cada 15 segundos
 var _sbLastHash = '';
+var _sbPollTimer = null;
+
+function sbPollUmaVez() {
+  fbGetAll().then(function(recs) {
+    if (!recs || !recs.length) return;
+    var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+    var hash = f.map(function(r){ return r._id+':'+r.gerado; }).join('|');
+    if (hash === _sbLastHash) return;
+    _sbLastHash = hash;
+    progData = deduplicar(f);
+    nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
+    saveLocal(); renderProg(); renderHist();
+    showToast('🔄 Dados atualizados', 'info');
+  }).catch(function(){});
+}
+
 function iniciarEscutaRealtime() {
-  setInterval(function() {
-    fbGetAll().then(function(recs) {
-      if (!recs || !recs.length) return;
-      var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
-      var hash = f.map(function(r){ return r._id+':'+r.gerado; }).join('|');
-      if (hash === _sbLastHash) return;
-      _sbLastHash = hash;
-      progData = deduplicar(f);
-      nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
-      saveLocal(); renderProg(); renderHist();
-      showToast('🔄 Dados atualizados', 'info');
-    }).catch(function(){});
-  }, 15000);
+  if (_sbPollTimer) clearInterval(_sbPollTimer);
+  _sbPollTimer = setInterval(sbPollUmaVez, 15000);
+
+  // Mobile: quando app volta do background, verificar imediatamente
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+      // Ao voltar do background: reenviar pendentes ANTES de buscar novos
+      setTimeout(function() {
+        _syncReenviarPendentes();
+        sbPollUmaVez();
+      }, 800);
+    }
+  });
+
+  // Mobile: ao ganhar foco (ex: usuário alterna abas)
+  window.addEventListener('focus', function() {
+    setTimeout(function() {
+      _syncReenviarPendentes();
+      sbPollUmaVez();
+    }, 500);
+  });
+
+  // Reenviar pendentes no próximo ciclo de polling também
+  setInterval(_syncReenviarPendentes, 30000);
+
+  // Reenviar pendentes que já existiam antes de abrir a página
+  setTimeout(_syncReenviarPendentes, 3000);
 }
 
 // Sincronizar manualmente
@@ -4757,9 +4859,60 @@ async function salvarTudoFirebase() {
 }
 
 // saveData — salva local + Firebase
+// ── Fila de pendências persistente (mobile-safe) ──────────────────────────
+// Quando fbSave falha (rede instável, app em background), o ID fica na fila.
+// Na próxima chance de rede (visibilitychange, focus, intervalo), tentamos reenviar.
+var _syncPendentes = new Set(JSON.parse(localStorage.getItem('pvg_sync_pendentes') || '[]'));
+
+function _syncSalvarFila() {
+  try { localStorage.setItem('pvg_sync_pendentes', JSON.stringify(Array.from(_syncPendentes))); } catch(e) {}
+}
+
+function _syncReenviarPendentes() {
+  if (!_syncPendentes.size) return;
+  var ids = Array.from(_syncPendentes);
+  ids.forEach(function(id) {
+    var rec = progData.find(function(r){ return String(r._id) === String(id); });
+    if (!rec) { _syncPendentes.delete(id); return; }
+    fbSave(rec).then(function() {
+      _syncPendentes.delete(id);
+      _syncSalvarFila();
+      console.log('[sync] Pendente reenviado ok: id=' + id);
+    }).catch(function(){});
+  });
+}
+
+function _syncEnviar(record) {
+  fbSave(record).then(function() {
+    // sucesso: garantir que não está na fila de pendentes
+    _syncPendentes.delete(String(record._id));
+    _syncSalvarFila();
+  }).catch(function(e) {
+    // falha: adicionar à fila persistente para retry posterior
+    console.warn('[sync] fbSave falhou, adicionando à fila pendente id=' + record._id, e);
+    _syncPendentes.add(String(record._id));
+    _syncSalvarFila();
+    // Tentar novamente em 5s
+    setTimeout(function() {
+      var r = progData.find(function(x){ return String(x._id) === String(record._id); });
+      if (r) fbSave(r).then(function() {
+        _syncPendentes.delete(String(r._id));
+        _syncSalvarFila();
+      }).catch(function(){});
+    }, 5000);
+  });
+}
+
 function saveData(record) {
   saveLocal();
-  if (record) fbSave(record);
+  if (record) {
+    // Registro específico → salva com retry e fila persistente
+    _syncEnviar(record);
+  } else {
+    // Sem record específico → sincroniza toda a lista (ex: importação, datas)
+    var lista = progData.filter(function(r){ return r.destino && r._id; });
+    lista.forEach(function(r){ _syncEnviar(r); });
+  }
 }
 
 // Alertas via Supabase
