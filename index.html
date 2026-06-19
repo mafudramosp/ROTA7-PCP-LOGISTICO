@@ -3376,6 +3376,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="rel-stat-card"><div class="rel-stat-label">Total CTRCs</div><div class="rel-stat-val" id="rel-s-total">—</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Peso total (kg)</div><div class="rel-stat-val" id="rel-s-peso">—</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Valor total</div><div class="rel-stat-val" id="rel-s-valor">—</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label">Volumes</div><div class="rel-stat-val" id="rel-s-vols">—</div></div>
     <div class="rel-stat-card rel-stat-red" id="rel-card-crit" onclick="relToggleCard('crit')" style="cursor:pointer" title="Clique para filtrar críticos"><div class="rel-stat-label">Críticos (t)</div><div class="rel-stat-val" id="rel-s-crit">—</div></div>
     <div class="rel-stat-card rel-stat-blue" id="rel-card-plan" onclick="relToggleCard('plan')" style="cursor:pointer" title="Clique para filtrar planejados"><div class="rel-stat-label">Planejados (t)</div><div class="rel-stat-val" id="rel-s-plan">—</div></div>
     <div class="rel-stat-card rel-stat-green" id="rel-card-disp" onclick="relToggleCard('disp')" style="cursor:pointer" title="Clique para filtrar disponíveis"><div class="rel-stat-label">Disponíveis (t)</div><div class="rel-stat-val" id="rel-s-disp">—</div></div>
@@ -3723,8 +3724,9 @@ function relProcessarRows(rows) {
 
   var cMacDest=colFallback('V','DESTINO_MAC','MAC_DESTINO','FILIAL_MAC');
   var cReboque=colFallback('AS','Reboque transfer.','REBOQUE_TRANSFER');
-  var cVols=colFallback('I','Volumes','QT_VOLUMES','QTDE_VOLUMES');
+  var cVols=relLetterIdx('I'); // forçado pela coluna I (índice 8), conforme solicitado
   var cPeso=colFallback('M','P_Operacional','P_Calculo','Peso operacional');
+
   var cValor=colFallback('P','Valor mercadoria','VALOR_MERCADORIA','VALOR_NF','VALOR_TOTAL');
   var cMotivo=colFallback('S','Motivo','MOTIVO');
   var cSit=colFallback('AH','SITUACAO_PREV_EMBARQUE');
@@ -3750,6 +3752,12 @@ function relProcessarRows(rows) {
       var amP=!!(row[cFimDes]&&String(row[cFimDes]).trim());
       var eqRaw = row[cEquip];
       var eqP=!!(eqRaw!==null&&eqRaw!==undefined&&String(eqRaw).trim()!==''&&parseFloat(String(eqRaw).replace(',','.'))!==0&&!isNaN(parseFloat(String(eqRaw).replace(',','.'))));
+      // AC igual a 0 (numericamente zero, distinto de "vazio"): usado no critério de Coleta
+      var acEqualZero = (function(){
+        if (eqRaw===null || eqRaw===undefined || String(eqRaw).trim()==='') return false;
+        var n = parseFloat(String(eqRaw).replace(',','.'));
+        return !isNaN(n) && n===0;
+      })();
       // AL e AM: 0 se em branco, 1 se preenchido
       var alVal = (row[cIniDes]!==null&&row[cIniDes]!==undefined&&String(row[cIniDes]).trim()!=='') ? 1 : 0;
       var amVal = (row[cFimDes]!==null&&row[cFimDes]!==undefined&&String(row[cFimDes]).trim()!=='') ? 1 : 0;
@@ -3769,47 +3777,19 @@ function relProcessarRows(rows) {
         disp = 'Disponível';
       }
 
-      // ── NOVA REGRA: W vazio → verificar coluna AN como MAC alternativo ──
-      // Apenas para linhas onde coluna B = 510 ou 540
+      // ── REGRA DE ORIGEM DO MAC ──
+      // Se a coluna W (Nr_Mac) tem informação: usa o MAC da coluna W normalmente
+      //   (a sigla de origem vem da coluna V, já mapeada em cMacDest)
+      // Se a coluna W estiver em branco: usa o MAC da coluna AN, com remetente da coluna E,
+      //   desde que coluna B = 510 ou 540, AC=0 (literal), AE vazia e AM vazia
       var macW = String(row[cMac]||'').trim();
       var colBRaw = row[cColB];
       var colBNum = parseInt(String(colBRaw||'').trim()) || 0;
       var macAN = String(row[cMacAN]||'').trim();
       var usaMacAN = false;
       if (!macW && macAN && (colBNum === 510 || colBNum === 540)) {
-        // Validar data da coluna A: apenas ontem, hoje e futuro
-        var colAVal = row[cColA];
-        var dataValida = false;
-        if (colAVal !== null && colAVal !== undefined && String(colAVal).trim() !== '') {
-          var dtStr = String(colAVal).trim().split(' ')[0];
-          // Suporte a serial do Excel (número)
-          var colANum = parseFloat(dtStr.replace(',','.'));
-          if (!isNaN(colANum) && colANum > 40000) {
-            // Converter serial Excel → Date
-            var dtSerial = new Date((colANum - 25569) * 86400000);
-            var hoje0 = new Date(); hoje0.setHours(0,0,0,0);
-            var ontem0 = new Date(hoje0); ontem0.setDate(ontem0.getDate()-1);
-            dataValida = dtSerial >= ontem0;
-          } else {
-            // Normalizar dd/mm/yyyy ou yyyy-mm-dd
-            if (dtStr.match(/^\d{4}-\d{2}-\d{2}/)) {
-              var dp = dtStr.split('-');
-              dtStr = dp[2]+'/'+dp[1]+'/'+dp[0];
-            }
-            var pts = dtStr.split('/');
-            if (pts.length === 3) {
-              var dtData = new Date(parseInt(pts[2].substring(0,4)), parseInt(pts[1])-1, parseInt(pts[0]), 0, 0, 0);
-              var hoje1 = new Date(); hoje1.setHours(0,0,0,0);
-              var ontem1 = new Date(hoje1); ontem1.setDate(ontem1.getDate()-1);
-              dataValida = dtData >= ontem1;
-            }
-          }
-        }
-        if (dataValida) {
-          // Só Patio ou Em descarregamento — AC=0 e AE vazio
-          if (!aeP && !eqP) {
-            usaMacAN = true;
-          }
+        if (acEqualZero && !aeP && amVal===0) {
+          usaMacAN = true;
         }
       }
       // Desconsiderar do ranking MACs se:
@@ -3828,7 +3808,9 @@ function relProcessarRows(rows) {
         disp:disp,cliente:cli,
         origem:String(row[cOrigem]||'').trim(),destino:String(row[cDestino]||'').trim(),
         equip:String(row[cEquip]||'').trim(),
-        agend:String(row[cAgend]||'').trim(),etiq:origem==='GRU'?'Coleta':'Reembarque',
+        agend:String(row[cAgend]||'').trim(),
+        // Coleta: AL vazia + AM vazia + AC igual a 0 + AE vazia
+        etiq:(alVal===0 && amVal===0 && acEqualZero && !aeP)?'Coleta':'Reembarque',
         ctrc:String(row[cCtrc]||'').trim(),remetente:String(row[cRem]||'').trim(),
         destinatario:String(row[cDest2]||'').trim(),
         modal:String(row[cModal]||'').trim().toUpperCase()==='PADRAO'?'Terrestre':'Aéreo',
@@ -3836,7 +3818,9 @@ function relProcessarRows(rows) {
         motivo:String(row[cMotivo]||'').trim(),frotaPlan:String(row[cPlan]||'').trim(),
         mac: usaMacAN ? macAN : String(row[cMac]||'').trim(),
         isAN: usaMacAN,
-        macDest:String(row[cMacDest]||'').trim(),
+        // B = 510/540 → origem do macDest vem da coluna E (remetente)
+        // B diferente disso → origem do macDest vem da coluna V (padrão)
+        macDest:(colBNum===510||colBNum===540)?String(row[cRem]||'').trim():String(row[cMacDest]||'').trim(),
         reboque:String(row[cReboque]||'').trim(),
         vols:row[cVols]!=null?String(row[cVols]).trim():'',
         peso:parseFloat(String(row[cPeso]||'0').replace(',','.'))||0,valor:val,
@@ -3982,16 +3966,19 @@ function relRenderizar() {
   var progSet = relGetDestsProgramados();
 
   // Stats
-  var totPeso=0,totValor=0,totCrit=0,totPlan=0,totDisp=0;
+  var totPeso=0,totValor=0,totCrit=0,totPlan=0,totDisp=0,totVols=0;
   for(var i=0;i<_relFilt.length;i++){
     totPeso+=_relFilt[i].peso; totValor+=_relFilt[i].valor;
     if(_relFilt[i].cliente==='⚠ Cliente critico') totCrit += _relFilt[i].peso||0;
     if(_relFilt[i].disp==='Planejado') totPlan += _relFilt[i].peso||0;
     if(_relFilt[i].disp==='Disponível') totDisp += _relFilt[i].peso||0;
+    var vN = parseFloat(String(_relFilt[i].vols||'0').replace(',','.'));
+    if(!isNaN(vN)) totVols += vN;
   }
   document.getElementById('rel-s-total').textContent=_relFilt.length.toLocaleString('pt-BR');
   document.getElementById('rel-s-peso').textContent=totPeso.toLocaleString('pt-BR',{maximumFractionDigits:1})+' kg';
   document.getElementById('rel-s-valor').textContent='R$ '+totValor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('rel-s-vols').textContent=totVols.toLocaleString('pt-BR',{maximumFractionDigits:0});
   document.getElementById('rel-s-crit').textContent=(totCrit/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' t';
   document.getElementById('rel-s-plan').textContent=(totPlan/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' t';
   document.getElementById('rel-s-disp').textContent=(totDisp/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' t';
@@ -4356,18 +4343,33 @@ function sbToRec(o) {
   };
 }
 
-// Salvar/atualizar um registro (upsert)
+// Salvar/atualizar um registro (upsert seguro: PATCH primeiro, POST se não existir)
+// Evita duplicação de linhas caso a tabela não tenha constraint UNIQUE em "id"
+// (merge-duplicates via POST só funciona com essa constraint; sem ela, cada
+// POST cria uma linha nova em vez de atualizar a existente).
 async function fbSave(r) {
   if (!r || !r._id) return;
   try {
-    var res = await fetch(SB_URL + '/programados', {
-      method: 'POST',
-      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify(recToSb(r))
+    var payload = recToSb(r);
+    // 1) Tenta atualizar o registro existente
+    var resPatch = await fetch(SB_URL + '/programados?id=eq.' + encodeURIComponent(payload.id), {
+      method: 'PATCH',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'return=representation'}),
+      body: JSON.stringify(payload)
     });
-    if (!res.ok) {
-      var err = await res.text();
-      console.warn('Supabase SAVE erro:', res.status, err);
+    if (resPatch.ok) {
+      var updated = await resPatch.json();
+      if (Array.isArray(updated) && updated.length > 0) return; // já existia e foi atualizado
+    }
+    // 2) Não existia ainda → cria
+    var resPost = await fetch(SB_URL + '/programados', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'return=minimal'}),
+      body: JSON.stringify(payload)
+    });
+    if (!resPost.ok) {
+      var err = await resPost.text();
+      console.warn('Supabase SAVE erro:', resPost.status, err);
       showToast('⚠️ Erro ao salvar: ' + err.substring(0,60), 'error');
     }
   } catch(e) { console.warn('sbSave:', e.message); }
@@ -4513,7 +4515,9 @@ function _relComprimir(r) {
     md:r.modal, oc:r.ocorr||'',
     mo:r.motivo||'', fp:r.frotaPlan||'',
     mc:r.mac||'', pe:r.peso||0,
-    vl:r.valor||0, sh:r.sitAH||''
+    vl:r.valor||0, sh:r.sitAH||'',
+    rb:r.reboque||'', vo:r.vols||'',
+    mdst:r.macDest||''
   };
   // Remove nulos/vazios para economizar espaço
   Object.keys(o).forEach(function(k){ if(o[k]===null||o[k]==='') delete o[k]; });
@@ -4531,7 +4535,9 @@ function _relDescomprimir(o) {
     modal:o.md||'', ocorr:o.oc||'',
     motivo:o.mo||'', frotaPlan:o.fp||'',
     mac:o.mc||'', peso:o.pe||0,
-    valor:o.vl||0, sitAH:o.sh||''
+    valor:o.vl||0, sitAH:o.sh||'',
+    reboque:o.rb||'', vols:o.vo||'',
+    macDest:o.mdst||''
   };
 }
 
@@ -4919,6 +4925,7 @@ function autoPreencherDataCrit() {
 
 function syncManual() {
   showSyncStatus('&#8635; Buscando dados...');
+  _sbLastHash = ''; // limpa o cache de hash para forçar atualização completa
   fbGetAll().then(function(recs) {
     if (recs && recs.length > 0) {
       var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
@@ -5172,12 +5179,16 @@ function sheetsGetWithRetry(n) {
 
 
 function deduplicar(records) {
-  // Remove duplicates by same destino+saida+dia combination (keep latest)
+  // Remove duplicatas pelo _id (identidade real do registro).
+  // ATENÇÃO: nunca deduplicar por destino+saida+dia+frota — são campos que
+  // legitimamente se repetem entre programações DIFERENTES (várias pessoas
+  // programando o mesmo destino/horário/frota em registros distintos).
+  // Deduplicar por esses campos apaga dados reais de outros usuários.
   const seen = new Map();
   [...records].reverse().forEach(r => {
-    const key = r.destino + '|' + r.saida + '|' + r.dia + '|' + r.frota;
+    const key = String(r._id);
     const existing = seen.get(key);
-    // If we have a duplicate, prioritize the one that has a time in prev_fech (length > 10)
+    // Se houver duplicata real do mesmo _id, prioriza o que tem prev_fech mais completo
     if (!existing || (r.prev_fech && String(r.prev_fech).length > String(existing.prev_fech).length)) {
       seen.set(key, r);
     }
