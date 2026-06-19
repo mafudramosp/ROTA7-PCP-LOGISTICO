@@ -1126,6 +1126,7 @@
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
 <style>
 .frota-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.06); }
@@ -3179,6 +3180,13 @@ document.addEventListener('DOMContentLoaded', function() {
   // Garantir cf-dropdown sempre fechado ao carregar
   var cfdd = document.getElementById('cf-dropdown');
   if (cfdd) { cfdd.style.display = 'none'; cfdd.classList.remove('open'); }
+
+  // Inicializar sincronização em tempo real (WebSocket) — fallback automático
+  // para polling se a lib não carregar ou a conexão falhar.
+  if (typeof sbInicializarRealtime === 'function') {
+    setTimeout(sbInicializarRealtime, 300);
+  }
+
   try {
     // Restaurar mapa de datas críticas persistido
     var savedCrit = localStorage.getItem('cg_data_crit');
@@ -4256,6 +4264,76 @@ var SB_HEADERS = {
   'Prefer': 'return=representation'
 };
 
+// ══════════════════════════════════════════════════════════════════════
+// SUPABASE REALTIME — sincronização instantânea via WebSocket
+// Fallback automático: se a lib não carregar ou a conexão cair, o sistema
+// continua funcionando normalmente via polling (REST), só que mais devagar.
+// ══════════════════════════════════════════════════════════════════════
+var _sbClient = null;
+var _sbRealtimeOk = false;
+
+function sbInicializarRealtime() {
+  try {
+    if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
+      console.warn('[realtime] Lib supabase-js não carregada — usando apenas polling REST.');
+      return;
+    }
+    var SB_BASE = SB_URL.replace('/rest/v1', '');
+    _sbClient = window.supabase.createClient(SB_BASE, SB_KEY);
+
+    // ── Canal 1: tabela "configuracoes" (relatório, planejamento, baseline de turno) ──
+    _sbClient.channel('cfg-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'configuracoes' }, function(payload) {
+        var chave = (payload.new && payload.new.chave) || (payload.old && payload.old.chave);
+        if (!chave) return;
+        console.log('[realtime] configuracoes mudou:', chave);
+        if (chave === 'tms_planejamento') {
+          // Recarrega planejamento imediatamente
+          if (typeof sbCarregarPlanejamento === 'function') sbCarregarPlanejamento();
+        } else if (chave.indexOf('tms_relatorio') === 0) {
+          // Recarrega relatório imediatamente
+          if (typeof sbCarregarRelatorio === 'function') sbCarregarRelatorio(true);
+        } else if (chave.indexOf('cg_baseline_') === 0) {
+          // Baseline de turno mudou em outra máquina — dispara o mesmo
+          // polling que já existe (90s), garantindo merge correto e
+          // consistente com a lógica original, mas agora de forma instantânea.
+          if (typeof cgDispararSincBaseline === 'function') cgDispararSincBaseline();
+        }
+      })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') {
+          _sbRealtimeOk = true;
+          console.log('[realtime] Canal configuracoes conectado ✅');
+        }
+      });
+
+    // ── Canal 2: tabela "programados" (tela Plataforma) ──
+    _sbClient.channel('prog-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'programados' }, function(payload) {
+        console.log('[realtime] programados mudou:', payload.eventType);
+        if (typeof sbPollUmaVez === 'function') sbPollUmaVez();
+      })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') console.log('[realtime] Canal programados conectado ✅');
+      });
+
+    // ── Canal 3: tabela "alertas" (chat/alertas entre telas) ──
+    _sbClient.channel('alertas-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alertas' }, function(payload) {
+        console.log('[realtime] novo alerta recebido');
+        if (typeof platPollAlertas === 'function') platPollAlertas();
+        if (typeof planPollAlertas === 'function') planPollAlertas();
+      })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') console.log('[realtime] Canal alertas conectado ✅');
+      });
+
+  } catch (e) {
+    console.warn('[realtime] Falha ao inicializar Realtime, usando polling como fallback.', e);
+    _sbRealtimeOk = false;
+  }
+}
+
 // Converte registro interno → Supabase
 function recToSb(r) {
   return {
@@ -4630,16 +4708,18 @@ function sbCarregarRelatorio(forcar) {
   } catch(e) {}
 }
 
-// Polling automático: verifica a cada 2 minutos se há versão mais nova do relatório
+// Polling de segurança: caso o Realtime não esteja disponível/habilitado,
+// verifica a cada 30s se há versão mais nova do relatório (era 2 minutos)
 setInterval(function() {
   sbCarregarRelatorio(false);
-}, 120000);
+}, 30000);
 
-// Polling da baseline de turno: a cada 90s recarrega do Supabase para sincronizar
-// outros usuários que ainda não importaram o Excel
-setInterval(function() {
+// Sincronização da baseline de turno: recarrega do Supabase para alinhar
+// outros usuários que ainda não importaram o Excel. Reaproveitada tanto
+// pelo polling periódico (90s, rede de segurança) quanto pelo Realtime
+// (instantâneo, dispara assim que outra máquina grava a baseline).
+function cgDispararSincBaseline() {
   var chaveAtual = cgChaveTurno();
-  // Só recarrega se ainda não tem baseline desta chave em memória
   cgCarregarBaselineSupabase(function(bl) {
     if (bl && _cgData) {
       // Aplicar merge silencioso com dados atuais
@@ -4651,19 +4731,25 @@ setInterval(function() {
       bl.forEach(function(bd) {
         if (!destAtual[bd.sigla] && bd.peso_critico_total > 0) {
           var concluido = JSON.parse(JSON.stringify(bd));
-          concluido.peso_critico_plan = concluido.peso_critico_total;
-          concluido.perc_critico = 100; concluido.perc_plan_crit = 100;
-          concluido.peso_planejado = concluido.peso_geral;
-          concluido.perc_plan_geral = 100; concluido._concluido = true;
+          concluido.peso_critico_plan        = concluido.peso_critico_total;
+          concluido.peso_critico_restante     = 0;
+          concluido.perc_critico             = 100; concluido.perc_plan_crit = 100;
+          concluido.peso_planejado           = concluido.peso_geral;
+          concluido.peso_disponivel_restante = 0;
+          concluido.perc_plan_geral          = 100; concluido._concluido = true;
           destinos.push(concluido);
         }
       });
       destinos.sort(function(a,b){ return b.peso_geral - a.peso_geral; });
       _cgData = { destinos: destinos, ts: _cgData.ts };
+      if (typeof cgGarantirCriticoRestante === 'function') _cgData = cgGarantirCriticoRestante(_cgData);
       cgRenderizar(_cgData);
     }
   });
-}, 90000);
+}
+
+// Polling de segurança: a cada 90s, caso o Realtime não esteja disponível
+setInterval(cgDispararSincBaseline, 90000);
 
 // ── SYNC PLANEJAMENTO ──
 
