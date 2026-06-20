@@ -1857,10 +1857,6 @@
               <button class="cf-btn" id="cfb-prev_fech" onclick="event.stopPropagation();cfOpen('prev_fech',this)">▼</button></div>
             </th>
             <th>Obs.</th>
-            <th onclick="sortHist('data_crit')" style="cursor:pointer">
-              <div class="col-filter-wrap"><span class="col-label">Data Crítica <span id="sh-data_crit">↕</span></span>
-              <button class="cf-btn" id="cfb-data_crit" onclick="event.stopPropagation();cfOpen('data_crit',this)">▼</button></div>
-            </th>
             <th><div class="col-filter-wrap"><span class="col-label">Prioridade</span>
               <button class="cf-btn" id="cfb-prioridade" onclick="cfOpen('prioridade',this)">▼</button></div></th>
             <th style="width:90px">Ações</th>
@@ -4224,6 +4220,9 @@ document.addEventListener('click',function(e){
 </div>
 
 
+
+
+
 </div><!-- /sb-content -->
 </div><!-- /app-layout -->
 
@@ -5977,7 +5976,6 @@ function renderHist() {
     <td>${ocupBar(r.ocup)}</td>
     <td style="font-size:11px">${r.prev_fech || '—'}</td>
     <td class="obs-cell" title="${r.obs}">${r.obs || '—'}</td>
-    <td style="font-size:11px">${r.data_crit || '—'}</td>
     <td>${priorBadge(calcPrioridade(r))}</td>
     <td>
       <div style="display:flex;gap:4px">
