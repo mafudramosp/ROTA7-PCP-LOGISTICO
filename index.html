@@ -3777,26 +3777,26 @@ function relProcessarRows(rows) {
         disp = 'Disponível';
       }
 
-      // ── REGRA DE ORIGEM DO MAC ──
-      // Se a coluna W (Nr_Mac) tem informação: usa o MAC da coluna W normalmente
-      //   (a sigla de origem vem da coluna V, já mapeada em cMacDest)
-      // Se a coluna W estiver em branco: usa o MAC da coluna AN, com remetente da coluna E,
-      //   desde que coluna B = 510 ou 540, AC=0 (literal), AE vazia e AM vazia
-      var macW = String(row[cMac]||'').trim();
+      // ── REGRA DE ORIGEM DO MAC (tela Prioridade de Descarga) ──
+      // Condição comum às duas situações: só é listado quando
+      //   AC = 0 (literal) + AE em branco + AM em branco.
+      var atendeCriterioDescarga = (acEqualZero && !aeP && amVal===0);
+
       var colBRaw = row[cColB];
       var colBNum = parseInt(String(colBRaw||'').trim()) || 0;
+      var ehB510540 = (colBNum === 510 || colBNum === 540);
+
+      var macW = String(row[cMac]||'').trim();
       var macAN = String(row[cMacAN]||'').trim();
-      var usaMacAN = false;
-      if (!macW && macAN && (colBNum === 510 || colBNum === 540)) {
-        if (acEqualZero && !aeP && amVal===0) {
-          usaMacAN = true;
-        }
-      }
-      // Desconsiderar do ranking MACs se:
-      // - AL+AM ambas preenchidas (descarga concluída sem fechamento)
-      // - AC > 0 (equipamento — descarregado, ficha não fechada)
-      // - AE preenchida (planejado — já embarcado)
-      var descCompleta = (alP && amP) || eqP || aeP;
+
+      // Situação 1: B = 510 ou 540 → MAC vem da coluna AN, remetente da coluna E
+      // Situação 2: B diferente   → MAC vem da coluna W,  remetente da coluna V
+      var usaMacAN = ehB510540;          // true → usa AN+E ; false → usa W+V
+      var macFinal = usaMacAN ? macAN : macW;
+
+      // Desconsiderar do ranking quando NÃO atende o critério (AC=0 + AE vazia + AM vazia).
+      // Mantém também as regras antigas de descarga concluída por segurança.
+      var descCompleta = !atendeCriterioDescarga || (alP && amP) || eqP || aeP;
 
       var cnpj=String(row[cCnpj]||'').replace(/[.\-\/\s]/g,'');
       var sit=String(row[cSit]||'').trim();
@@ -3816,11 +3816,11 @@ function relProcessarRows(rows) {
         modal:String(row[cModal]||'').trim().toUpperCase()==='PADRAO'?'Terrestre':'Aéreo',
         ocorr:String(row[cOcorr]||'').trim(),
         motivo:String(row[cMotivo]||'').trim(),frotaPlan:String(row[cPlan]||'').trim(),
-        mac: usaMacAN ? macAN : String(row[cMac]||'').trim(),
+        mac: macFinal,
         isAN: usaMacAN,
-        // B = 510/540 → origem do macDest vem da coluna E (remetente)
-        // B diferente disso → origem do macDest vem da coluna V (padrão)
-        macDest:(colBNum===510||colBNum===540)?String(row[cRem]||'').trim():String(row[cMacDest]||'').trim(),
+        // B = 510/540 → remetente/origem vem da coluna E
+        // B diferente disso → origem vem da coluna V (padrão)
+        macDest: ehB510540 ? String(row[cRem]||'').trim() : String(row[cMacDest]||'').trim(),
         reboque:String(row[cReboque]||'').trim(),
         vols:row[cVols]!=null?String(row[cVols]).trim():'',
         peso:parseFloat(String(row[cPeso]||'0').replace(',','.'))||0,valor:val,
@@ -9577,7 +9577,7 @@ function hubRenderMacRanking(dataHub) {
 
   var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º'];
   wrap.innerHTML = ranking.slice(0,10).map(function(m,i){
-    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente) || (m._isColeta && m.remetente);
+    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
     var bg = usaRemetente ? '#f97316' : '#111111';
     var txtColor = usaRemetente ? '#000000' : '#ffffff';
     var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
@@ -9601,7 +9601,7 @@ function hubRenderMacRanking(dataHub) {
     var _limite = new Date(_hoje); _limite.setDate(_limite.getDate()-3);
     ranking.forEach(function(m) {
       // Usar coluna A para MACs com remetente, coluna R para os demais
-      var usaRem = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente) || (m._isColeta && m.remetente);
+      var usaRem = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
       var dtRaw = m._isColeta ? (m._dtAN || '—') : m.menorDtStr;
       var dtStr = dtRaw && dtRaw !== '—' ? dtRaw : '';
       if (!dtStr) return; // ignora sem data
@@ -9612,7 +9612,7 @@ function hubRenderMacRanking(dataHub) {
       if (dtDate < _limite) return; // ignora mais de 3 dias atrás
       var dt = dtStr.substring(0,5);
       if (!byDate[dt]) byDate[dt] = [];
-      var destLabel = (m._isAN || m._isColeta || (m.dest||'').toUpperCase()==='EXA') && m.remetente ? m.remetente.split(' ')[0] : m.dest;
+      var destLabel = (m._isAN || (m.dest||'').toUpperCase()==='EXA') && m.remetente ? m.remetente.split(' ')[0] : m.dest;
       byDate[dt].push(destLabel);
     });
     // Ordena datas
@@ -9841,7 +9841,7 @@ function descargaRenderizar() {
   if (!list) return;
   var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º','11º','12º','13º','14º','15º'];
   list.innerHTML = _descMacRanking.slice(0,15).map(function(m,i) {
-    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente) || (m._isColeta && m.remetente);
+    var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
     var bg = usaRemetente ? '#f97316' : '#111111';
     var txtColor = usaRemetente ? '#000000' : '#ffffff';
     var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
@@ -9956,7 +9956,7 @@ function imprimirListaDescarga() {
   // Montar linhas da tabela
   var linhas = lista.map(function(m, i) {
     var macLabel = 'MAC: ' + m.mac;
-    var destLabel = (m._isAN && m.remetente) || (m._isColeta && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente) || (m._isColeta && m.remetente)
+    var destLabel = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente)
       ? m.remetente : (m.dest || '—');
     var macDest = macLabel + ' – ' + destLabel;
     var status = m.disp || 'Patio';
