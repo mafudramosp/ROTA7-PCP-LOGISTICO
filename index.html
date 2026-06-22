@@ -4370,6 +4370,8 @@ async function fbSave(r) {
       var err = await resPost.text();
       console.warn('Supabase SAVE erro:', resPost.status, err);
       showToast('⚠️ Erro ao salvar: ' + err.substring(0,60), 'error');
+      // Bug fix 4: lançar erro para que _syncEnviar capture e adicione à fila de retry
+      throw new Error('POST falhou: ' + resPost.status + ' ' + err.substring(0,60));
     }
   } catch(e) { console.warn('sbSave:', e.message); }
 }
@@ -4439,18 +4441,31 @@ function loadData() {
 var _sbLastHash = '';
 var _sbPollTimer = null;
 
+var _sbPollRunning = false;
+var _sbPollPaused = false;
+
 function sbPollUmaVez() {
+  // Bug fix 1: guard de concorrência — evita múltiplas chamadas simultâneas
+  if (_sbPollRunning || _sbPollPaused) return;
+  _sbPollRunning = true;
   fbGetAll().then(function(recs) {
-    if (!recs || !recs.length) return;
+    if (!recs || !recs.length) { _sbPollRunning = false; return; }
     var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
     var hash = f.map(function(r){ return r._id+':'+r.gerado; }).join('|');
-    if (hash === _sbLastHash) return;
+    if (hash === _sbLastHash) { _sbPollRunning = false; return; }
     _sbLastHash = hash;
-    progData = deduplicar(f);
+    // Bug fix 2: MERGE ao invés de replace — preserva registros locais pendentes
+    var sbIds = new Set(f.map(function(r){ return String(r._id); }));
+    var localPendentes = progData.filter(function(r) {
+      return !sbIds.has(String(r._id)) && !_deletedIds.has(String(r._id));
+    });
+    progData = deduplicar(f.concat(localPendentes));
     nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
     saveLocal(); renderProg(); renderHist();
     showToast('🔄 Dados atualizados', 'info');
-  }).catch(function(){});
+  }).catch(function(){}).finally(function(){
+    _sbPollRunning = false;
+  });
 }
 
 function iniciarEscutaRealtime() {
@@ -4928,7 +4943,12 @@ function syncManual() {
   fbGetAll().then(function(recs) {
     if (recs && recs.length > 0) {
       var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
-      progData = deduplicar(f);
+      // Bug fix: MERGE ao invés de replace — preserva registros locais pendentes
+      var sbIds = new Set(f.map(function(r){ return String(r._id); }));
+      var localPendentes = progData.filter(function(r) {
+        return !sbIds.has(String(r._id)) && !_deletedIds.has(String(r._id));
+      });
+      progData = deduplicar(f.concat(localPendentes));
       nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
       autoPreencherDataCrit();
       saveLocal();
@@ -4942,12 +4962,30 @@ function syncManual() {
 async function salvarTudoFirebase() {
   var lista = progData.filter(function(r){ return r.destino; });
   if (!lista.length) { showToast('Nenhum dado para salvar', 'info'); return; }
+  // Bug fix 3: pausar auto-sync durante o loop para evitar sobrescrita parcial
+  _sbPollPaused = true;
+  _sbLastHash = ''; // forçar re-fetch após as saves
   showSyncStatus('&#8635; Salvando ' + lista.length + ' registros...');
+  var erros = 0;
   try {
-    for (var i = 0; i < lista.length; i++) { await fbSave(lista[i]); }
+    for (var i = 0; i < lista.length; i++) {
+      try { await fbSave(lista[i]); }
+      catch(e) { erros++; console.warn('[salvarTudo] erro no registro ' + lista[i]._id, e); }
+    }
     hideSyncStatus();
-    showToast('✅ ' + lista.length + ' registros salvos!', 'success');
-  } catch(e) { hideSyncStatus(); showToast('❌ Erro: ' + e.message, 'error'); }
+    if (erros === 0) {
+      showToast('✅ ' + lista.length + ' registros salvos!', 'success');
+    } else {
+      showToast('⚠️ ' + (lista.length - erros) + '/' + lista.length + ' salvos (' + erros + ' com erro)', 'error');
+    }
+  } catch(e) {
+    hideSyncStatus();
+    showToast('❌ Erro ao salvar: ' + e.message, 'error');
+  } finally {
+    _sbPollPaused = false;
+    // Sync único final após todas as saves concluídas
+    setTimeout(function() { if (!_sbPollRunning) sbPollUmaVez(); }, 500);
+  }
 }
 
 // saveData — salva local + Firebase
