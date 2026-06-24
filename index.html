@@ -3794,19 +3794,23 @@ function relProcessarRows(rows) {
       // Mantém também as regras antigas de descarga concluída por segurança.
       var descCompleta = !atendeCriterioDescarga || (alP && amP) || eqP || aeP;
 
+      // Origem GRU ou EXA → data coluna A + etiqueta Coleta
+      var origemValRaw = String(row[cOrigem]||'').trim().toUpperCase();
+      var ehOrigemColetaGRUEXA = (origemValRaw === 'GRU' || origemValRaw === 'EXA');
+
       var cnpj=String(row[cCnpj]||'').replace(/[.\-\/\s]/g,'');
       var sit=String(row[cSit]||'').trim();
       var cli=REL_CNPJ_PRIORIDADE.has(cnpj)||sit==='Hoje'||sit==='Atrasado'?'⚠ Cliente critico':String(row[cAgend]||'').trim().toUpperCase()==='SIM'?'⚠ Agendamento':'Fluxo';
       var vr=row[cValor]; var val=typeof vr==='number'?vr:(parseFloat(String(vr||'').replace(/\./g,'').replace(',','.'))||0);
       _relData.push({
         dtPrev:relExcelDate(row[cDtPrev]),dataMax:relExcelDate(row[cDataMax]),
-        dtUlt:relExcelDate(row[cDtUlt]),dtColA:relExcelDate(row[cColA]),fimDes:relExcelDate(row[cFimDes]),
+        dtUlt:(ehOrigemColetaGRUEXA ? relExcelDate(row[cColA]) : relExcelDate(row[cDtUlt])),dtColA:relExcelDate(row[cColA]),fimDes:relExcelDate(row[cFimDes]),
         disp:disp,cliente:cli,
         origem:String(row[cOrigem]||'').trim(),destino:String(row[cDestino]||'').trim(),
         equip:String(row[cEquip]||'').trim(),
         agend:String(row[cAgend]||'').trim(),
-        // Coleta: AL vazia + AM vazia + AC igual a 0 + AE vazia
-        etiq:(alVal===0 && amVal===0 && acEqualZero && !aeP)?'Coleta':'Reembarque',
+        // Coleta: origem GRU ou EXA
+        etiq:ehOrigemColetaGRUEXA?'Coleta':'Reembarque',
         ctrc:String(row[cCtrc]||'').trim(),remetente:String(row[cRem]||'').trim(),
         destinatario:String(row[cDest2]||'').trim(),
         modal:String(row[cModal]||'').trim().toUpperCase()==='PADRAO'?'Terrestre':'Aéreo',
