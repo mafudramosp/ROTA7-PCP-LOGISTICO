@@ -1859,6 +1859,10 @@
             <th>Obs.</th>
             <th><div class="col-filter-wrap"><span class="col-label">Prioridade</span>
               <button class="cf-btn" id="cfb-prioridade" onclick="cfOpen('prioridade',this)">▼</button></div></th>
+            <th onclick="sortHist('data_crit')" style="cursor:pointer">
+              <div class="col-filter-wrap"><span class="col-label">Data Crítica <span id="sh-data_crit">↕</span></span>
+              <button class="cf-btn" id="cfb-data_crit" onclick="event.stopPropagation();cfOpen('data_crit',this)">▼</button></div>
+            </th>
             <th style="width:90px">Ações</th>
           </tr>
         </thead>
@@ -3703,16 +3707,16 @@ function relProcessarRows(rows) {
   var cDtPrev=colFallback('AG','DT_PREV_EMBARQUE','DT_PREV. EMBARQ.');
   var cDataMax=colFallback('Y','Data_Entrega_Maxima','DATA_ENTREGA_MAXIMA');
   var cDtUlt=colFallback('R','DT última posição','DT_POSICAO');
-  var cFimDes=colFallback('AM','FIM_DESCARREGAMENTO','Fim de descarga');
+  var cFimDes=relLetterIdx('AM');
+  var cPlan=relLetterIdx('AE');
   var cOrigem=colFallback('AI','SIGLA_FILIAL_ORIGEM','Sigla_origem');
   var cDestino=colFallback('AJ','SIGLA_FILIAL_DESTINO','Siglas_destino');
-  var cEquip=colFallback('AC','Equipamento','EQUIPAMENTO');
+  var cEquip=relLetterIdx('AC');
   var cCtrc=colFallback('D','CTRC','NR_CTRC','CTE');
   var cRem=colFallback('E','Remetente','REMETENTE','NOME_REMETENTE');
   var cDest2=colFallback('F','Destinatario','DESTINATARIO','NOME_DESTINATARIO');
   var cModal=colFallback('Z','Modal','MODAL','TIPO_MODAL');
   var cOcorr=colFallback('AV','Ocorrência aberta','OCORRENCIA_ABERTA');
-  var cPlan=colFallback('AE','Mercadoria_Planejada','Frota planejada');
   var cMac=colFallback('W','Nr_Mac','NR_MAC');
   var cColA=colFallback('A','DT_POSICAO_A','DATA_A');
   var cColB=colFallback('B','TIPO_B','COD_B');
@@ -3727,7 +3731,7 @@ function relProcessarRows(rows) {
   var cMotivo=colFallback('S','Motivo','MOTIVO');
   var cSit=colFallback('AH','SITUACAO_PREV_EMBARQUE');
   var cCnpj=colFallback('AK','CNPJ_DESTINATARIO','CPF_CNPJ_DESTINATARIO','CNPJ');
-  var cIniDes=colFallback('AL','INICIO_DESCARREGAMENTO');
+  var cIniDes=relLetterIdx('AL');
   var cAgend=colFallback('AQ','Agendamento','FL_AGENDAMENTO');
   _relData=[]; _rcfF={}; _relSort={col:null,asc:true};
   var dataRows=rows.slice(hdrIdx+1), total=dataRows.length;
@@ -6001,7 +6005,7 @@ function renderHist() {
   document.getElementById('badge-hist').textContent = data.length;
   const tbody = document.getElementById('tbody-hist');
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="15"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
     return;
   }
   tbody.innerHTML = data.map((r, i) => `<tr id="hist-row-${r._id}" class="hist-row" data-id="${r._id}">
@@ -6019,6 +6023,7 @@ function renderHist() {
     <td style="font-size:11px">${r.prev_fech || '—'}</td>
     <td class="obs-cell" title="${r.obs}">${r.obs || '—'}</td>
     <td>${priorBadge(calcPrioridade(r))}</td>
+    <td style="font-size:11px;color:var(--text2)">${r.data_crit || '—'}</td>
     <td>
       <div style="display:flex;gap:4px">
         <button class="btn btn-ghost btn-sm" onclick="editProgramado(${r._id})" title="Editar"
@@ -9825,21 +9830,31 @@ var _descMacRanking = [];
 function descargaRenderizar() {
   if (!_relData || !_relData.length) return;
 
-  var dataHub = _relData.filter(function(r){ return r.motivo !== 'Ocor.Aberta'; });
-  var agora = new Date(); var h24 = 24*60*60*1000;
+  // Somente Transferências (exclui Coletas) — regra atual da tela Descarga
+  var dataHub = _relData.filter(function(r){ return r.motivo !== 'Ocor.Aberta' && (r.etiq||'') === 'Reembarque'; });
+  var agora = new Date(); var h36 = 36*60*60*1000;
 
-  // Marca MACs inválidos se QUALQUER linha tiver AC>0 ou AE preenchida
+  // Destinos prioritários — checados na coluna AJ (r.destino)
+  var DEST_PRIOR = ['SAO','JDI','ITP','SOD','SJK','SSZ','BGI','CPQ','CWB','POA','SCZ','CXJ','CAC','PFB','PPB','SCA','SJP','RAO','RIA'];
+
+  // Marca MACs inválidos se QUALQUER linha não atender ao critério (AC=0 + AE vazia + AM vazia).
+  // IMPORTANTE: usa r.disp (salvo no Supabase como 'dv') — r.descCompleta NÃO é salvo.
+  // disp='Patio' ou 'Em descarregamento' → critério OK
+  // disp='Disponível' (AM preenchida ou AC≠0) ou 'Planejado' (AE preenchida) → excluir MAC
   var invalidMacsD = new Set();
   dataHub.forEach(function(r) {
-    if (r.mac && r.mac.trim() && r.descCompleta) invalidMacsD.add(r.mac.trim());
+    var mac = r.mac && r.mac.trim();
+    if (!mac) return;
+    var d = r.disp || '';
+    if (d === 'Disponível' || d === 'Planejado') invalidMacsD.add(mac);
   });
 
-  // Build mac map — exceto MACs inválidos
+  // Build mac map — exceto MACs inválidos — consolidando linhas duplicadas da coluna W
   var macMap = {};
   dataHub.forEach(function(r) {
     var mac = r.mac && r.mac.trim();
     if (!mac || mac === '—' || invalidMacsD.has(mac)) return;
-    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'', _isAN:r.isAN||false, _isColeta:(r.etiq||'')==='Coleta', pesoTotal:0, disp:r.disp||'Patio' };
+    if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'', _isAN:r.isAN||false, _isColeta:false, pesoTotal:0, disp:r.disp||'Patio', temDestPrior:false };
     var m = macMap[mac];
     m.pesoTotal = (m.pesoTotal||0) + (r.peso||0);
     m.disp = r.disp || m.disp;
@@ -9858,24 +9873,26 @@ function descargaRenderizar() {
     if (r.dtUlt && r.dtUlt !== '—') {
       var pts = r.dtUlt.split('/');
       if (pts.length >= 3) { var dt = new Date(pts[2].substring(0,4),pts[1]-1,pts[0]); if (!m.menorDt||dt<m.menorDt){m.menorDt=dt;m.menorDtStr=r.dtUlt;} }
-      if ((r.isAN || (r.etiq||'')=='Coleta') && r.dtColA) m._dtAN = r.dtColA;
     }
+    // Destino prioritário (coluna AJ)
+    var destAJ = String(r.destino||'').trim().toUpperCase();
+    if (DEST_PRIOR.indexOf(destAJ) !== -1) m.temDestPrior = true;
   });
 
-  // Score
-  _descMacRanking = Object.values(macMap).filter(function(m){ return !m._invalido; }).map(function(m) {
+  // Score: maior36h (coluna R) + quantidade Atrasado/Hoje (coluna AH) + destino prioritário (coluna AJ)
+  _descMacRanking = Object.values(macMap).map(function(m) {
     m.atras=0; m.hoje=0; m.ctrcs=0;
     Object.values(m._ctrcs).forEach(function(sit){
       m.ctrcs++;
       if(sit==='Atrasado') m.atras++;
       else if(sit==='Hoje') m.hoje++;
     });
-    var diff = m.menorDt ? (agora - m.menorDt) : 999*h24;
-    var temSJK = (m.dest||'').toUpperCase().indexOf('SJK')!==-1;
-    m.score = m.atras*3 + m.hoje*2 + (diff<=h24?5:0) + m.ctrcs*0.1 + (temSJK?10:0) + (m._isColeta?1000:0);
-    m.urgente = m.atras>0 || diff<=h24 || m._isColeta;
+    var diff = m.menorDt ? (agora - m.menorDt) : 0;
+    m.maior36h = diff > h36;
+    m.score = (m.atras + m.hoje) * 10 + (m.maior36h ? 50 : 0) + (m.temDestPrior ? 20 : 0);
+    m.urgente = m.atras > 0 || m.maior36h;
     return m;
-  }).filter(function(m){ return !m._isColeta || m.ctrcs >= 15; }).sort(function(a,b){return b.score-a.score;});
+  }).filter(function(m){ return m.ctrcs >= 10; }).sort(function(a,b){return b.score-a.score;});
 
   var list = document.getElementById('desc-mac-list');
   if (!list) return;
@@ -9884,13 +9901,12 @@ function descargaRenderizar() {
     var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
     var bg = usaRemetente ? '#f97316' : '#111111';
     var txtColor = usaRemetente ? '#000000' : '#ffffff';
-    var pct = m.ctrcs>0?Math.round((m.atras+m.hoje)/m.ctrcs*100):0;
     var destLabel = usaRemetente ? m.remetente : m.dest;
     return '<div class="desc-mac-item'+(m.mac===_descMacSel?' selected':'')+'" style="background:'+bg+';color:'+txtColor+'" onclick="descargaSelectMac(\''+m.mac.replace(/'/g,"\\'")+'\')">' +
       '<div><span style="font-size:10px;opacity:.8">'+pos[i]+'</span>' +
       '<span style="font-weight:800;margin-left:6px">MAC: '+m.mac+' – '+destLabel+'</span></div>' +
-      '<div style="text-align:right"><div style="font-size:13px;font-weight:800">'+pct+'%</div>' +
-      '<div style="font-size:9px;opacity:.85">'+(m._isColeta ? (m._dtAN ? m._dtAN.substring(0,5) : '—') : m.menorDtStr)+' · ⚠'+m.atras+' 📅'+m.hoje+'</div></div>' +
+      '<div style="text-align:right"><div style="font-size:13px;font-weight:800">'+(m.atras+m.hoje)+'</div>' +
+      '<div style="font-size:9px;opacity:.85">'+m.menorDtStr+' · ⚠'+m.atras+' 📅'+m.hoje+'</div></div>' +
     '</div>';
   }).join('');
 
