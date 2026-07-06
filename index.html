@@ -1876,7 +1876,7 @@
               <div class="col-filter-wrap"><span class="col-label">Data Crítica <span id="sh-data_crit">↕</span></span>
               <button class="cf-btn" id="cfb-data_crit" onclick="event.stopPropagation();cfOpen('data_crit',this)">▼</button></div>
             </th>
-            <th id="col-expedicao-anchor" style="">Horário Grade</th>
+            <th id="col-expedicao-anchor" style="display:none"></th>
             <th style="">Conferente</th>
             <th style="">Início Carg.</th>
             <th style="">Parada 1</th>
@@ -3226,6 +3226,7 @@ document.addEventListener('DOMContentLoaded', function() {
   } catch(e) {}
   // Carregar mapa atualizado do Supabase (compartilhado entre usuários)
   setTimeout(cgCarregarCritSupabase, 1000);
+  setTimeout(sbCarregarClientesCrit, 1200);
   // Carregar relatório e planejamento do Supabase
   // Carregar baseline do turno atual do Supabase (antes de sbCarregarPlanejamento)
   setTimeout(function(){ cgCarregarBaselineSupabase(function(){}); }, 900);
@@ -4374,8 +4375,9 @@ function sbInicializarRealtime() {
           // Recarrega planejamento imediatamente
           if (typeof sbCarregarPlanejamento === 'function') sbCarregarPlanejamento();
         } else if (chave.indexOf('tms_relatorio') === 0) {
-          // Recarrega relatório imediatamente
           if (typeof sbCarregarRelatorio === 'function') sbCarregarRelatorio(true);
+        } else if (chave === 'clientes_crit_map') {
+          if (typeof sbCarregarClientesCrit === 'function') sbCarregarClientesCrit();
         } else if (chave.indexOf('cg_baseline_') === 0) {
           // Baseline de turno mudou em outra máquina — dispara o mesmo
           // polling que já existe (90s), garantindo merge correto e
@@ -5019,6 +5021,22 @@ function sbCarregarPlanejamento() {
   } catch(e) {}
 }
 
+function sbCarregarClientesCrit() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.clientes_crit_map&select=valor', {
+      headers: {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY}
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      if (data && data[0] && data[0].valor) {
+        // Atualiza localStorage com dados do Supabase (fonte de verdade)
+        try { localStorage.setItem('pvg_clientes_crit_cache', data[0].valor); } catch(e) {}
+        // Se Expedição estiver aberta, re-renderiza
+        var tab = document.getElementById('tab-expedicao-content');
+        if (tab && tab.classList.contains('active')) renderExpedicao();
+      }
+    }).catch(function(){});
+  } catch(e) {}
+}
+
 function cgCarregarCritSupabase() {
   try {
     fetch(SB_URL + '/configuracoes?chave=eq.cg_data_crit&select=valor', {
@@ -5568,7 +5586,6 @@ function _expedClientesCrit(destKey) {
 // Chamado automaticamente após import do TMS — salva clientes_crit no banco
 // sem precisar abrir a aba de Expedição
 function renderExpedicaoSilent() {
-  // Salva mapa completo de clientes por destino no localStorage — sem depender do Supabase
   if (!_relData || !_relData.length) return;
   var ORDER = {Atrasado:0, Hoje:1};
   var destMap = {};
@@ -5590,12 +5607,23 @@ function renderExpedicaoSilent() {
       });
     if (lista.length) cache[dest] = lista;
   });
-  try {
-    localStorage.setItem('pvg_clientes_crit_cache', JSON.stringify({
-      cache:cache, ts:new Date().toISOString(), total:Object.keys(cache).length
-    }));
-    showToast('💾 Clientes críticos salvos — ' + Object.keys(cache).length + ' destinos', 'success');
-  } catch(e) {}
+  var payload = JSON.stringify({cache:cache, ts:new Date().toISOString(), total:Object.keys(cache).length});
+  // 1. localStorage (acesso imediato no mesmo browser)
+  try { localStorage.setItem('pvg_clientes_crit_cache', payload); } catch(e) {}
+  // 2. configuracoes no Supabase (persiste para todos os browsers/usuários)
+  var agora = new Date().toISOString();
+  fetch(SB_URL + '/configuracoes?chave=eq.clientes_crit_map', {
+    method: 'PATCH', headers: Object.assign({}, SB_HEADERS, {'Prefer':'return=minimal'}),
+    body: JSON.stringify({chave:'clientes_crit_map', valor:payload, atualizado_em:agora})
+  }).then(function(r){
+    if (r.status === 404 || r.headers.get('content-range') === '*/0') {
+      fetch(SB_URL + '/configuracoes', {
+        method: 'POST', headers: Object.assign({}, SB_HEADERS, {'Prefer':'resolution=merge-duplicates,return=minimal'}),
+        body: JSON.stringify({chave:'clientes_crit_map', valor:payload, atualizado_em:agora})
+      }).catch(function(){});
+    }
+  }).catch(function(){});
+  showToast('💾 Clientes críticos salvos — ' + Object.keys(cache).length + ' destinos', 'success');
 }
 
 // Lê clientes críticos do cache localStorage para um destino
@@ -6395,7 +6423,6 @@ function renderHist() {
     <td class="obs-cell" title="${r.obs}">${r.obs || '—'}</td>
     <td>${priorBadge(calcPrioridade(r))}</td>
     <td style="font-size:11px;color:var(--text2)">${r.data_crit || '—'}</td>
-    <td style="font-size:11px;color:#4ade80;text-align:center">${getGradeHorario(r.destino, r.dia)}</td>
     <td style="font-size:11px">${r.conferente||'—'}</td>
     <td style="font-size:11px;white-space:nowrap">${r.ini_carg||'—'}</td>
     <td style="font-size:11px;white-space:nowrap">${r.parada1_dt ? r.parada1_dt + (r.parada1_peso ? '<br><span style=\'color:#94a3b8\'>' + r.parada1_peso + ' kg</span>' : '') : '—'}</td>
