@@ -4768,6 +4768,8 @@ function _relAplicarDados(registros, ts, forcar) {
   if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
   if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
   if (typeof cgRenderizar === 'function' && _cgData) setTimeout(function(){ cgRenderizar(_cgData); }, 400);
+  // Salvar clientes críticos na Expedição (import novo OU restore do Supabase)
+  if (typeof renderExpedicaoSilent === 'function') setTimeout(renderExpedicaoSilent, 500);
   if (forcar !== true) showToast('🔄 Relatório atualizado automaticamente (' + ts.toLocaleString('pt-BR') + ')', 'info');
 }
 
