@@ -1876,8 +1876,7 @@
               <div class="col-filter-wrap"><span class="col-label">Data Crítica <span id="sh-data_crit">↕</span></span>
               <button class="cf-btn" id="cfb-data_crit" onclick="event.stopPropagation();cfOpen('data_crit',this)">▼</button></div>
             </th>
-            <th id="col-expedicao-anchor" style="display:none"></th>
-            <th style="">Conferente</th>
+            <th id="col-expedicao-anchor" style="">Conferente</th>
             <th style="">Início Carg.</th>
             <th style="">Parada 1</th>
             <th style="">Fim Carg.</th>
@@ -5612,16 +5611,11 @@ function renderExpedicaoSilent() {
   try { localStorage.setItem('pvg_clientes_crit_cache', payload); } catch(e) {}
   // 2. configuracoes no Supabase (persiste para todos os browsers/usuários)
   var agora = new Date().toISOString();
-  fetch(SB_URL + '/configuracoes?chave=eq.clientes_crit_map', {
-    method: 'PATCH', headers: Object.assign({}, SB_HEADERS, {'Prefer':'return=minimal'}),
+  // Upsert via resolution=merge-duplicates — mesmo padrão do cg_data_crit
+  fetch(SB_URL + '/configuracoes', {
+    method: 'POST',
+    headers: Object.assign({}, SB_HEADERS, {'Prefer':'resolution=merge-duplicates,return=minimal'}),
     body: JSON.stringify({chave:'clientes_crit_map', valor:payload, atualizado_em:agora})
-  }).then(function(r){
-    if (r.status === 404 || r.headers.get('content-range') === '*/0') {
-      fetch(SB_URL + '/configuracoes', {
-        method: 'POST', headers: Object.assign({}, SB_HEADERS, {'Prefer':'resolution=merge-duplicates,return=minimal'}),
-        body: JSON.stringify({chave:'clientes_crit_map', valor:payload, atualizado_em:agora})
-      }).catch(function(){});
-    }
   }).catch(function(){});
   showToast('💾 Clientes críticos salvos — ' + Object.keys(cache).length + ' destinos', 'success');
 }
