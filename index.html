@@ -5568,24 +5568,44 @@ function _expedClientesCrit(destKey) {
 // Chamado automaticamente após import do TMS — salva clientes_crit no banco
 // sem precisar abrir a aba de Expedição
 function renderExpedicaoSilent() {
+  // Salva mapa completo de clientes por destino no localStorage — sem depender do Supabase
   if (!_relData || !_relData.length) return;
-  var data = (progData||[]).filter(function(r){ return r.destino && r.frota; });
   var ORDER = {Atrasado:0, Hoje:1};
-  var queue = [];
-  data.forEach(function(r) {
-    var destKey = String(r.destino||'').trim().toUpperCase();
-    var relRowsClientes = _expedClientesCrit(destKey);
-    var novoValor = relRowsClientes.map(function(c){ return c.nome; }).join('|');
-    if (novoValor && novoValor !== (r.clientes_crit||'')) {
-      r.clientes_crit = novoValor;
-      queue.push(r);
-    }
+  var destMap = {};
+  _relData.forEach(function(rel) {
+    var dest = String(rel.destino||'').trim().toUpperCase();
+    var nome = (rel.clienteE||'').trim();
+    if (!dest || !nome) return;
+    if (!destMap[dest]) destMap[dest] = [];
+    destMap[dest].push({nome:nome, sit:rel.sitAH||''});
   });
-  if (queue.length > 0) {
-    saveLocal();
-    queue.forEach(function(rec){ fbSave(rec); });
-    showToast('💾 Clientes críticos salvos — ' + queue.length + ' destinos', 'success');
-  }
+  var cache = {};
+  Object.keys(destMap).forEach(function(dest) {
+    var seen = {}, lista = [];
+    destMap[dest]
+      .sort(function(a,b){ return ((ORDER[a.sit]!==undefined?ORDER[a.sit]:2)-(ORDER[b.sit]!==undefined?ORDER[b.sit]:2)); })
+      .forEach(function(c){
+        var k = c.nome.toUpperCase();
+        if (!seen[k] && lista.length < 10) { seen[k]=true; lista.push(c); }
+      });
+    if (lista.length) cache[dest] = lista;
+  });
+  try {
+    localStorage.setItem('pvg_clientes_crit_cache', JSON.stringify({
+      cache:cache, ts:new Date().toISOString(), total:Object.keys(cache).length
+    }));
+    showToast('💾 Clientes críticos salvos — ' + Object.keys(cache).length + ' destinos', 'success');
+  } catch(e) {}
+}
+
+// Lê clientes críticos do cache localStorage para um destino
+function _expedClientesCritCache(destKey) {
+  try {
+    var raw = localStorage.getItem('pvg_clientes_crit_cache');
+    if (!raw) return [];
+    var obj = JSON.parse(raw);
+    return (obj.cache && obj.cache[destKey]) ? obj.cache[destKey].slice(0,5) : [];
+  } catch(e) { return []; }
 }
 
 function renderExpedicao() {
@@ -5623,7 +5643,6 @@ function renderExpedicao() {
   }
   var comMotivo=0, semMotivo=0, pesoTotal=0;
   var ORDER = {Atrasado:0, Hoje:1};
-  var _expedSaveQueue = []; // registros que tiveram clientes_crit alterados
   var rows = data.map(function(r,i) {
     var frotaKey = String(r.frota||'').trim();
     var relRows = (_relData||[]).filter(function(rel){ return String(rel.frotaPlan||'').trim() === frotaKey; });
@@ -5639,15 +5658,14 @@ function renderExpedicao() {
     var clientesList = [];
     if (_relData && _relData.length > 0) {
       clientesList = _expedClientesCrit(destKey);
-      // Persistir: salvar no registro se mudou
+      // Atualizar cache localStorage com os dados mais recentes
       var novoValor = clientesList.map(function(c){ return c.nome; }).join('|');
-      if (novoValor !== (r.clientes_crit||'')) {
-        r.clientes_crit = novoValor;
-        _expedSaveQueue.push(r);
-      }
-    } else if (r.clientes_crit) {
-      // Sem relatório importado: usa o que está salvo no banco
-      clientesList = (r.clientes_crit||'').split('|').filter(Boolean).map(function(n){ return {nome:n, sit:''}; });
+      if (novoValor !== (r.clientes_crit||'')) r.clientes_crit = novoValor;
+    } else {
+      // Sem relatório: tenta cache localStorage primeiro, depois clientes_crit do banco
+      var fromCache = _expedClientesCritCache(destKey);
+      clientesList = fromCache.length ? fromCache
+        : (r.clientes_crit||'').split('|').filter(Boolean).map(function(n){ return {nome:n, sit:''}; });
     }
     var clientesHtml = clientesList.length
       ? clientesList.map(function(c){
@@ -5672,14 +5690,6 @@ function renderExpedicao() {
     '</tr>';
   });
   tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="10" style="text-align:center;padding:48px;color:#94a3b8">Nenhum veículo programado com frota preenchida.</td></tr>';
-
-  // Salvar registros com clientes_crit atualizados no Supabase
-  if (_expedSaveQueue.length > 0) {
-    saveLocal();
-    var _n = _expedSaveQueue.length;
-    _expedSaveQueue.forEach(function(rec){ fbSave(rec); });
-    showToast('💾 Clientes críticos salvos em ' + _n + ' registros', 'success');
-  }
   if (cardsDiv) {
     cardsDiv.innerHTML = [
       {label:'Total',valor:data.length,cor:'#111111',txt:'#9ca3af'},
