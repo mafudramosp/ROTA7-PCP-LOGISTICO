@@ -4376,7 +4376,10 @@ function sbInicializarRealtime() {
         } else if (chave.indexOf('tms_relatorio') === 0) {
           if (typeof sbCarregarRelatorio === 'function') sbCarregarRelatorio(true);
         } else if (chave === 'clientes_crit_map') {
-          if (typeof sbCarregarClientesCrit === 'function') sbCarregarClientesCrit();
+          sbCarregarClientesCrit().then(function() {
+            var tab = document.getElementById('tab-expedicao-content');
+            if (tab && tab.classList.contains('active')) renderExpedicao();
+          });
         } else if (chave.indexOf('cg_baseline_') === 0) {
           // Baseline de turno mudou em outra máquina — dispara o mesmo
           // polling que já existe (90s), garantindo merge correto e
@@ -5020,23 +5023,19 @@ function sbCarregarPlanejamento() {
 }
 
 function sbCarregarClientesCrit() {
-  // Carrega do Supabase, atualiza localStorage, re-renderiza sempre
-  try {
-    fetch(SB_URL + '/configuracoes?chave=eq.clientes_crit_map&select=valor', {
-      headers: {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY}
-    }).then(function(r){ return r.json(); }).then(function(data) {
-      var payload = data && data[0] && data[0].valor ? data[0].valor : null;
-      if (payload) {
-        try { localStorage.setItem('pvg_clientes_crit_cache', payload); } catch(e) {}
-      }
-      // Re-renderiza independente de qual tab está ativa
-      // (renderExpedicao lê do localStorage/cache automaticamente)
-      var tab = document.getElementById('tab-expedicao-content');
-      if (tab && tab.classList.contains('active')) {
-        setTimeout(renderExpedicao, 50);
-      }
-    }).catch(function(){});
-  } catch(e) {}
+  return new Promise(function(resolve) {
+    try {
+      fetch(SB_URL + '/configuracoes?chave=eq.clientes_crit_map&select=valor', {
+        headers: {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY}
+      }).then(function(r){ return r.json(); }).then(function(data) {
+        var payload = data && data[0] && data[0].valor ? data[0].valor : null;
+        if (payload) {
+          try { localStorage.setItem('pvg_clientes_crit_cache', payload); } catch(e) {}
+        }
+        resolve(!!payload);
+      }).catch(function(){ resolve(false); });
+    } catch(e) { resolve(false); }
+  });
 }
 
 function cgCarregarCritSupabase() {
@@ -5516,7 +5515,12 @@ function showTab(tab) {
       }, 400);
     }
   }
-  if (tab === 'expedicao') { window.scrollTo(0,0); renderExpedicao(); }
+  if (tab === 'expedicao') {
+    window.scrollTo(0,0);
+    // Carrega cache do Supabase primeiro, depois renderiza — garante que os clientes apareçam
+    sbCarregarClientesCrit().then(function() { renderExpedicao(); });
+    return;
+  }
   if (tab === 'historico') {
     const dtDe = document.getElementById('filter-hist-de');
     const dtAte = document.getElementById('filter-hist-ate');
@@ -5668,7 +5672,6 @@ function renderExpedicao() {
   }
   var comMotivo=0, semMotivo=0, pesoTotal=0;
   var ORDER = {Atrasado:0, Hoje:1};
-  var _expedSbCargaTentada = false; // evita múltiplas chamadas ao Supabase por renderização
   var rows = data.map(function(r,i) {
     var frotaKey = String(r.frota||'').trim();
     var relRows = (_relData||[]).filter(function(rel){ return String(rel.frotaPlan||'').trim() === frotaKey; });
@@ -5688,13 +5691,8 @@ function renderExpedicao() {
       var novoValor = clientesList.map(function(c){ return c.nome; }).join('|');
       if (novoValor !== (r.clientes_crit||'')) r.clientes_crit = novoValor;
     } else {
-      // Sem relatório: tenta cache localStorage primeiro, depois Supabase
+      // Sem relatório: usa cache (localStorage preenchido pelo Supabase no showTab)
       var fromCache = _expedClientesCritCache(destKey);
-      if (!fromCache.length && !_expedSbCargaTentada) {
-        // Dispara carga do Supabase uma única vez por sessão de renderização
-        _expedSbCargaTentada = true;
-        setTimeout(sbCarregarClientesCrit, 100);
-      }
       clientesList = fromCache.length ? fromCache
         : (r.clientes_crit||'').split('|').filter(Boolean).map(function(n){ return {nome:n, sit:''}; });
     }
