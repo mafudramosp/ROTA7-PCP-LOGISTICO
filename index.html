@@ -4428,7 +4428,6 @@ function recToSb(r) {
     obs: r.obs||'', tipo_prior: r.tipo_prior||'', data_crit: r.data_crit||'',
     conferente: r.conferente||'', ini_carg: r.ini_carg||'',
     parada1_dt: r.parada1_dt||'', parada1_peso: r.parada1_peso||0,
-    parada2_dt: r.parada2_dt||'', parada2_peso: r.parada2_peso||0,
     fim_carg_dt: r.fim_carg_dt||'', fim_carg_peso: r.fim_carg_peso||0,
     conferente2: r.conferente2||'', ini_carg2: r.ini_carg2||'',
     parada1_dt2: r.parada1_dt2||'', parada1_peso2: r.parada1_peso2||0,
@@ -5021,16 +5020,20 @@ function sbCarregarPlanejamento() {
 }
 
 function sbCarregarClientesCrit() {
+  // Carrega do Supabase, atualiza localStorage, re-renderiza sempre
   try {
     fetch(SB_URL + '/configuracoes?chave=eq.clientes_crit_map&select=valor', {
       headers: {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY}
     }).then(function(r){ return r.json(); }).then(function(data) {
-      if (data && data[0] && data[0].valor) {
-        // Atualiza localStorage com dados do Supabase (fonte de verdade)
-        try { localStorage.setItem('pvg_clientes_crit_cache', data[0].valor); } catch(e) {}
-        // Se Expedição estiver aberta, re-renderiza
-        var tab = document.getElementById('tab-expedicao-content');
-        if (tab && tab.classList.contains('active')) renderExpedicao();
+      var payload = data && data[0] && data[0].valor ? data[0].valor : null;
+      if (payload) {
+        try { localStorage.setItem('pvg_clientes_crit_cache', payload); } catch(e) {}
+      }
+      // Re-renderiza independente de qual tab está ativa
+      // (renderExpedicao lê do localStorage/cache automaticamente)
+      var tab = document.getElementById('tab-expedicao-content');
+      if (tab && tab.classList.contains('active')) {
+        setTimeout(renderExpedicao, 50);
       }
     }).catch(function(){});
   } catch(e) {}
@@ -5665,6 +5668,7 @@ function renderExpedicao() {
   }
   var comMotivo=0, semMotivo=0, pesoTotal=0;
   var ORDER = {Atrasado:0, Hoje:1};
+  var _expedSbCargaTentada = false; // evita múltiplas chamadas ao Supabase por renderização
   var rows = data.map(function(r,i) {
     var frotaKey = String(r.frota||'').trim();
     var relRows = (_relData||[]).filter(function(rel){ return String(rel.frotaPlan||'').trim() === frotaKey; });
@@ -5684,8 +5688,13 @@ function renderExpedicao() {
       var novoValor = clientesList.map(function(c){ return c.nome; }).join('|');
       if (novoValor !== (r.clientes_crit||'')) r.clientes_crit = novoValor;
     } else {
-      // Sem relatório: tenta cache localStorage primeiro, depois clientes_crit do banco
+      // Sem relatório: tenta cache localStorage primeiro, depois Supabase
       var fromCache = _expedClientesCritCache(destKey);
+      if (!fromCache.length && !_expedSbCargaTentada) {
+        // Dispara carga do Supabase uma única vez por sessão de renderização
+        _expedSbCargaTentada = true;
+        setTimeout(sbCarregarClientesCrit, 100);
+      }
       clientesList = fromCache.length ? fromCache
         : (r.clientes_crit||'').split('|').filter(Boolean).map(function(n){ return {nome:n, sit:''}; });
     }
