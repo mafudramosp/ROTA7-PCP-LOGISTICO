@@ -4187,19 +4187,19 @@ document.addEventListener('click',function(e){
         <table id="desc-rel-table" style="width:100%;border-collapse:collapse;font-size:11px">
           <thead style="position:sticky;top:0;z-index:3">
             <tr style="background:#111827 !important">
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">PREV. EMBARQUE</th>
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">DT. ENT. MÁX.</th>
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">CLIENTE</th>
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">ORIGEM</th>
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">DESTINO</th>
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;font-family:monospace;background:#111827">CTRC</th>
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">REMETENTE</th>
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">DESTINATÁRIO</th>
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">MODAL</th>
-              <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">NR. MAC</th>
-              <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;background:#111827">VOLS.</th>
-              <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">PESO (KG)</th>
-              <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">VALOR (R$)</th>
+              <th onclick="descSortBy('dtPrev')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">PREV. EMBARQUE<span class="desc-sort-arrow" id="dsa-dtPrev" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('dataMax')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">DT. ENT. MÁX.<span class="desc-sort-arrow" id="dsa-dataMax" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('cliente')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">CLIENTE<span class="desc-sort-arrow" id="dsa-cliente" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('origem')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">ORIGEM<span class="desc-sort-arrow" id="dsa-origem" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('destino')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">DESTINO<span class="desc-sort-arrow" id="dsa-destino" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('ctrc')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none;font-family:monospace">CTRC<span class="desc-sort-arrow" id="dsa-ctrc" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('remetente')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">REMETENTE<span class="desc-sort-arrow" id="dsa-remetente" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('destinatario')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">DESTINATÁRIO<span class="desc-sort-arrow" id="dsa-destinatario" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('modal')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">MODAL<span class="desc-sort-arrow" id="dsa-modal" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('mac')" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">NR. MAC<span class="desc-sort-arrow" id="dsa-mac" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('vols')" style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">VOLS.<span class="desc-sort-arrow" id="dsa-vols" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('peso')" style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">PESO (KG)<span class="desc-sort-arrow" id="dsa-peso" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
+              <th onclick="descSortBy('valor')" style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">VALOR (R$)<span class="desc-sort-arrow" id="dsa-valor" style="margin-left:4px;font-size:9px;opacity:.4">↕</span></th>
             </tr>
             <tr style="background:#1e293b" id="desc-filter-row">
               <th style="padding:3px 4px;background:#1e293b"><input oninput="descFiltrar()" data-col="0" class="desc-filter-inp" placeholder="🔍" style="width:100%;padding:3px 5px;border:none;border-radius:4px;font-size:10px;background:#334155;color:#fff;outline:none"></th>
@@ -9826,6 +9826,7 @@ function hubSaveNote(key,val) {}
 <script>
 var _descMacSel = null;
 var _descMacRanking = [];
+var _descSort = {col: null, asc: false};
 
 function descargaRenderizar() {
   if (!_relData || !_relData.length) return;
@@ -9916,6 +9917,41 @@ function descargaRenderizar() {
 
 var _descRows = []; // stores all rows for current MAC
 
+function descSortBy(col) {
+  if (_descSort.col === col) {
+    _descSort.asc = !_descSort.asc;
+  } else {
+    _descSort.col = col;
+    _descSort.asc = false; // 1º clique → maior para menor
+  }
+  document.querySelectorAll('.desc-sort-arrow').forEach(function(el) {
+    el.textContent = '↕'; el.style.opacity = '0.4';
+  });
+  var arrow = document.getElementById('dsa-' + col);
+  if (arrow) { arrow.textContent = _descSort.asc ? '↑' : '↓'; arrow.style.opacity = '1'; }
+  descFiltrar();
+}
+function _descSortRows(rows) {
+  if (!_descSort.col) return rows;
+  var col = _descSort.col, asc = _descSort.asc;
+  var dateKeys = ['dtPrev','dataMax'];
+  var numKeys  = ['vols','peso','valor'];
+  return rows.slice().sort(function(a, b) {
+    var va = a[col], vb = b[col];
+    if (dateKeys.indexOf(col) !== -1) {
+      var pa = (va||'').split('/'), pb = (vb||'').split('/');
+      var da = pa.length===3 ? new Date(+pa[2],+pa[1]-1,+pa[0]) : new Date(0);
+      var db = pb.length===3 ? new Date(+pb[2],+pb[1]-1,+pb[0]) : new Date(0);
+      return asc ? da-db : db-da;
+    }
+    if (numKeys.indexOf(col) !== -1) {
+      va = parseFloat(va)||0; vb = parseFloat(vb)||0;
+      return asc ? va-vb : vb-va;
+    }
+    va = String(va||'').toLowerCase(); vb = String(vb||'').toLowerCase();
+    return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+}
 function descFiltrar() {
   var filters = [];
   document.querySelectorAll('.desc-filter-inp').forEach(function(inp) {
@@ -9925,14 +9961,14 @@ function descFiltrar() {
   var critBadge = {'⚠ Cliente critico':'#ea580c','⚠ Agendamento':'#d97706','Fluxo':'#64748b'};
   var sitColor  = {'Atrasado':'#dc2626','Hoje':'#d97706','':'#374151'};
 
-  var html = _descRows.filter(function(r) {
+  var html = _descSortRows(_descRows.filter(function(r) {
     var cells = [r.dtPrev||'', r.dataMax||'', r.cliente||'', r.origem||'', r.destino||'',
                  r.ctrc||'', r.remetente||'', r.destinatario||'', r.modal||''];
     for (var i=0; i<filters.length; i++) {
       if (filters[i] && cells[i].toLowerCase().indexOf(filters[i]) === -1) return false;
     }
     return true;
-  }).map(function(r) {
+  })).map(function(r) {
     var rowCls = r.sitAH==='Atrasado'?'atras':r.cliente==='⚠ Cliente critico'?'crit':'';
     var sitC = sitColor[r.sitAH]||'#374151';
     return '<tr class="desc-rel-row '+rowCls+'">' +
