@@ -4171,8 +4171,13 @@ document.addEventListener('click',function(e){
 
     <!-- LISTA DE MACs -->
     <div>
-      <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">MACs — Inbound Priority</div>
-      <div id="desc-mac-list" style="display:flex;flex-direction:column;gap:5px">
+      <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">MACs — Inbound Priority</div>
+      <div style="position:relative;margin-bottom:8px">
+        <input type="text" id="desc-mac-busca" placeholder="Buscar MAC..." oninput="descBuscarMac()"
+          style="width:100%;padding:7px 10px 7px 30px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;outline:none;box-sizing:border-box">
+        <svg style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </div>
+      <div id="desc-mac-list" style="display:flex;flex-direction:column;gap:5px;max-height:calc(100vh - 240px);overflow-y:auto">
         <div style="color:#94a3b8;font-size:12px;padding:20px;text-align:center;background:#fff;border-radius:8px">Importe o TMS para ver</div>
       </div>
     </div>
@@ -9897,14 +9902,14 @@ function descargaRenderizar() {
 
   var list = document.getElementById('desc-mac-list');
   if (!list) return;
-  var pos=['1º','2º','3º','4º','5º','6º','7º','8º','9º','10º','11º','12º','13º','14º','15º'];
-  list.innerHTML = _descMacRanking.slice(0,15).map(function(m,i) {
+  list.innerHTML = _descMacRanking.map(function(m,i) {
+    var pos = (i+1) + 'º';
     var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
     var bg = usaRemetente ? '#f97316' : '#111111';
     var txtColor = usaRemetente ? '#000000' : '#ffffff';
     var destLabel = usaRemetente ? m.remetente : m.dest;
     return '<div class="desc-mac-item'+(m.mac===_descMacSel?' selected':'')+'" style="background:'+bg+';color:'+txtColor+'" onclick="descargaSelectMac(\''+m.mac.replace(/'/g,"\\'")+'\')">' +
-      '<div><span style="font-size:10px;opacity:.8">'+pos[i]+'</span>' +
+      '<div><span style="font-size:10px;opacity:.8">'+pos+'</span>' +
       '<span style="font-weight:800;margin-left:6px">MAC: '+m.mac+' – '+destLabel+'</span></div>' +
       '<div style="text-align:right"><div style="font-size:13px;font-weight:800">'+(m.atras+m.hoje)+'</div>' +
       '<div style="font-size:9px;opacity:.85">'+m.menorDtStr+' · ⚠'+m.atras+' 📅'+m.hoje+'</div></div>' +
@@ -9990,6 +9995,15 @@ function descFiltrar() {
 
   var tbody = document.getElementById('desc-rel-tbody');
   if (tbody) tbody.innerHTML = html || '<tr><td colspan="13" style="padding:20px;text-align:center;color:#94a3b8">Nenhum resultado</td></tr>';
+}
+
+function descBuscarMac() {
+  var termo = (document.getElementById('desc-mac-busca').value || '').trim().toLowerCase();
+  var items = document.querySelectorAll('#desc-mac-list .desc-mac-item');
+  items.forEach(function(el) {
+    var txt = el.textContent.toLowerCase();
+    el.style.display = (!termo || txt.includes(termo)) ? '' : 'none';
+  });
 }
 
 function descargaSelectMac(mac) {
