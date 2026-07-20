@@ -9898,7 +9898,7 @@ function descargaRenderizar() {
     m.score = (m.atras + m.hoje) * 10 + (m.maior36h ? 50 : 0) + (m.temDestPrior ? 20 : 0);
     m.urgente = m.atras > 0 || m.maior36h;
     return m;
-  }).filter(function(m){ return m.ctrcs >= 10; }).sort(function(a,b){return b.score-a.score;});
+  }).sort(function(a,b){return b.score-a.score;});
 
   var list = document.getElementById('desc-mac-list');
   if (!list) return;
