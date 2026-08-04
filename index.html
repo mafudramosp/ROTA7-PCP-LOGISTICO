@@ -3633,6 +3633,10 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof _descAcompListaCarregarSupabase === 'function') setTimeout(_descAcompListaCarregarSupabase, 1450);
   if (typeof _cargaCriticaHistoricoCarregarSupabase === 'function') setTimeout(_cargaCriticaHistoricoCarregarSupabase, 1500);
   if (typeof _deletedIdsCarregarSupabase === 'function') setTimeout(_deletedIdsCarregarSupabase, 1000);
+  // Carregar Acompanhamento OUT (Carregamento) do Supabase para compartilhamento entre usuários
+  if (typeof _acompOutCarregarSupabase === 'function') setTimeout(_acompOutCarregarSupabase, 1600);
+  // Renderizar Acompanhamento OUT para alimentar os gauges de Frotas Programadas
+  if (typeof acompOutRenderizar === 'function') setTimeout(acompOutRenderizar, 2000);
   // Limpar baselines de dias anteriores
   try {
     var hoje = new Date().toISOString().slice(0,10);
@@ -5116,6 +5120,9 @@ function sbInicializarRealtime() {
         } else if (chave === 'descarga_acomp_lista') {
           // Lista/fila do Acompanhamento de Produção (inclui "Finalizado Anteriormente") mudou em outra máquina
           if (typeof _descAcompListaCarregarSupabase === 'function') _descAcompListaCarregarSupabase();
+        } else if (chave === 'acomp_out_data') {
+          // Dados do Acompanhamento OUT (horas/peso/conferente) mudaram em outra máquina
+          if (typeof _acompOutCarregarSupabase === 'function') _acompOutCarregarSupabase();
         } else if (chave === 'carga_critica_historico') {
           // Histórico de Relatório da Carga Crítica mudou em outra máquina
           if (typeof _cargaCriticaHistoricoCarregarSupabase === 'function') _cargaCriticaHistoricoCarregarSupabase();
@@ -12390,11 +12397,59 @@ showTab = function(tab) {
 };
 
 // ═══ ACOMPANHAMENTO OUT ═══
+// Parser de peso no formato brasileiro:
+// "163.000"  → 163000  (ponto como separador de milhar)
+// "163.000,5"→ 163000.5
+// "163,5"    → 163.5
+// "163.5"    → 163.5   (ponto como decimal, sem ambiguidade)
+function _parsePesoBR(s) {
+  var str = String(s || '0').trim().replace(/\s/g, '');
+  if (!str || str === '0') return 0;
+  if (str.indexOf(',') !== -1) {
+    // Tem vírgula → vírgula é decimal, pontos são milhar
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if (/\.\d{3}$/.test(str)) {
+    // Termina com .XXX (exatamente 3 dígitos) → ponto é milhar
+    str = str.replace(/\./g, '');
+  }
+  return parseFloat(str) || 0;
+}
+
 var _acompOutData = {};
 try { _acompOutData = JSON.parse(localStorage.getItem('acomp_out_v1') || '{}'); } catch(ex) { _acompOutData = {}; }
 
 function _acompOutSalvar() {
   try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(ex) {}
+  _acompOutSalvarSupabase(); // compartilha com todos os usuários
+}
+
+// Salva os dados de Acompanhamento OUT (horaInicio/horaFim/pesoOpl/conferente/qtdConf/qtdAjud) no Supabase
+function _acompOutSalvarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ chave: 'acomp_out_data', valor: JSON.stringify(_acompOutData) })
+    }).catch(function(){});
+  } catch(e) {}
+}
+
+// Carrega os dados de Acompanhamento OUT do Supabase (chamado no início do app e via realtime)
+function _acompOutCarregarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.acomp_out_data&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      if (data && data.length && data[0].valor) {
+        _acompOutData = JSON.parse(data[0].valor);
+        try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(e){}
+        if (typeof acompOutRenderizar === 'function') {
+          var tab = document.getElementById('tab-acompOut-content');
+          if (tab && tab.classList.contains('active')) acompOutRenderizar();
+        }
+      }
+    }).catch(function(){});
+  } catch(e) {}
 }
 
 function _acompOutGet(id) {
@@ -12420,7 +12475,7 @@ function acompOutCampoAlterado(id, campo, valor) {
     var prodEl = document.getElementById('acompOut-prod-' + id);
     if (tempoEl) tempoEl.textContent = _descAcompTempoTotal(rec);
     if (prodEl) {
-      var pesoOplNum = parseFloat(String(rec.pesoOpl||'0').replace(',','.')) || 0;
+      var pesoOplNum = _parsePesoBR(rec.pesoOpl);
       prodEl.textContent = _descAcompProdutividade(rec, pesoOplNum);
     }
   }
@@ -12435,7 +12490,7 @@ function acompOutSalvarHistoricoSheets() {
   }
   var lista = (_acompOutUltimaLista || []).map(function(r) {
     var rec = _acompOutGet(r._id);
-    var pesoOplNum = parseFloat(String(rec.pesoOpl||'0').replace(',','.')) || 0;
+    var pesoOplNum = _parsePesoBR(rec.pesoOpl);
     return {
       id: r._id,
       destino: r.destino || '',
@@ -12470,7 +12525,7 @@ function acompOutAtualizarCards() {
 
   data.forEach(function(r) {
     var rec = _acompOutGet(r._id);
-    var peso = parseFloat(String(rec.pesoOpl || '0').replace(',', '.')) || 0;
+    var peso = _parsePesoBR(rec.pesoOpl);
     pesoTotal += peso;
     if (rec.horaFim && String(rec.horaFim).trim() !== '') finalizado++;
     else if (rec.horaInicio && String(rec.horaInicio).trim() !== '') emAndamento++;
@@ -12561,7 +12616,7 @@ function acompOutRenderizar() {
   tbody.innerHTML = data.map(function(r) {
     var rec = _acompOutGet(r._id);
     var st = _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim);
-    var pesoOplNum = parseFloat(String(rec.pesoOpl||'0').replace(',','.')) || 0;
+    var pesoOplNum = _parsePesoBR(rec.pesoOpl);
     return '<tr style="border-bottom:1px solid #f1f5f9">' +
       '<td style="padding:8px 10px;font-size:11px;color:#94a3b8">' + (r.gerado || '—') + '</td>' +
       '<td style="padding:8px 10px;font-weight:700;color:#1e293b">' + (r.destino || '') + '</td>' +
@@ -13538,6 +13593,8 @@ function _gvColetarDadosIN() {
   var pesoPlano = 0, pesoExecutado = 0, pesoProgramado = 0, pesoSemProgramacao = 0;
   var turnoTotal = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var turnoFeito = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var turnoTotalPeso = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var turnoFeitoPeso = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var turnoItens = {'1º Turno':[],'2º Turno':[],'3º Turno':[]};
   var pesoPorDestino = {}; // aqui representa peso por FILIAL ORIGEM (é o que existe no lado IN)
   var semProgramacaoLista = [];
@@ -13559,7 +13616,11 @@ function _gvColetarDadosIN() {
     var t = _gvTurnoDoHorario(horaRef);
     if (t) {
       turnoTotal[t]++;
-      if (temFim) turnoFeito[t]++;
+      turnoTotalPeso[t] += peso;
+      if (temFim) {
+        turnoFeito[t]++;
+        turnoFeitoPeso[t] += peso;
+      }
       turnoItens[t].push({ label: 'MAC ' + mac + ' — ' + info.origem, peso: peso, finalizado: temFim });
     }
 
@@ -13578,7 +13639,9 @@ function _gvColetarDadosIN() {
     pesoPlano: pesoPlano, pesoExecutado: pesoExecutado, pesoProgramado: pesoProgramado,
     pesoSemProgramacao: pesoSemProgramacao, semProgramacaoLista: semProgramacaoLista,
     pesoTransito: pesoTransito,
-    turnoTotal: turnoTotal, turnoFeito: turnoFeito, turnoItens: turnoItens,
+    turnoTotal: turnoTotal, turnoFeito: turnoFeito, 
+    turnoTotalPeso: turnoTotalPeso, turnoFeitoPeso: turnoFeitoPeso,
+    turnoItens: turnoItens,
     pesoPorDestino: pesoPorDestino,
     labelFeito: 'Peso Descarregado', labelFila: 'Peso na Fila (a descarregar)',
     labelDestino: 'Filial Origem'
@@ -13663,25 +13726,43 @@ function _fpColeta() {
 
   var ordem = ['1º Turno', '2º Turno', '3º Turno'];
   var porTurnoExec = {};
-  ordem.forEach(function(t) { porTurnoExec[t] = { programados: 0, executados: 0, andamento: 0, aguardando: 0 }; });
+  ordem.forEach(function(t) { 
+    porTurnoExec[t] = { 
+      programados: 0, executados: 0, andamento: 0, aguardando: 0,
+      pesoTotal: 0, pesoExecutado: 0, pesoAndamento: 0 
+    }; 
+  });
 
-  var pesoExecutado = 0, pesoAndamento = 0;
+  var pesoExecutado = 0, pesoAndamento = 0, pesoTotal = 0;
   var execCount = 0, andamentoCount = 0, aguardandoCount = 0;
 
   programadas.forEach(function(r) {
     var turno = (typeof calcTurnoCorte === 'function') ? calcTurnoCorte(r.saida) : '—';
-    if (!porTurnoExec[turno]) { porTurnoExec[turno] = { programados: 0, executados: 0, andamento: 0, aguardando: 0 }; ordem.push(turno); }
+    if (!porTurnoExec[turno]) { 
+      porTurnoExec[turno] = { 
+        programados: 0, executados: 0, andamento: 0, aguardando: 0,
+        pesoTotal: 0, pesoExecutado: 0, pesoAndamento: 0 
+      }; 
+      ordem.push(turno); 
+    }
     porTurnoExec[turno].programados++;
 
     var rec = (r._id !== null && r._id !== undefined) ? acompData[r._id] : null;
     var temInicio = !!(rec && rec.horaInicio && String(rec.horaInicio).trim());
     var temFim = !!(rec && rec.horaFim && String(rec.horaFim).trim());
-    var peso = rec ? (parseFloat(String(rec.pesoOpl || '0').replace(',', '.')) || 0) : 0;
+    var peso = rec ? (_parsePesoBR(rec.pesoOpl)) : 0;
+
+    porTurnoExec[turno].pesoTotal += peso;
+    pesoTotal += peso;
 
     if (temFim) {
-      pesoExecutado += peso; execCount++; porTurnoExec[turno].executados++;
+      pesoExecutado += peso; execCount++; 
+      porTurnoExec[turno].executados++;
+      porTurnoExec[turno].pesoExecutado += peso;
     } else if (temInicio) {
-      pesoAndamento += peso; andamentoCount++; porTurnoExec[turno].andamento++;
+      pesoAndamento += peso; andamentoCount++; 
+      porTurnoExec[turno].andamento++;
+      porTurnoExec[turno].pesoAndamento += peso;
     } else {
       aguardandoCount++; porTurnoExec[turno].aguardando++;
     }
@@ -13787,21 +13868,23 @@ function frotasProgramadasRenderizar() {
     fpPbProg.style.borderRadius = (pctExecutado > 0) ? '0 999px 999px 0' : '999px';
   }
 
-  // ── Velocímetros por turno: % de entrega concluída (executado ÷ programado) ──
+  // ── Velocímetros por turno: % de entrega concluída (peso executado ÷ peso total) ──
   var gaugesDiv = document.getElementById('fp-gauges');
   if (gaugesDiv) {
     var coresGauge = { '1º Turno': '#3fb950', '2º Turno': '#f0b429', '3º Turno': '#6b8cff' };
     var gaugesHtml = d.ordem.slice(0, 3).map(function(t) {
-      var g = d.porTurnoExec[t] || { programados: 0, executados: 0 };
-      var pct = g.programados ? Math.round(g.executados / g.programados * 100) : 0;
+      var g = d.porTurnoExec[t] || { pesoTotal: 0, pesoExecutado: 0, executados: 0, programados: 0 };
+      var pct = g.pesoTotal ? Math.round(g.pesoExecutado / g.pesoTotal * 100) : 0;
+      var pesoExecKg = Math.round(g.pesoExecutado || 0);
+      var pesoTotalKg = Math.round(g.pesoTotal || 0);
       return '<div style="flex:1;display:flex;flex-direction:column;align-items:center">' +
-        _gvGaugeSvg(pct, coresGauge[t] || '#9a9a9a', t, g.executados + ' de ' + g.programados) +
+        _gvGaugeSvg(pct, coresGauge[t] || '#9a9a9a', t, pesoExecKg + ' de ' + pesoTotalKg + ' kg') +
       '</div>';
     }).join('');
     gaugesDiv.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box">' +
         '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Atua&ccedil;&atilde;o de Entrega por Turno</div>' +
-        '<div style="font-size:10px;color:#6b6b6b;margin-bottom:14px">De quem j&aacute; est&aacute; programado (motorista/cavalo + frota carreta), quanto j&aacute; foi carregado e entregue</div>' +
+        '<div style="font-size:10px;color:#6b6b6b;margin-bottom:14px">Peso de cargas j&aacute; completamente carregadas e entregues vs peso total programado para o turno</div>' +
         '<div style="display:flex;gap:16px">' + gaugesHtml + '</div>' +
       '</div>';
   }
@@ -13812,14 +13895,18 @@ function frotasProgramadasRenderizar() {
     var corTurnoBadge = { '1º Turno': '#3fb950', '2º Turno': '#f0b429', '3º Turno': '#6b8cff' };
     var linhasT = d.ordem.map(function(t) {
       var g = d.porTurnoExec[t];
-      if (!g || !g.programados) return '';
-      var pct = Math.round(g.executados / g.programados * 100);
+      if (!g || !g.pesoTotal) return '';
+      var pct = Math.round(g.pesoExecutado / g.pesoTotal * 100);
+      var pesoExecKg = Math.round(g.pesoExecutado || 0);
+      var pesoAndKg = Math.round(g.pesoAndamento || 0);
+      var pesoAguKg = Math.round((g.pesoTotal - g.pesoExecutado - g.pesoAndamento) || 0);
+      var pesoTotalKg = Math.round(g.pesoTotal || 0);
       return '<tr>' +
         '<td style="padding:8px 10px;font-size:12px;color:#e5e9f0;border-bottom:1px solid #232323"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + (corTurnoBadge[t]||'#9a9a9a') + ';margin-right:7px"></span>' + t + '</td>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#e5e9f0;text-align:right;border-bottom:1px solid #232323">' + g.programados + '</td>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#3fb950;font-weight:700;text-align:right;border-bottom:1px solid #232323">' + g.executados + '</td>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#f0b429;font-weight:700;text-align:right;border-bottom:1px solid #232323">' + g.andamento + '</td>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#9a9a9a;text-align:right;border-bottom:1px solid #232323">' + g.aguardando + '</td>' +
+        '<td style="padding:8px 10px;font-size:12px;color:#e5e9f0;text-align:right;border-bottom:1px solid #232323">' + pesoTotalKg + ' kg</td>' +
+        '<td style="padding:8px 10px;font-size:12px;color:#3fb950;font-weight:700;text-align:right;border-bottom:1px solid #232323">' + pesoExecKg + ' kg</td>' +
+        '<td style="padding:8px 10px;font-size:12px;color:#f0b429;font-weight:700;text-align:right;border-bottom:1px solid #232323">' + pesoAndKg + ' kg</td>' +
+        '<td style="padding:8px 10px;font-size:12px;color:#9a9a9a;text-align:right;border-bottom:1px solid #232323">' + pesoAguKg + ' kg</td>' +
         '<td style="padding:8px 10px;font-size:12px;color:#fff;font-weight:800;text-align:right;border-bottom:1px solid #232323">' + pct + '%</td>' +
       '</tr>';
     }).join('');
@@ -13830,8 +13917,8 @@ function frotasProgramadasRenderizar() {
           '<table style="width:100%;border-collapse:collapse">' +
             '<thead><tr style="background:#1a1a1a">' +
               '<th style="text-align:left;padding:8px 10px;font-size:10px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.03em">Turno</th>' +
-              '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.03em">Programados</th>' +
-              '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#3fb950;text-transform:uppercase;letter-spacing:.03em">Entregues</th>' +
+              '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.03em">Peso Total</th>' +
+              '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#3fb950;text-transform:uppercase;letter-spacing:.03em">Entregue</th>' +
               '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#f0b429;text-transform:uppercase;letter-spacing:.03em">Carregando</th>' +
               '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.03em">Aguardando</th>' +
               '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#fff;text-transform:uppercase;letter-spacing:.03em">% Conclu&iacute;do</th>' +
@@ -13913,13 +14000,43 @@ function frotasProgramadasRenderizar() {
 }
 
 function _gvColetarDadosOUT() {
-  var itens = (typeof _acompOutUltimaLista !== 'undefined' && _acompOutUltimaLista.length) ? _acompOutUltimaLista : _gvAcompOutBase();
+  // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
+  var itens = (typeof progData !== 'undefined' && progData.length) 
+    ? progData.filter(function(r) { return !!(r.frota || r.ocup); })
+    : [];
   var acompData = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
+  var relD = (typeof _relData !== 'undefined') ? _relData : [];
+
+  // Construir mapa de peso por frotaPlan do TMS (mesma lógica do planejamento)
+  var relByFrota = {};
+  relD.forEach(function(r) {
+    var fp = String(r.frotaPlan||'').trim();
+    if (fp) {
+      if (!relByFrota[fp]) relByFrota[fp] = 0;
+      relByFrota[fp] += r.peso || 0;
+    }
+  });
+
+  function pesoDoTMS(frota) {
+    if (!frota) return 0;
+    var fn = String(frota).toUpperCase().replace(/\s+/g,'');
+    if (relByFrota[frota]) return relByFrota[frota];
+    if (relByFrota[fn]) return relByFrota[fn];
+    var found = 0;
+    Object.keys(relByFrota).forEach(function(k) {
+      if (found) return;
+      var kn = k.toUpperCase().replace(/\s+/g,'');
+      if (kn === fn || fn.indexOf(kn) !== -1 || kn.indexOf(fn) !== -1) found = relByFrota[k];
+    });
+    return found;
+  }
 
   var pesoFeito = 0, pesoFila = 0;
 
   var turnoTotal = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var turnoFeito = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var turnoTotalPeso = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var turnoFeitoPeso = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var turnoItens = {'1º Turno':[],'2º Turno':[],'3º Turno':[]};
   var pesoPorDestino = {};
 
@@ -13928,7 +14045,10 @@ function _gvColetarDadosOUT() {
     var rec = acompData[r._id] || {};
     var finalizado = !!(rec.horaFim && String(rec.horaFim).trim());
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
-    var peso = parseFloat(String(rec.pesoOpl||'0').replace(',','.')) || 0;
+    // Peso: prioriza TMS por frota; fallback para pesoOpl manual
+    var pesoTms = pesoDoTMS(r.frota);
+    var pesoManual = _parsePesoBR(rec.pesoOpl);
+    var peso = pesoTms > 0 ? pesoTms : pesoManual;
 
     if (finalizado) pesoFeito += peso;
     else pesoFila += peso;
@@ -13937,7 +14057,11 @@ function _gvColetarDadosOUT() {
     var t = _gvTurnoDoHorario(temInicio ? rec.horaInicio : agoraHoraOut);
     if (!t) return;
     turnoTotal[t]++;
-    if (finalizado) turnoFeito[t]++;
+    turnoTotalPeso[t] += peso;
+    if (finalizado) {
+      turnoFeito[t]++;
+      turnoFeitoPeso[t] += peso;
+    }
     turnoItens[t].push({ label: (r.destino||'—') + ' — frota ' + (r.frota||'—'), peso: peso, finalizado: finalizado });
 
     var dest = r.destino || '—';
@@ -13946,7 +14070,9 @@ function _gvColetarDadosOUT() {
 
   return {
     pesoFeito: pesoFeito, pesoFila: pesoFila,
-    turnoTotal: turnoTotal, turnoFeito: turnoFeito, turnoItens: turnoItens,
+    turnoTotal: turnoTotal, turnoFeito: turnoFeito, 
+    turnoTotalPeso: turnoTotalPeso, turnoFeitoPeso: turnoFeitoPeso,
+    turnoItens: turnoItens,
     pesoPorDestino: pesoPorDestino,
     labelFeito: 'Peso Carregado', labelFila: 'Peso na Fila (a carregar)'
   };
@@ -13960,7 +14086,10 @@ function _gvColetarDadosOUT() {
 // Obs.: o histórico TMS é macro (sem lista por item), então Fila Inicial/Entrou/Final existem no agregado (linha Total).
 function _gvFluxoFilaOUT() {
   var historico = (typeof _cargaCriticaHistorico !== 'undefined') ? _cargaCriticaHistorico : [];
-  var itensBase = (typeof _acompOutUltimaLista !== 'undefined' && _acompOutUltimaLista.length) ? _acompOutUltimaLista : _gvAcompOutBase();
+  // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
+  var itensBase = (typeof progData !== 'undefined' && progData.length)
+    ? progData.filter(function(r) { return !!(r.frota || r.ocup); })
+    : [];
   var acompData = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
   var hojeStr = new Date().toLocaleDateString('pt-BR');
   var agoraHora = new Date().toTimeString().substring(0,5);
@@ -13986,6 +14115,30 @@ function _gvFluxoFilaOUT() {
     return '3º Turno';
   }
 
+  // Construir mapa de peso por frotaPlan do TMS
+  var relD2 = (typeof _relData !== 'undefined') ? _relData : [];
+  var relByFrotaOut = {};
+  relD2.forEach(function(r) {
+    var fp = String(r.frotaPlan||'').trim();
+    if (fp) {
+      if (!relByFrotaOut[fp]) relByFrotaOut[fp] = 0;
+      relByFrotaOut[fp] += r.peso || 0;
+    }
+  });
+  function pesoTMSOut(frota) {
+    if (!frota) return 0;
+    var fn = String(frota).toUpperCase().replace(/\s+/g,'');
+    if (relByFrotaOut[frota]) return relByFrotaOut[frota];
+    if (relByFrotaOut[fn]) return relByFrotaOut[fn];
+    var found = 0;
+    Object.keys(relByFrotaOut).forEach(function(k) {
+      if (found) return;
+      var kn = k.toUpperCase().replace(/\s+/g,'');
+      if (kn === fn || fn.indexOf(kn) !== -1 || kn.indexOf(fn) !== -1) found = relByFrotaOut[k];
+    });
+    return found;
+  }
+
   // ── Passe 1 (SEMPRE sobre todas as frotas): Plano/Fila Final são números do armazém inteiro,
   //    não fazem sentido "por frota" — por isso nunca são filtrados, mesmo com uma frota selecionada.
   var execTotalGeral = 0, progTotalGeral = 0, naoIniciadoGeral = 0;
@@ -13993,7 +14146,8 @@ function _gvFluxoFilaOUT() {
     var rec = acompData[r._id] || {};
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
-    var peso = parseFloat(String(rec.pesoOpl||'0').replace(',','.')) || 0;
+    var pesoTms = pesoTMSOut(r.frota);
+    var peso = pesoTms > 0 ? pesoTms : (_parsePesoBR(rec.pesoOpl));
     if (temFim) execTotalGeral += peso;
     else if (temInicio) progTotalGeral += peso;
     else naoIniciadoGeral += peso;
@@ -14005,30 +14159,61 @@ function _gvFluxoFilaOUT() {
   var plano = filaInicial + entrouDepois;
   var filaFinal = plano - execTotalGeral;
 
-  // ── Passe 2: o que é exibido como "Executado", por turno ──
+  // ── Passe 2: o que é exibido como "Executado", por turno + distribuição proporcional de Fila ──
   var itens = itensBase;
   var ordem = ['1º Turno','2º Turno','3º Turno'];
   var execTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var pesoAcompTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var execTotal = 0;
 
   itens.forEach(function(r) {
     var rec = acompData[r._id] || {};
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
-    var peso = parseFloat(String(rec.pesoOpl||'0').replace(',','.')) || 0;
+    var pesoTms2 = pesoTMSOut(r.frota);
+    var peso = pesoTms2 > 0 ? pesoTms2 : (_parsePesoBR(rec.pesoOpl));
+    var t = turnoDe(temInicio ? rec.horaInicio : (rec.horaFim || agoraHora));
+    
+    pesoAcompTurno[t] += peso;
+    
     if (temFim) {
       execTotal += peso;
-      execTurno[turnoDe(temInicio ? rec.horaInicio : (rec.horaFim || agoraHora))] += peso;
+      execTurno[t] += peso;
     }
   });
 
+  var pctTotalExec = plano ? Math.round(execTotal / plano * 100) : 0;
+  // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
+  if (pctTotalExec === 0 && execTotal > 0) pctTotalExec = 1;
+  
   var total = {
     turno: 'Total', filaInicial: filaInicial, entrouDepois: entrouDepois,
     executado: execTotal, filaFinal: filaFinal,
-    pctExec: plano ? Math.round(execTotal / plano * 100) : 0
+    pctExec: pctTotalExec
   };
+  
+  // Distribui filaInicial proporcionalmente por turno baseado no acompanhamento
+  var totalAcomp = execTotal + (ordem.reduce(function(sum, t) { return sum + (pesoAcompTurno[t] - execTurno[t]); }, 0));
+  
   var linhas = ordem.map(function(t) {
-    return { turno: t, executado: execTurno[t], pctExec: plano ? Math.round(execTurno[t] / plano * 100) : 0 };
+    var proporcao = totalAcomp > 0 ? pesoAcompTurno[t] / totalAcomp : 0;
+    var filaInicialT = Math.round(filaInicial * proporcao);
+    var entrouDeT = Math.round(entrouDepois * proporcao);
+    var planoT = filaInicialT + entrouDeT;
+    var execT = execTurno[t];
+    var faltaT = planoT - execT;
+    var pctT = plano ? Math.round(execT / plano * 100) : 0;
+    // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
+    if (pctT === 0 && execT > 0) pctT = 1;
+    
+    return { 
+      turno: t, 
+      filaInicial: filaInicialT,
+      entrouDepois: entrouDeT,
+      filaFinal: faltaT,
+      executado: execT, 
+      pctExec: pctT
+    };
   });
 
   var horaPrimeiro = primeiroImport ? new Date(primeiroImport.dataHoraISO).toTimeString().substring(0,5) : null;
@@ -14150,18 +14335,35 @@ function gestaoVistaRenderizar() {
   var pesoTotalHoje = 0, pesoProgramado = 0, pesoExecutado = 0, pesoNaoIniciado = 0;
 
   if (_gvVisaoAtual === 'out') {
-    var itensOut = (typeof _acompOutUltimaLista !== 'undefined' && _acompOutUltimaLista.length) ? _acompOutUltimaLista : _gvAcompOutBase();
+    // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
+    var itensOut = (typeof progData !== 'undefined' && progData.length)
+      ? progData.filter(function(r) { return !!(r.frota || r.ocup); })
+      : [];
     var acompOut = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
-    // Plano (fila total do dia) é sempre do armazém inteiro — não faz sentido "por frota" (mesmo raciocínio da tabela Fluxo de Fila)
-    itensOut.forEach(function(r) {
-      var rec = acompOut[r._id] || {};
-      var peso = parseFloat(String(rec.pesoOpl||'0').replace(',','.')) || 0;
-      pesoTotalHoje += peso;
+    var relD3 = (typeof _relData !== 'undefined') ? _relData : [];
+    var relByFrotaGV = {};
+    relD3.forEach(function(r) {
+      var fp = String(r.frotaPlan||'').trim();
+      if (fp) { if (!relByFrotaGV[fp]) relByFrotaGV[fp] = 0; relByFrotaGV[fp] += r.peso || 0; }
     });
-    // Executado/Programado (fatias coloridas)
+    function pesoPorFrotaGV(frota) {
+      if (!frota) return 0;
+      var fn = String(frota).toUpperCase().replace(/\s+/g,'');
+      if (relByFrotaGV[frota]) return relByFrotaGV[frota];
+      if (relByFrotaGV[fn]) return relByFrotaGV[fn];
+      var found = 0;
+      Object.keys(relByFrotaGV).forEach(function(k) {
+        if (found) return;
+        var kn = k.toUpperCase().replace(/\s+/g,'');
+        if (kn === fn || fn.indexOf(kn) !== -1 || kn.indexOf(fn) !== -1) found = relByFrotaGV[k];
+      });
+      return found;
+    }
+    // Executado/Programado usando peso TMS por frota (fallback: pesoOpl manual)
     itensOut.forEach(function(r) {
       var rec = acompOut[r._id] || {};
-      var peso = parseFloat(String(rec.pesoOpl||'0').replace(',','.')) || 0;
+      var pesoTms = pesoPorFrotaGV(r.frota);
+      var peso = pesoTms > 0 ? pesoTms : (_parsePesoBR(rec.pesoOpl));
       var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
       var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
       if (temFim) pesoExecutado += peso;
@@ -14170,6 +14372,7 @@ function gestaoVistaRenderizar() {
     });
     // Plano OUT = tudo disponível no relatório do TMS (Fila Inicial + Entrou Depois do dia)
     if (fluxoOut && fluxoOut.temTms) pesoTotalHoje = fluxoOut.plano;
+    else pesoTotalHoje = pesoExecutado + pesoProgramado + pesoNaoIniciado;
   } else {
     // IN: reaproveita os valores já calculados em _gvColetarDadosIN (deduplicados via Histórico de Relatório)
     pesoTotalHoje = dados.pesoPlano || 0;
@@ -14255,19 +14458,23 @@ function gestaoVistaRenderizar() {
   var gaugesDiv = document.getElementById('gv-card-gauges');
   if (gaugesDiv) {
     var gaugesHtml = ordemTurnos.map(function(t) {
-      var total = dados.turnoTotal[t] || 0;
-      var feitas = dados.turnoFeito[t] || 0;
-      var pct = total ? Math.round((feitas / total) * 100) : 0;
+      var totalPeso = dados.turnoTotalPeso[t] || 0;
+      var feitoPeso = dados.turnoFeitoPeso[t] || 0;
+      // Usar plano total (TMS) para calcular percentuais, não apenas acompanhamento
+      var pesoPlanoTotal = pesoTotalHoje;
+      var pct = pesoPlanoTotal ? Math.round((feitoPeso / pesoPlanoTotal) * 100) : 0;
+      // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
+      if (pct === 0 && feitoPeso > 0) pct = 1;
       var selecionado = (_gvFiltroTurno === t);
       var itensTurno = dados.turnoItens[t] || [];
       var pendentes = itensTurno.filter(function(x){ return !x.finalizado; });
-      var tooltipHtml = '<b>'+t+'</b><br>'+feitas+' de '+total+' concluídos ('+pct+'%)' +
+      var tooltipHtml = '<b>'+t+'</b><br>'+Math.round(feitoPeso)+' de '+Math.round(pesoPlanoTotal)+' kg concluídos ('+pct+'%)' +
         (pendentes.length ? '<br><br>Pendentes:<br>' + pendentes.slice(0,5).map(function(p){ return '• '+p.label; }).join('<br>') : '<br><br>Tudo concluído neste turno ✅');
       return '<div style="flex:1;text-align:center;cursor:pointer;border-radius:8px;padding:4px;'+(selecionado?'background:rgba(255,255,255,.06)':'')+'" ' +
         'onclick="gestaoVistaFiltrarTurno(\''+t+'\')" ' +
         'onmousemove="_gvTooltipMostrar(event, \''+tooltipHtml.replace(/'/g,"\\'")+'\')" onmouseout="_gvTooltipEsconder()">' +
         _gvGaugeSvg(pct, corVisao, t, pct + '%') +
-        '<div style="font-size:10px;color:#9a9a9a;margin-top:2px">' + feitas + ' de ' + total + '</div>' +
+        '<div style="font-size:10px;color:#9a9a9a;margin-top:2px">' + Math.round(feitoPeso) + ' de ' + Math.round(pesoPlanoTotal) + ' kg</div>' +
       '</div>';
     }).join('');
     gaugesDiv.innerHTML =
@@ -14388,15 +14595,15 @@ function gestaoVistaRenderizar() {
     var linhasO = fo.linhas.map(function(l, i) {
       var selecionado = (_gvFiltroTurno === l.turno);
       var zebra = (i % 2 === 0) ? '#121212' : '#161616';
-      var tip = '<b>'+l.turno+'</b><br>Executado: '+fmtKgO(l.executado)+' kg ('+l.pctExec+'% do plano)<br><small>fila do TMS é agregada — detalhe por turno só no Executado</small>';
+      var tip = '<b>'+l.turno+'</b><br>Fila Inicial: '+fmtKgO(l.filaInicial)+' kg<br>Fila Final: '+fmtKgO(l.filaFinal)+' kg<br>Executado: '+fmtKgO(l.executado)+' kg ('+l.pctExec+'%)';
       return '<tr onclick="gestaoVistaFiltrarTurno(\''+l.turno+'\')" ' +
         'onmousemove="_gvTooltipMostrar(event, \''+tip.replace(/'/g,"\\'")+'\')" onmouseout="_gvTooltipEsconder()" ' +
         'style="cursor:pointer;background:'+(selecionado?'rgba(232,179,57,.12)':zebra)+'" ' +
         'onmouseover="this.style.background=\'#1d1d1d\'" onmouseleave="this.style.background=\''+(selecionado?'rgba(232,179,57,.12)':zebra)+'\'">' +
         '<td style="padding:9px 14px;font-size:12.5px;font-weight:600;color:#d0d0d0;white-space:nowrap;border-right:1px solid #232323">'+l.turno+(selecionado?' <span style="color:#e8b339">✕</span>':'')+'</td>' +
-        '<td style="'+tdTraco+'">—</td>' +
-        '<td style="'+tdTraco+'">—</td>' +
-        '<td style="'+tdTraco+'">—</td>' +
+        '<td style="'+tdNumO+'">'+fmtKgO(l.filaInicial)+'</td>' +
+        '<td style="'+tdNumO+'">'+fmtKgO(l.entrouDepois)+'</td>' +
+        '<td style="'+tdNumO+'">'+fmtKgO(l.filaFinal)+'</td>' +
         '<td style="'+tdNumO+';color:#4ade80;font-weight:700">'+fmtKgO(l.executado)+'</td>' +
         '<td style="'+tdNumO+';color:#f0b429;font-weight:800">'+l.pctExec+'%</td>' +
       '</tr>';
