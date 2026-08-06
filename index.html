@@ -1650,6 +1650,7 @@
       <button class="sb-item" id="tab-relatorio" onclick="showTab('relatorio')" data-tip="Planejamento OUT"><span class="sb-text">Planejamento OUT</span></button>
       <button class="sb-item" id="tab-prioridades" onclick="showTab('prioridades')" data-tip="Prioridade de Carregamento"><span class="sb-text">Prioridade de Carregamento</span></button>
       <button class="sb-item" id="tab-acompOut" onclick="showTab('acompOut')" data-tip="Acompanhamento OUT"><span class="sb-text">Acompanhamento OUT</span></button>
+      <button class="sb-item" id="tab-histRelOut" onclick="showTab('histRelOut')" data-tip="Histórico de Relatório" style="padding-left:40px !important"><span class="sb-text">Histórico de Relatório</span></button>
     </div>
   </div>
   <!-- Grupo: Plano PCP (antigo "Programar") -->
@@ -1697,7 +1698,7 @@
     </div>
     <div class="sb-group-items" id="items-gestaoavista">
       <button class="sb-item" id="tab-gestaoVista" onclick="showTab('gestaoVista')" data-tip="Painel Executivo"><span class="sb-text">Painel Executivo</span></button>
-      <button class="sb-item" id="tab-frotasProgramadas" onclick="showTab('frotasProgramadas')" data-tip="Frotas Programadas"><span class="sb-text">Frotas Programadas</span></button>
+
     </div>
   </div>
 
@@ -2064,35 +2065,60 @@ function _gradeAtualizarComMalha(rows) {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
       <button id="gv-btn-in" onclick="gestaoVistaTrocarVisao('in')" style="padding:7px 18px;border-radius:4px;border:1px solid #e8e8e8;background:#e8e8e8;color:#111;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Descarga (IN)</button>
       <button id="gv-btn-out" onclick="gestaoVistaTrocarVisao('out')" style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Carregamento (OUT)</button>
+      <button id="gv-btn-fp" onclick="gestaoVistaTrocarVisao('fp')" style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Frotas Programadas</button>
 
       <div id="gv-filtro-ativo" style="margin-left:8px"></div>
     </div>
 
-    <!-- Barra de 3 estágios: Executado / Programado / Plano -->
-    <div id="gv-barra-estagios" style="margin-bottom:20px"></div>
+    <!-- Container para visão IN/OUT -->
+    <div id="gv-inout-container">
+      <!-- Barra de 3 estágios: Executado / Programado / Plano -->
+      <div id="gv-barra-estagios" style="margin-bottom:20px"></div>
 
-    <!-- Linha 1: cards principais + gauges de turno + leaderboard -->
-    <div style="display:grid;grid-template-columns:260px 1fr 280px;gap:16px;margin-bottom:16px;align-items:stretch">
-      <div id="gv-card-sales"></div>
-      <div id="gv-card-gauges"></div>
-      <div id="gv-card-leaderboard"></div>
+      <!-- Linha 1: cards principais + gauges de turno + leaderboard -->
+      <div style="display:grid;grid-template-columns:260px 1fr 280px;gap:16px;margin-bottom:16px;align-items:stretch">
+        <div id="gv-card-sales"></div>
+        <div id="gv-card-gauges"></div>
+        <div id="gv-card-leaderboard"></div>
+      </div>
+
+      <!-- Linha 2: entrega total do dia (gráfico) + indicadores do dia -->
+      <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;margin-bottom:16px">
+        <div id="gv-card-entrega"></div>
+        <div id="gv-card-indicadores"></div>
+      </div>
+
+      <!-- Linha 3: visão do que está Sem Programação + Em Trânsito -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div id="gv-card-sem-programacao"></div>
+        <div id="gv-card-transito"></div>
+      </div>
+
+      <!-- Linha 4: Frotas Programadas no turno (substitui o antigo seletor de Frotas) -->
+      <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-top:16px">
+        <div id="gv-card-frotas-prog"></div>
+      </div>
     </div>
 
-    <!-- Linha 2: entrega total do dia (gráfico) + indicadores do dia -->
-    <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;margin-bottom:16px">
-      <div id="gv-card-entrega"></div>
-      <div id="gv-card-indicadores"></div>
-    </div>
+    <!-- Container para visão Frotas Programadas -->
+    <div id="gv-fp-container" style="display:none">
+      <!-- KPIs grandes em linguagem simples -->
+      <div id="fp-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px"></div>
 
-    <!-- Linha 3: visão do que está Sem Programação + Em Trânsito -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div id="gv-card-sem-programacao"></div>
-      <div id="gv-card-transito"></div>
-    </div>
+      <!-- Barra de progresso: Executado / Em Carregamento / Aguardando (das rotas já programadas) -->
+      <div id="fp-barra" style="margin-bottom:20px"></div>
 
-    <!-- Linha 4: Frotas Programadas no turno (substitui o antigo seletor de Frotas) -->
-    <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-top:16px">
-      <div id="gv-card-frotas-prog"></div>
+      <!-- Velocímetros por turno -->
+      <div id="fp-gauges" style="margin-bottom:16px"></div>
+
+      <!-- Tabela: atuação de entrega por turno -->
+      <div id="fp-tabela-turno" style="margin-bottom:16px"></div>
+
+      <!-- Pendentes de programação + Críticos entre os programados -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div id="fp-pendentes"></div>
+        <div id="fp-criticos"></div>
+      </div>
     </div>
 
     <!-- Tooltip flutuante (popup ao passar o mouse) -->
@@ -2101,38 +2127,7 @@ function _gradeAtualizarComMalha(rows) {
 </div>
 
 
-<!-- ===================== TAB: FROTAS PROGRAMADAS (dashboard dedicado) ===================== -->
-<div id="tab-frotasProgramadas-content" class="tab-content">
-  <div style="padding:20px 24px;box-sizing:border-box;background:#0d0d0d;min-height:calc(100vh - 64px);font-family:'Poppins',sans-serif;position:relative">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div>
-        <div style="font-size:18px;font-weight:700;color:#fff">Frotas Programadas — Painel de Execução</div>
-        <div style="font-size:11px;color:#9a9a9a">Veículos escalados para carregamento hoje, da programação até a entrega — turno a turno</div>
-      </div>
-      <div style="font-size:11px;color:#9a9a9a" id="fp-atualizado">—</div>
-    </div>
 
-    <!-- KPIs grandes em linguagem simples -->
-    <div id="fp-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px"></div>
-
-    <!-- Barra de progresso: Executado / Em Carregamento / Aguardando (das rotas já programadas) -->
-    <div id="fp-barra" style="margin-bottom:20px"></div>
-
-    <!-- Velocímetros por turno -->
-    <div id="fp-gauges" style="margin-bottom:16px"></div>
-
-    <!-- Tabela: atuação de entrega por turno -->
-    <div id="fp-tabela-turno" style="margin-bottom:16px"></div>
-
-    <!-- Pendentes de programação + Críticos entre os programados -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div id="fp-pendentes"></div>
-      <div id="fp-criticos"></div>
-    </div>
-
-    <div id="fp-tooltip" style="display:none;position:fixed;z-index:9999;background:#1a1a1a;border:1px solid #2f2f2f;border-radius:6px;padding:10px 14px;font-size:11px;color:#e5e9f0;max-width:260px;box-shadow:0 8px 24px rgba(0,0,0,.4);pointer-events:none"></div>
-  </div>
-</div>
 
 
 <!-- ===================== TAB: PROGRAMADOS ===================== -->
@@ -3817,6 +3812,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <button id="rel-btn-carregar" onclick="relCarregarPendente()" style="display:none;padding:7px 14px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Carregar dados</button>
       <button onclick="relAbrirExport()" style="padding:7px 14px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Exportar Excel</button>
       <button onclick="relAbrirImpressao()" style="padding:7px 14px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Imprimir</button>
+
     </div>
   </div>
 
@@ -4138,6 +4134,10 @@ function relExecutarImpressao() {
   var w = window.open('','_blank','width=1200,height=800');
   w.document.write(html);
   w.document.close();
+
+  // Ao imprimir, registra o planejamento e atualiza a coluna Programação
+  var destStr = ordemDestinos.length > 3 ? 'Múltiplos (' + ordemDestinos.length + ')' : ordemDestinos.join(', ');
+  relGerarPlanejamento(destStr);
 }
 
 // ── WEB WORKER PARA PARSING (não bloqueia UI) ──
@@ -4349,7 +4349,8 @@ function relProcessarRows(rows) {
           if (d === 'planejado') return 'Carregando';
           if (d === 'disponível') return 'Disponível';
           return '—';
-        })()
+        })(),
+        programacao: ''
       });
     }
     if(e2<total) setTimeout(function(){parseChunk(e2);},0);
@@ -4392,6 +4393,7 @@ function relImportar(input) {
 
 // ── Colunas da tabela ──
 var REL_COLS = [
+  {k:'programacao',  l:'Programação',         w:175,                filter:false},
   {k:'dtPrev',      l:'Prev. Embarque',    w:120, type:'date',  filter:true},
   {k:'dataMax',     l:'Dt. Entrega Máx.',  w:120, type:'date',  filter:true},
   {k:'dtUlt',       l:'Dt. Últ. Posição',  w:120, type:'date',  filter:true},
@@ -4418,6 +4420,122 @@ var dispLabel={'Patio':'Pátio','Em descarregamento':'Em descarga'};
 var posicaoBadge={'Fila de descarga':'rel-badge-patio','Disponível':'rel-badge-disp','Carregando':'rel-badge-plan'};
 var critBadge={'⚠ Cliente critico':'rel-badge-crit','⚠ Agendamento':'rel-badge-agend','Fluxo':'rel-badge-fluxo'};
 var etiqBadge={'Coleta':'rel-badge-colet','Reembarque':'rel-badge-remb'};
+
+// ── HISTÓRICO DE RELATÓRIO OUT ──
+var _histRelOut = [];
+try { _histRelOut = JSON.parse(localStorage.getItem('hist_rel_out_v1') || '[]'); } catch(ex) { _histRelOut = []; }
+
+function relGerarPlanejamento(destinoImpresso) {
+  if (!_relFilt || !_relFilt.length) {
+    showToast('Nenhum registro filtrado para gerar planejamento', 'error');
+    return;
+  }
+  // Formata data/hora atual
+  var now = new Date();
+  var d = ('0'+now.getDate()).slice(-2) + '/' + ('0'+(now.getMonth()+1)).slice(-2) + '/' + now.getFullYear();
+  var t = ('0'+now.getHours()).slice(-2) + ':' + ('0'+now.getMinutes()).slice(-2);
+  var statusText = 'Planejado – ' + d + ' - ' + t;
+
+  // Marca todos os registros filtrados com o status de programação
+  _relFilt.forEach(function(r) { r.programacao = statusText; });
+
+  // Captura os dados exibidos nos cards (stats)
+  var snapshot = {
+    ts: now.toISOString(),
+    tsFormatado: d + ' ' + t,
+    statusText: statusText,
+    destinoImpresso: destinoImpresso || '—',
+    totalCtrcs: document.getElementById('rel-s-total') ? document.getElementById('rel-s-total').textContent : String(_relFilt.length),
+    pesoTotal:  document.getElementById('rel-s-peso')  ? document.getElementById('rel-s-peso').textContent  : '—',
+    valorTotal: document.getElementById('rel-s-valor') ? document.getElementById('rel-s-valor').textContent : '—',
+    volumes:    document.getElementById('rel-s-vols')  ? document.getElementById('rel-s-vols').textContent  : '—',
+    totalNotas: document.getElementById('rel-s-notas') ? document.getElementById('rel-s-notas').textContent : '—',
+    critEntrega:document.getElementById('rel-s-critentrega') ? document.getElementById('rel-s-critentrega').textContent : '—',
+    ctrcsAfetados: _relFilt.length
+  };
+
+  // Salva no histórico local (mais recente primeiro, limite 100)
+  _histRelOut.unshift(snapshot);
+  if (_histRelOut.length > 100) _histRelOut = _histRelOut.slice(0, 100);
+  try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+
+  // Envia para Google Sheets (fire-and-forget, não bloqueia)
+  if (typeof sheetsPost === 'function' && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
+    sheetsPost('salvar_hist_rel_out', snapshot).catch(function(){});
+  }
+
+  // Re-renderiza a tabela para exibir a coluna Programação atualizada
+  if (typeof relRenderizar === 'function') relRenderizar();
+  
+  // Atualiza a aba de histórico se estiver ativa
+  if (document.getElementById('tab-histRelOut-content').classList.contains('active')) {
+    histRelOutRenderizar();
+  }
+
+  showToast('✅ Planejamento registrado: ' + snapshot.ctrcsAfetados + ' CTRCs marcados (' + d + ' ' + t + ')', 'success');
+}
+
+function histRelOutRenderizar() {
+  var tbody = document.getElementById('hro-tbody');
+  if (!tbody) return;
+
+  var dateFilter = document.getElementById('hro-filter-date') ? document.getElementById('hro-filter-date').value : '';
+  var filtered = _histRelOut;
+  if (dateFilter) {
+    filtered = _histRelOut.filter(function(s) { return s.ts.startsWith(dateFilter); });
+  }
+
+  // Atualiza Cards de Totais Gerais do Histórico
+  var tCtrcs = 0, tPeso = 0, tValor = 0, tVols = 0, tNotas = 0, tCrit = 0;
+  filtered.forEach(function(s) {
+    tCtrcs += parseInt(String(s.totalCtrcs).replace(/\./g, '')) || 0;
+    tPeso += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
+    tValor += parseFloat(String(s.valorTotal).replace('R$ ', '').replace(/\./g, '').replace(',', '.')) || 0;
+    tVols += parseInt(String(s.volumes).replace(/\./g, '')) || 0;
+    tNotas += parseInt(String(s.totalNotas).replace(/\./g, '')) || 0;
+    tCrit += parseInt(String(s.critEntrega).replace(/\./g, '')) || 0;
+  });
+
+  if (document.getElementById('hro-c-ctrcs')) document.getElementById('hro-c-ctrcs').textContent = tCtrcs.toLocaleString('pt-BR');
+  if (document.getElementById('hro-c-peso')) document.getElementById('hro-c-peso').textContent = tPeso.toLocaleString('pt-BR', {maximumFractionDigits:1});
+  if (document.getElementById('hro-c-valor')) document.getElementById('hro-c-valor').textContent = 'R$ ' + tValor.toLocaleString('pt-BR', {minimumFractionDigits:2});
+  if (document.getElementById('hro-c-vols')) document.getElementById('hro-c-vols').textContent = tVols.toLocaleString('pt-BR');
+  if (document.getElementById('hro-c-notas')) document.getElementById('hro-c-notas').textContent = tNotas.toLocaleString('pt-BR');
+  if (document.getElementById('hro-c-crit')) document.getElementById('hro-c-crit').textContent = tCrit.toLocaleString('pt-BR');
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:24px">Nenhum registro encontrado</td></tr>';
+    document.getElementById('hro-btn-excluir').style.display = 'none';
+    return;
+  }
+
+  // Agrupamento por dia
+  var html = '';
+  var lastDay = '';
+  filtered.forEach(function(s, i) {
+    var day = (s.tsFormatado || '').split(' ')[0];
+    if (day && day !== lastDay) {
+      html += '<tr style="background:#e2e8f0"><td colspan="9" style="padding:6px 10px;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase">' + day + '</td></tr>';
+      lastDay = day;
+    }
+    var bg = i % 2 === 0 ? '#fff' : '#f8fafc';
+    var indexOriginal = _histRelOut.indexOf(s);
+    html += '<tr style="background:' + bg + '" data-orig-index="' + indexOriginal + '">'
+      + '<td style="padding:8px 10px;text-align:center"><input type="checkbox" class="hro-check-item" data-index="' + indexOriginal + '" onchange="histRelOutAtualizarBotao()" style="cursor:pointer"></td>'
+      + '<td style="padding:8px 10px;font-size:11px;white-space:nowrap;font-weight:600">' + (s.tsFormatado || '—') + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1e293b">' + (s.destinoImpresso || '—') + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;text-align:right">' + (s.totalCtrcs || '—') + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;text-align:right">' + (s.pesoTotal  || '—') + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;text-align:right">' + (s.valorTotal || '—') + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;text-align:right">' + (s.volumes    || '—') + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;text-align:right">' + (s.totalNotas || '—') + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;text-align:right">' + (s.critEntrega|| '—') + '</td>'
+      + '</tr>';
+  });
+  tbody.innerHTML = html;
+  document.getElementById('hro-btn-excluir').style.display = 'none';
+  document.getElementById('hro-check-all').checked = false;
+}
 
 
 
@@ -4897,7 +5015,52 @@ document.addEventListener('click',function(e){
   </div>
 </div>
 
-<!-- ── TAB CONSOLIDAÇÃO ── -->
+<!-- ── TAB HISTÓRICO DE RELATÓRIO OUT ── -->
+<div id="tab-histRelOut-content" class="tab-content" style="background:#f1f5f9;min-height:calc(100vh - 64px);padding:20px 24px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:16px;font-weight:700;color:#1e293b">Histórico de Relatório</div>
+      <div style="font-size:11px;color:#94a3b8">Planejamento OUT · registros salvos a cada impressão</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <input type="date" id="hro-filter-date" onchange="histRelOutRenderizar()" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;outline:none;background:#fff">
+      <button id="hro-btn-excluir" onclick="histRelOutExcluirSelecionados()" style="padding:8px 16px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;display:none">Excluir</button>
+    </div>
+  </div>
+
+  <!-- Cards de Totais Gerais do Histórico -->
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <div class="rel-stat-card"><div class="rel-stat-label">Total CTRCs</div><div class="rel-stat-val" id="hro-c-ctrcs">0</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label">Peso total (kg)</div><div class="rel-stat-val" id="hro-c-peso">0</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label">Valor total</div><div class="rel-stat-val" id="hro-c-valor">R$ 0,00</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label">Volumes</div><div class="rel-stat-val" id="hro-c-vols">0</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label">Total de Notas</div><div class="rel-stat-val" id="hro-c-notas">0</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label">Qtd. Crit. Entrega</div><div class="rel-stat-val" id="hro-c-crit">0</div></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;vertical-align:middle;width:40px"><input type="checkbox" id="hro-check-all" onchange="histRelOutToggleTodos()" style="cursor:pointer"></th>
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;vertical-align:middle">Horário Impressão</th>
+          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;vertical-align:middle">Destino Impresso</th>
+          <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Total CTRCs</th>
+          <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Peso Total (kg)</th>
+          <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Valor Total</th>
+          <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Volumes</th>
+          <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Total de Notas</th>
+          <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Criticidade de Entrega</th>
+        </tr>
+      </thead>
+      <tbody id="hro-tbody">
+        <tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:24px">Nenhum registro encontrado</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
 <div id="tab-consolidacao-content" class="tab-content" style="background:#f1f5f9;min-height:calc(100vh - 64px);padding:20px 24px;box-sizing:border-box">
   <div style="margin-bottom:16px">
     <div style="font-size:16px;font-weight:700;color:#1e293b">Peso em Rota</div>
@@ -4939,6 +5102,7 @@ document.addEventListener('click',function(e){
     </div>
   </div>
 
+  <div id="descarga-cards" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
   <div style="display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start">
 
     <!-- LISTA DE MACs -->
@@ -5013,7 +5177,7 @@ document.addEventListener('click',function(e){
       <div style="font-size:16px;font-weight:700;color:#1e293b">Acompanhamento IN</div>
       <div style="font-size:11px;color:#94a3b8">Sub-tópico de Descarga · impressões, andamento físico e horários de cada MAC da fila <span id="descAcomp-ultimo-import"></span></div>
     </div>
-    <button onclick="descargaAcompSalvarHistoricoSheets()" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Salvar</button>
+
   </div>
 
   <div id="descarga-acomp-cards" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
@@ -5064,6 +5228,7 @@ document.addEventListener('click',function(e){
           <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">HORÁRIO DE INCLUSÃO</th>
           <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">QTD. DE MACS</th>
           <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">TOTAL DE REGISTROS (CTRCS)</th>
+          <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">PESO OPERACIONAL TOTAL</th>
           <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">FILA DE DESCARGA (NA HORA)</th>
           <th style="padding:8px 10px;text-align:right;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">DESCARREGADOS</th>
           <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">AÇÃO</th>
@@ -5595,7 +5760,8 @@ function _relComprimir(r) {
     vl:r.valor||0, sh:r.sitAH||'',
     rb:r.reboque||'', vo:r.vols||'',
     mdst:r.macDest||'',
-    nt:r.nota||''
+    nt:r.nota||'',
+    pg:r.programacao||''
   };
   // Remove nulos/vazios para economizar espaço
   Object.keys(o).forEach(function(k){ if(o[k]===null||o[k]==='') delete o[k]; });
@@ -5625,7 +5791,8 @@ function _relDescomprimir(o) {
     valor:o.vl||0, sitAH:o.sh||'',
     reboque:o.rb||'', vols:o.vo||'',
     macDest:o.mdst||'',
-    nota:o.nt||''
+    nota:o.nt||'',
+    programacao:o.pg||''
   };
 }
 
@@ -7039,10 +7206,6 @@ function buildProgRows() {
       gerado: saved ? saved.gerado : '',
       _id: saved ? saved._id : null,
     };
-  }).filter(function(row) {
-    // Mantém se: saída >= hora atual OU está Carregando (ocup > 1%)
-    if (row.saida >= horaAtual) return true;
-    return row.ocupPct > 1; // Carregando ou Finalizado
   });
 }
 
@@ -10146,7 +10309,7 @@ function toggleSbGroup(name) {
 var _sbGroupMap = {
   'programacao': 'programar', 'nova': 'programar', 'historico': 'programar',
   'grade': 'malha',
-  'cargas': 'estoque', 'relatorio': 'estoque', 'frotas': 'estoque', 'descarga': 'estoque', 'descargaAcomp': 'estoque', 'descargaHistorico': 'estoque',
+  'cargas': 'estoque', 'relatorio': 'estoque', 'frotas': 'estoque', 'descarga': 'estoque', 'descargaAcomp': 'estoque', 'descargaHistorico': 'estoque', 'histRelOut': 'estoque',
   'transito': 'emtransito',
   'dashboard': 'analise'
 };
@@ -10184,6 +10347,8 @@ showTab = function(tab) {
   }
   // Frotas
   if (tab === 'frotas' && typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 50);
+  // Histórico de Relatório OUT
+  if (tab === 'histRelOut' && typeof histRelOutRenderizar === 'function') histRelOutRenderizar();
 
 };
 </script>
@@ -10857,6 +11022,15 @@ function descargaRenderizar() {
 
   // Mantém o Acompanhamento de Produção sincronizado com a fila atual
   if (typeof descargaAcompRenderizar === 'function') descargaAcompRenderizar();
+
+  // Card de Peso Total na Fila de Descarga
+  var cardsDiv = document.getElementById('descarga-cards');
+  if (cardsDiv) {
+    var pesoTotalFila = _descMacRanking.reduce(function(s, m){ return s + (m.pesoTotal || 0); }, 0);
+    cardsDiv.innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:160px;flex:1;max-width:240px">' +
+      '<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Peso Total na Fila</div>' +
+      '<div style="font-size:18px;font-weight:800;color:#1e293b;margin-top:4px">' + Math.round(pesoTotalFila).toLocaleString('pt-BR') + ' kg</div></div>';
+  }
 }
 
 var _descRows = []; // stores all rows for current MAC
@@ -11125,6 +11299,28 @@ function _descAcompListaCarregarSupabase() {
     }).then(function(r){ return r.json(); }).then(function(data) {
       if (data && data.length && data[0].valor) {
         _descAcompLista = JSON.parse(data[0].valor);
+        
+        // Limpeza automática: remover finalizados há mais de 3 dias
+        var agora = new Date();
+        var tresDias = 3 * 24 * 60 * 60 * 1000;
+        var mudou = false;
+        _descAcompLista = _descAcompLista.filter(function(m) {
+          var rec = _descAcompData[m.mac];
+          if (rec && rec.dataFimISO) {
+            var dtFim = new Date(rec.dataFimISO);
+            if (agora - dtFim > tresDias) {
+              delete _descAcompData[m.mac];
+              mudou = true;
+              return false;
+            }
+          }
+          return true;
+        });
+        if (mudou) {
+          _descAcompListaSalvar();
+          _descAcompSalvar();
+        }
+
         try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
         if (typeof descargaAcompRenderizar === 'function') {
           var tab = document.getElementById('tab-descargaAcomp-content');
@@ -11260,6 +11456,7 @@ function descargaAcompStatusAlterado(mac, status) {
       rec.horaInicio = horaAtual;
     }
     rec.horaFim = horaAtual;
+    rec.dataFimISO = agora.toISOString();
   } else if (status === 'em-andamento') {
     if (!rec.horaInicio || String(rec.horaInicio).trim() === '') {
       rec.horaInicio = horaAtual;
@@ -11606,6 +11803,19 @@ function _relatorioHistoricoCarregarSupabase() {
     }).then(function(r){ return r.json(); }).then(function(data) {
       if (data && data.length && data[0].valor) {
         _relatorioHistorico = JSON.parse(data[0].valor);
+        
+        // Limpeza automática: registros com mais de 7 dias
+        var agora = new Date();
+        var seteDias = 7 * 24 * 60 * 60 * 1000;
+        var inicialLen = _relatorioHistorico.length;
+        _relatorioHistorico = _relatorioHistorico.filter(function(h) {
+          var dt = new Date(h.dataHoraISO);
+          return (agora - dt) <= seteDias;
+        });
+        if (_relatorioHistorico.length !== inicialLen) {
+          _relatorioHistoricoSalvarSupabase();
+        }
+
         try { localStorage.setItem('relatorio_historico_v1', JSON.stringify(_relatorioHistorico)); } catch(e){}
         var tab = document.getElementById('tab-descargaHistorico-content');
         if (tab && tab.classList.contains('active') && typeof descargaHistoricoRenderizar === 'function') descargaHistoricoRenderizar();
@@ -11641,10 +11851,12 @@ function _relatorioHistoricoRegistrar() {
   // Total de CTRCs somado só dos MACs que estão na fila (não o total bruto do relatório inteiro)
   var totalCtrcsFila = filaSnapshot.reduce(function(s, f){ return s + (f.qtdCtrcs || 0); }, 0);
 
+  var pesoTotalFila = filaSnapshot.reduce(function(s, f){ return s + (f.pesoOpl || 0); }, 0);
   var entrada = {
     dataHoraISO: new Date().toISOString(),
     totalMacs: filaSnapshot.length, // qtd. de MACs na FILA de Descarga (não o total bruto do relatório)
     totalRegistros: totalCtrcsFila, // soma de CTRCs só dos MACs na fila (não o total bruto do relatório)
+    pesoTotal: pesoTotalFila,
     filaSnapshot: filaSnapshot
   };
   _relatorioHistorico.unshift(entrada); // mais recente primeiro
@@ -11673,7 +11885,8 @@ function descargaHistoricoRenderizar() {
   var cards = [
     { l: 'Total de Importações', v: _relatorioHistorico.length, cor: '#1e293b' },
     { l: 'Última Importação', v: ultima ? _histFmtDataHoraCurta(ultima.dataHoraISO) : '—', cor: '#475569' },
-    { l: 'MACs na Última Importação', v: ultima ? ultima.totalMacs : '—', cor: '#16a34a' }
+    { l: 'MACs na Última Importação', v: ultima ? ultima.totalMacs : '—', cor: '#16a34a' },
+    { l: 'Peso Operacional Total', v: ultima ? Math.round(ultima.pesoTotal || 0).toLocaleString('pt-BR') + ' kg' : '—', cor: '#00B200' }
   ];
   if (cardsDiv) cardsDiv.innerHTML = cards.map(function(c){
     return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:160px;flex:1;max-width:240px">' +
@@ -11682,7 +11895,7 @@ function descargaHistoricoRenderizar() {
   }).join('');
 
   if (!_relatorioHistorico.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="padding:30px;text-align:center;color:#94a3b8">Nenhuma importação registrada ainda</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:30px;text-align:center;color:#94a3b8">Nenhuma importação registrada ainda</td></tr>';
     return;
   }
 
@@ -11705,6 +11918,7 @@ function descargaHistoricoRenderizar() {
         '<td style="padding:8px 10px">' + (temFila ? ('<span id="hist-seta-' + idx + '" style="display:inline-block;width:14px;color:#94a3b8">▸</span>') : '<span style="display:inline-block;width:14px"></span>') + new Date(h.dataHoraISO).toLocaleString('pt-BR') + '</td>' +
         '<td style="padding:8px 10px;text-align:right;font-weight:700">' + h.totalMacs + '</td>' +
         '<td style="padding:8px 10px;text-align:right;font-family:monospace">' + h.totalRegistros + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;font-family:monospace">' + Math.round(h.pesoTotal || 0).toLocaleString('pt-BR') + ' kg</td>' +
         '<td style="padding:8px 10px;text-align:right;color:' + (temFila ? '#2563eb' : '#cbd5e1') + ';font-weight:600">' + (temFila ? (fila.length + ' MACs · ver fila') : '—') + '</td>' +
         '<td style="padding:8px 10px;text-align:right;font-weight:700;color:' + (qtdDescarregados ? '#7c3aed' : '#cbd5e1') + '">' + (qtdDescarregados === null ? '—' : qtdDescarregados) + '</td>' +
         '<td style="padding:8px 10px;text-align:center" onclick="event.stopPropagation()">' +
@@ -11767,7 +11981,7 @@ function descargaHistoricoRenderizar() {
       }).join('');
       linhaDetalhe =
         '<tr id="hist-detalhe-' + idx + '" style="display:none">' +
-          '<td colspan="6" style="padding:8px 10px 12px 30px;background:#f8fafc">' +
+          '<td colspan="7" style="padding:8px 10px 12px 30px;background:#f8fafc">' +
             '<table style="width:100%;max-width:900px;border-collapse:collapse">' +
               '<thead><tr style="background:#e2e8f0">' +
                 '<th style="padding:4px 10px;text-align:right;font-size:9px;color:#64748b;font-weight:700">PRIORIZAÇÃO</th>' +
@@ -11919,7 +12133,7 @@ showTab = function(tab) {
   if (tab === 'consolidacao' && typeof consolidacaoRenderizar === 'function') setTimeout(consolidacaoRenderizar, 50);
   if (tab === 'resumoMalha' && typeof resumoMalhaRenderizar === 'function') setTimeout(resumoMalhaRenderizar, 50);
   if (tab === 'gestaoVista' && typeof gestaoVistaRenderizar === 'function') setTimeout(function(){ _gvAnimarEntrada = true; gestaoVistaRenderizar(); }, 50);
-  if (tab === 'frotasProgramadas' && typeof frotasProgramadasRenderizar === 'function') setTimeout(function(){ _fpAnimarEntrada = true; frotasProgramadasRenderizar(); }, 50);
+
 };
 
 // ═══ ACOMPANHAMENTO OUT ═══
@@ -13063,14 +13277,13 @@ function gestaoVistaTrocarVisao(visao) {
   _gvFiltroTurno = null; // limpa filtro de turno ao trocar de visão
   var btnIn = document.getElementById('gv-btn-in');
   var btnOut = document.getElementById('gv-btn-out');
-  if (btnIn && btnOut) {
-    if (visao === 'in') {
-      btnIn.style.background = '#e8e8e8'; btnIn.style.color = '#111'; btnIn.style.borderColor = '#e8e8e8';
-      btnOut.style.background = '#1a1a1a'; btnOut.style.color = '#9a9a9a'; btnOut.style.borderColor = '#2f2f2f';
-    } else {
-      btnOut.style.background = '#e8e8e8'; btnOut.style.color = '#111'; btnOut.style.borderColor = '#e8e8e8';
-      btnIn.style.background = '#1a1a1a'; btnIn.style.color = '#9a9a9a'; btnIn.style.borderColor = '#2f2f2f';
-    }
+  var btnFp = document.getElementById('gv-btn-fp');
+  if (btnIn && btnOut && btnFp) {
+    [btnIn, btnOut, btnFp].forEach(function(b) {
+      b.style.background = '#1a1a1a'; b.style.color = '#9a9a9a'; b.style.borderColor = '#2f2f2f';
+    });
+    var sel = (visao === 'in') ? btnIn : (visao === 'out') ? btnOut : btnFp;
+    sel.style.background = '#e8e8e8'; sel.style.color = '#111'; sel.style.borderColor = '#e8e8e8';
   }
   gestaoVistaRenderizar();
 }
@@ -13244,9 +13457,27 @@ function _fpColeta() {
   var relData = (typeof _relData !== 'undefined') ? _relData : [];
   var linhas = (typeof buildProgRows === 'function') ? buildProgRows() : [];
 
+  // Mapeia peso do TMS por frota para fallback
+  var relByFrotaFP = {};
+  relData.forEach(function(r) {
+    var fp = String(r.frotaPlan||'').trim();
+    if (fp) { if (!relByFrotaFP[fp]) relByFrotaFP[fp] = 0; relByFrotaFP[fp] += r.peso || 0; }
+  });
+  function getPesoTMS(frota) {
+    if (!frota) return 0;
+    var fn = String(frota).toUpperCase().replace(/\s+/g,'');
+    if (relByFrotaFP[frota]) return relByFrotaFP[frota];
+    if (relByFrotaFP[fn]) return relByFrotaFP[fn];
+    var found = 0;
+    Object.keys(relByFrotaFP).forEach(function(k) {
+      if (found) return;
+      var kn = k.toUpperCase().replace(/\s+/g,'');
+      if (kn === fn || fn.indexOf(kn) !== -1 || kn.indexOf(fn) !== -1) found = relByFrotaFP[k];
+    });
+    return found;
+  }
+
   var programadas = linhas.filter(function(r) {
-    // Considera programado quem tem frota carreta — motorista é opcional
-    // (coluna motorista pode não existir no Supabase em todas as instalações)
     return !!(r.frota && String(r.frota).trim());
   });
 
@@ -13254,6 +13485,7 @@ function _fpColeta() {
   var porTurnoExec = {};
   ordem.forEach(function(t) { 
     porTurnoExec[t] = { 
+      total: (base.porTurno[t] ? base.porTurno[t].total : 0),
       programados: 0, executados: 0, andamento: 0, aguardando: 0,
       pesoTotal: 0, pesoExecutado: 0, pesoAndamento: 0 
     }; 
@@ -13266,6 +13498,7 @@ function _fpColeta() {
     var turno = (typeof calcTurnoCorte === 'function') ? calcTurnoCorte(r.saida) : '—';
     if (!porTurnoExec[turno]) { 
       porTurnoExec[turno] = { 
+        total: (base.porTurno[turno] ? base.porTurno[turno].total : 0),
         programados: 0, executados: 0, andamento: 0, aguardando: 0,
         pesoTotal: 0, pesoExecutado: 0, pesoAndamento: 0 
       }; 
@@ -13276,7 +13509,10 @@ function _fpColeta() {
     var rec = (r._id !== null && r._id !== undefined) ? acompData[r._id] : null;
     var temInicio = !!(rec && rec.horaInicio && String(rec.horaInicio).trim());
     var temFim = !!(rec && rec.horaFim && String(rec.horaFim).trim());
+    
+    // Busca peso no Acompanhamento, se zero busca no TMS
     var peso = rec ? (_parsePesoBR(rec.pesoOpl)) : 0;
+    if (peso <= 0) peso = getPesoTMS(r.frota);
 
     porTurnoExec[turno].pesoTotal += peso;
     pesoTotal += peso;
@@ -13337,11 +13573,11 @@ function _fpKpiCard(label, valor, cor, sufixo, sub) {
 var _fpAnimarEntrada = false;
 
 function frotasProgramadasRenderizar() {
-  var painel = document.getElementById('tab-frotasProgramadas-content');
+  var painel = document.getElementById('gv-fp-container');
   if (!painel) return;
   var animarEntrada = _fpAnimarEntrada; _fpAnimarEntrada = false;
 
-  var atualizadoEl = document.getElementById('fp-atualizado');
+  var atualizadoEl = document.getElementById('gv-atualizado');
   if (atualizadoEl) atualizadoEl.textContent = 'Atualizado em ' + new Date().toLocaleString('pt-BR');
 
   var d = _fpColeta();
@@ -13394,62 +13630,87 @@ function frotasProgramadasRenderizar() {
     fpPbProg.style.borderRadius = (pctExecutado > 0) ? '0 999px 999px 0' : '999px';
   }
 
-  // ── Velocímetros por turno: % de entrega concluída (peso executado ÷ peso total) ──
+  // ── Velocímetros por turno: % de atuação do turno (rotas executadas ÷ total de rotas do turno) ──
   var gaugesDiv = document.getElementById('fp-gauges');
   if (gaugesDiv) {
     var coresGauge = { '1º Turno': '#3fb950', '2º Turno': '#f0b429', '3º Turno': '#6b8cff' };
     var gaugesHtml = d.ordem.slice(0, 3).map(function(t) {
-      var g = d.porTurnoExec[t] || { pesoTotal: 0, pesoExecutado: 0, executados: 0, programados: 0 };
-      var pct = g.pesoTotal ? Math.round(g.pesoExecutado / g.pesoTotal * 100) : 0;
-      var pesoExecKg = Math.round(g.pesoExecutado || 0);
-      var pesoTotalKg = Math.round(g.pesoTotal || 0);
+      var g = d.porTurnoExec[t] || { total: 0, executados: 0 };
+      var pct = g.total ? Math.round(g.executados / g.total * 100) : 0;
       return '<div style="flex:1;display:flex;flex-direction:column;align-items:center">' +
-        _gvGaugeSvg(pct, coresGauge[t] || '#9a9a9a', t, pesoExecKg + ' de ' + pesoTotalKg + ' kg') +
+        _gvGaugeSvg(pct, coresGauge[t] || '#9a9a9a', t, pct + '%') +
       '</div>';
     }).join('');
     gaugesDiv.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box">' +
-        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Atua&ccedil;&atilde;o de Entrega por Turno</div>' +
-        '<div style="font-size:10px;color:#6b6b6b;margin-bottom:14px">Peso de cargas j&aacute; completamente carregadas e entregues vs peso total programado para o turno</div>' +
+        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Percentual de Atua&ccedil;&atilde;o do Turno</div>' +
+        '<div style="font-size:10px;color:#6b6b6b;margin-bottom:14px">Rotas j&aacute; carregadas e entregues vs total de rotas planejadas para o turno</div>' +
         '<div style="display:flex;gap:16px">' + gaugesHtml + '</div>' +
       '</div>';
   }
 
-  // ── Tabela: atuação por turno (números simples) ──
+  // ── Tabela: Resumo por Turno (estilo Fluxo de Fila com Histórico) ──
   var tabTurnoDiv = document.getElementById('fp-tabela-turno');
   if (tabTurnoDiv) {
-    var corTurnoBadge = { '1º Turno': '#3fb950', '2º Turno': '#f0b429', '3º Turno': '#6b8cff' };
-    var linhasT = d.ordem.map(function(t) {
-      var g = d.porTurnoExec[t];
-      if (!g || !g.pesoTotal) return '';
-      var pct = Math.round(g.pesoExecutado / g.pesoTotal * 100);
-      var pesoExecKg = Math.round(g.pesoExecutado || 0);
-      var pesoAndKg = Math.round(g.pesoAndamento || 0);
-      var pesoAguKg = Math.round((g.pesoTotal - g.pesoExecutado - g.pesoAndamento) || 0);
-      var pesoTotalKg = Math.round(g.pesoTotal || 0);
-      return '<tr>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#e5e9f0;border-bottom:1px solid #232323"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + (corTurnoBadge[t]||'#9a9a9a') + ';margin-right:7px"></span>' + t + '</td>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#e5e9f0;text-align:right;border-bottom:1px solid #232323">' + pesoTotalKg + ' kg</td>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#3fb950;font-weight:700;text-align:right;border-bottom:1px solid #232323">' + pesoExecKg + ' kg</td>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#f0b429;font-weight:700;text-align:right;border-bottom:1px solid #232323">' + pesoAndKg + ' kg</td>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#9a9a9a;text-align:right;border-bottom:1px solid #232323">' + pesoAguKg + ' kg</td>' +
-        '<td style="padding:8px 10px;font-size:12px;color:#fff;font-weight:800;text-align:right;border-bottom:1px solid #232323">' + pct + '%</td>' +
+    var fo = _gvFluxoFilaOUT();
+    var fmtKgO = function(v){ return Math.round(v).toLocaleString('pt-BR'); };
+    var thNumO = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;white-space:nowrap';
+    var tdNumO = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#e5e5e5;white-space:nowrap';
+
+    var linhasO = fo.linhas.map(function(l, i) {
+      var zebra = (i % 2 === 0) ? '#121212' : '#161616';
+      var tip = '<b>'+l.turno+'</b><br>Fila Inicial: '+fmtKgO(l.filaInicial)+' kg<br>Fila Final: '+fmtKgO(l.filaFinal)+' kg<br>Executado: '+fmtKgO(l.executado)+' kg ('+l.pctExec+'%)';
+      return '<tr onmousemove="_gvTooltipMostrar(event, \''+tip.replace(/'/g,"\\'")+'\')" onmouseout="_gvTooltipEsconder()" ' +
+        'style="background:'+zebra+'" ' +
+        'onmouseover="this.style.background=\'#1d1d1d\'" onmouseleave="this.style.background=\''+zebra+'\'">' +
+        '<td style="padding:9px 14px;font-size:12.5px;font-weight:600;color:#d0d0d0;white-space:nowrap;border-right:1px solid #232323">'+l.turno+'</td>' +
+        '<td style="'+tdNumO+'">'+fmtKgO(l.filaInicial)+'</td>' +
+        '<td style="'+tdNumO+'">'+fmtKgO(l.entrouDepois)+'</td>' +
+        '<td style="'+tdNumO+'">'+fmtKgO(l.filaFinal)+'</td>' +
+        '<td style="'+tdNumO+';color:#4ade80;font-weight:700">'+fmtKgO(l.executado)+'</td>' +
+        '<td style="'+tdNumO+';color:#f0b429;font-weight:800">'+l.pctExec+'%</td>' +
       '</tr>';
     }).join('');
+
+    var tO = fo.total;
+    var tdTotO = 'padding:10px 14px;text-align:right;font-size:13px;font-weight:800;color:#fff;white-space:nowrap;border-top:2px solid #3a3a3a;background:#1b1b1b';
+    var totalO =
+      '<tr>' +
+        '<td style="padding:10px 14px;font-size:13px;font-weight:800;color:#fff;border-top:2px solid #3a3a3a;background:#1b1b1b;border-right:1px solid #232323">Total</td>' +
+        '<td style="'+tdTotO+'">'+fmtKgO(tO.filaInicial)+'</td>' +
+        '<td style="'+tdTotO+'">'+fmtKgO(tO.entrouDepois)+'</td>' +
+        '<td style="'+tdTotO+'">'+fmtKgO(tO.filaFinal)+'</td>' +
+        '<td style="'+tdTotO+';color:#4ade80">'+fmtKgO(tO.executado)+'</td>' +
+        '<td style="'+tdTotO+';color:#f0b429">'+tO.pctExec+'%</td>' +
+      '</tr>';
+
+    var subInfoO = fo.temTms
+      ? 'CARREGAMENTO · KG · Hoje · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) no dia'
+      : 'CARREGAMENTO · KG · Hoje · Plano = soma da lista do Acompanhamento';
+
     tabTurnoDiv.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box">' +
-        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px">Resumo por Turno</div>' +
-        (d.totalRotas ?
-          '<table style="width:100%;border-collapse:collapse">' +
-            '<thead><tr style="background:#1a1a1a">' +
-              '<th style="text-align:left;padding:8px 10px;font-size:10px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.03em">Turno</th>' +
-              '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.03em">Peso Total</th>' +
-              '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#3fb950;text-transform:uppercase;letter-spacing:.03em">Entregue</th>' +
-              '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#f0b429;text-transform:uppercase;letter-spacing:.03em">Carregando</th>' +
-              '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.03em">Aguardando</th>' +
-              '<th style="text-align:right;padding:8px 10px;font-size:10px;color:#fff;text-transform:uppercase;letter-spacing:.03em">% Conclu&iacute;do</th>' +
-            '</tr></thead><tbody>' + linhasT + '</tbody>' +
-          '</table>'
+        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Resumo por Turno</div>' +
+        '<div style="font-size:10px;color:#6b6b6b;margin-bottom:12px">'+subInfoO+'</div>' +
+        (fo.linhas.length ?
+          '<div style="overflow-x:auto">' +
+            '<table style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif">' +
+              '<thead>' +
+                '<tr>' +
+                  '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#1a1a1a;vertical-align:bottom">Turno / Hoje</th>' +
+                  '<th colspan="5" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#1a1a1a;border-bottom:1px solid #2b2b2b">Fluxo de Fila — Peso OPL (kg)</th>' +
+                '</tr>' +
+                '<tr style="background:#151515">' +
+                  '<th style="'+thNumO+'">Fila Inicial (kg)</th>' +
+                  '<th style="'+thNumO+'">Entrou Depois (kg)</th>' +
+                  '<th style="'+thNumO+'">Fila Final (kg)</th>' +
+                  '<th style="'+thNumO+';color:#4ade80">Executado (kg)</th>' +
+                  '<th style="'+thNumO+';color:#f0b429">% Exec.</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' + linhasO + totalO + '</tbody>' +
+            '</table>' +
+          '</div>'
           : '<div style="color:#9a9a9a;font-size:12px">Nenhuma rota programada hoje ainda.</div>') +
       '</div>';
   }
@@ -13459,7 +13720,7 @@ function frotasProgramadasRenderizar() {
   if (pendDiv) {
     var listaPend = d.pendentes.length ? d.pendentes.slice(0, 10).map(function(p) {
       var corFalta = p.falta === 'tudo' ? '#ef4444' : '#f0b429';
-      var textoFalta = p.falta === 'tudo' ? 'Falta tudo' : 'Falta ' + p.falta;
+      var textoFalta = p.falta === 'tudo' ? 'Pendente' : 'Falta ' + p.falta;
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #262626;font-size:12px">' +
         '<span style="color:#e5e9f0">' + p.destino + ' <span style="color:#6b6b6b;font-size:10px">' + p.saida + ' · ' + p.turno + '</span></span>' +
         '<span style="color:' + corFalta + ';font-weight:700;font-size:10px;text-transform:uppercase">' + textoFalta + '</span>' +
@@ -13818,6 +14079,19 @@ function _gvFluxoFilaIN() {
 function gestaoVistaRenderizar() {
   var container = document.getElementById('tab-gestaoVista-content');
   if (!container) return;
+
+  var containerInout = document.getElementById('gv-inout-container');
+  var containerFp = document.getElementById('gv-fp-container');
+
+  if (_gvVisaoAtual === 'fp') {
+    if (containerInout) containerInout.style.display = 'none';
+    if (containerFp) containerFp.style.display = 'block';
+    frotasProgramadasRenderizar();
+    return;
+  } else {
+    if (containerInout) containerInout.style.display = 'block';
+    if (containerFp) containerFp.style.display = 'none';
+  }
 
   // ── Animação de entrada: consumida uma vez por visita à aba (marcada no hook do showTab) ──
   var animarEntrada = _gvAnimarEntrada;
@@ -14288,7 +14562,7 @@ function gestaoVistaRenderizar() {
             '<div><span style="font-size:18px;font-weight:800;color:#ef4444">' + (fpResumo.parcialGeral + fpResumo.naoProgGeral) + '</span> <span style="font-size:11px;color:#9a9a9a">faltam programar</span></div>' +
           '</div>' +
         '</div>' +
-        '<button onclick="showTab(\'frotasProgramadas\')" style="padding:11px 20px;border-radius:4px;border:none;background:#f0b429;color:#141414;font-size:12.5px;font-weight:800;cursor:pointer;font-family:\'Poppins\',sans-serif;white-space:nowrap">Ver Dashboard Completo →</button>' +
+        '<button onclick="gestaoVistaTrocarVisao(\'fp\')" style="padding:11px 20px;border-radius:4px;border:none;background:#f0b429;color:#141414;font-size:12.5px;font-weight:800;cursor:pointer;font-family:\'Poppins\',sans-serif;white-space:nowrap">Ver Dashboard Completo →</button>' +
       '</div>';
   }
 
@@ -14363,6 +14637,74 @@ function _gvContagemAnimada(el) {
     if (p < 1) requestAnimationFrame(passo);
   }
   requestAnimationFrame(passo);
+}
+// ── FUNÇÕES PARA HISTÓRICO DE RELATÓRIO: EXCLUSÃO COM CHECKBOXES ──
+
+// Atualizar visibilidade do botão Excluir baseado em checkboxes selecionados
+function histRelOutAtualizarBotao() {
+  var checkboxes = document.querySelectorAll('.hro-check-item:checked');
+  var btnExcluir = document.getElementById('hro-btn-excluir');
+  if (btnExcluir) {
+    btnExcluir.style.display = checkboxes.length > 0 ? 'block' : 'none';
+  }
+}
+
+// Toggle todos os checkboxes
+function histRelOutToggleTodos() {
+  var checkAll = document.getElementById('hro-check-all');
+  var checkboxes = document.querySelectorAll('.hro-check-item');
+  checkboxes.forEach(function(cb) {
+    cb.checked = checkAll.checked;
+  });
+  histRelOutAtualizarBotao();
+}
+
+// Excluir registros selecionados
+function histRelOutExcluirSelecionados() {
+  var checkboxes = document.querySelectorAll('.hro-check-item:checked');
+  if (!checkboxes.length) {
+    showToast('Nenhum registro selecionado para exclusão', 'error');
+    return;
+  }
+
+  // Confirmar exclusão
+  if (!confirm('Tem certeza que deseja excluir ' + checkboxes.length + ' registro(s)? Esta ação não pode ser desfeita.')) {
+    return;
+  }
+
+  // Coletar índices dos registros a excluir
+  var indicesToDelete = [];
+  checkboxes.forEach(function(cb) {
+    var index = parseInt(cb.getAttribute('data-index'));
+    if (!isNaN(index)) {
+      indicesToDelete.push(index);
+    }
+  });
+
+  // Ordenar em ordem decrescente para evitar problemas de índice
+  indicesToDelete.sort(function(a, b) { return b - a; });
+
+  // Remover do array _histRelOut
+  indicesToDelete.forEach(function(idx) {
+    if (idx >= 0 && idx < _histRelOut.length) {
+      var record = _histRelOut[idx];
+      _histRelOut.splice(idx, 1);
+      
+      // Enviar exclusão para Google Sheets (fire-and-forget)
+      if (typeof sheetsPost === 'function' && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
+        sheetsPost('excluir_hist_rel_out', { ts: record.ts, tsFormatado: record.tsFormatado }).catch(function(){});
+      }
+    }
+  });
+
+  // Salvar no localStorage
+  try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+
+  // Re-renderizar a tabela
+  histRelOutRenderizar();
+
+  // Mostrar mensagem de sucesso
+  showToast(indicesToDelete.length + ' registro(s) excluído(s) com sucesso', 'success');
 }
 
 </script>
