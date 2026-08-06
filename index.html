@@ -1836,6 +1836,14 @@
           <input type="text" id="f-frota" placeholder="Ex: 2154 ou ABC1D23">
         </div>
         <div class="form-group">
+          <label class="form-label">Nome do Motorista</label>
+          <input type="text" id="f-motorista" placeholder="Nome completo">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nº Cavalinho</label>
+          <input type="text" id="f-cavalinho" placeholder="Ex: ABC1D23">
+        </div>
+        <div class="form-group">
           <label class="form-label">Ocupação Visual <span>*</span></label>
           <div style="position:relative;display:flex;align-items:center">
             <input type="number" id="f-ocup" min="0" max="100" step="1"
@@ -7958,6 +7966,8 @@ function salvarProg() {
   const dia = document.getElementById('f-dia').value;
   const tipo = document.getElementById('f-tipo').value;
   const frota = document.getElementById('f-frota').value;
+  const motorista = document.getElementById('f-motorista').value;
+  const cavalinho = document.getElementById('f-cavalinho').value;
   const ocupPct = parseInt(document.getElementById('f-ocup').value || '0'); const ocup = Math.min(ocupPct, 100) / 100;
   const prev_fech = document.getElementById('f-prev_fech').value;
   const obs = document.getElementById('f-obs').value;
@@ -7979,7 +7989,7 @@ function salvarProg() {
   const rec = {
     _id: nextId++,
     gerado: now(),
-    origem, destino, regiao, composicao, saida, dia, tipo, frota,
+    origem, destino, regiao, composicao, saida, dia, tipo, frota, motorista, cavalinho,
     ocup, prev_fech: formatDTLocal(prev_fech), obs, tipo_prior,
     data_crit: formatDTLocal(data_crit), id: ''
   };
@@ -7992,7 +8002,7 @@ function salvarProg() {
 
 // ===== LIMPAR FORM =====
 function limparForm() {
-  ['f-destino','f-regiao','f-composicao','f-saida','f-tipo','f-frota','f-obs','f-tipo_prior','f-data_crit','f-prev_fech','f-ocup'].forEach(id => {
+  ['f-destino','f-regiao','f-composicao','f-saida','f-tipo','f-frota','f-motorista','f-cavalinho','f-obs','f-tipo_prior','f-data_crit','f-prev_fech','f-ocup'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -8030,6 +8040,8 @@ function viewProg(id) {
         ['Dia da Semana', r.dia],
         ['Tipo', r.tipo],
         ['Frota', r.frota],
+        ['Motorista', r.motorista || '—'],
+        ['Cavalinho', r.cavalinho || '—'],
         ['Ocupação', ocupPct(r.ocup)],
         ['Prev. Fechamento', r.prev_fech || '—'],
         ['Observação', r.obs || '—'],
@@ -8067,6 +8079,8 @@ function editProg(id) {
         </select>
       </div>
       <div class="form-group"><label class="form-label">Frota / Placa</label><input id="e-frota" value="${r.frota}"></div>
+      <div class="form-group"><label class="form-label">Motorista</label><input id="e-motorista" value="${r.motorista || ''}"></div>
+      <div class="form-group"><label class="form-label">Cavalinho</label><input id="e-cavalinho" value="${r.cavalinho || ''}"></div>
       <div class="form-group"><label class="form-label">Ocupação</label>
         <select id="e-ocup">
           ${[0.1,0.3,0.51,0.71,1].map(v=>`<option value="${v}"${v==r.ocup?' selected':''}>${Math.round(v*100)}%</option>`).join('')}
@@ -8098,6 +8112,8 @@ function saveEdit(id) {
   r.dia = document.getElementById('e-dia').value;
   r.tipo = document.getElementById('e-tipo').value;
   r.frota = document.getElementById('e-frota').value;
+  r.motorista = document.getElementById('e-motorista').value;
+  r.cavalinho = document.getElementById('e-cavalinho').value;
   r.ocup = parseFloat(document.getElementById('e-ocup').value);
   r.prev_fech = document.getElementById('e-prev_fech').value;
   r.tipo_prior = document.getElementById('e-tipo_prior').value;
@@ -8881,6 +8897,10 @@ function editProgramado(id) {
 
       '<div class="form-group"><label class="form-label">Frota / Placa</label>' +
       '<input id="ep-frota" value="' + (r.frota||'') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Nome do Motorista</label>' +
+      '<input id="ep-motorista" value="' + (r.motorista||'') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Nº Cavalinho</label>' +
+      '<input id="ep-cavalinho" value="' + (r.cavalinho||'') + '"></div>' +
 
       '<div class="form-group"><label class="form-label">Ocupação %</label>' +
       '<div style="display:flex;align-items:center;gap:6px">' +
@@ -8932,6 +8952,8 @@ function saveEditProgramado(id) {
   r.dia        = document.getElementById('ep-dia').value;
   r.tipo       = document.getElementById('ep-tipo').value;
   r.frota      = document.getElementById('ep-frota').value;
+  r.motorista  = document.getElementById('ep-motorista').value;
+  r.cavalinho  = document.getElementById('ep-cavalinho').value;
   r.ocup       = (parseInt(document.getElementById('ep-ocup').value)||0) / 100;
   r.prev_fech  = document.getElementById('ep-prev').value || '';
   r.tipo_prior = document.getElementById('ep-prior').value;
