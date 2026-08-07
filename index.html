@@ -2193,18 +2193,6 @@ function _gradeAtualizarComMalha(rows) {
               <div class="col-filter-wrap"><span class="col-label">Status Carregamento <span id="sh-ocup">↕</span></span>
               <button class="cf-btn" id="cfb-ocup" onclick="event.stopPropagation();cfOpen('ocup',this)">▼</button></div>
             </th>
-            <th onclick="sortHist('prev_fech')" style="cursor:pointer;color:#00B200">
-              <div class="col-filter-wrap"><span class="col-label">Prev. Fechamento <span id="sh-prev_fech">↑</span></span>
-              <button class="cf-btn" id="cfb-prev_fech" onclick="event.stopPropagation();cfOpen('prev_fech',this)">▼</button></div>
-            </th>
-            <th>Obs.</th>
-            <th><div class="col-filter-wrap"><span class="col-label">Prioridade</span>
-              <button class="cf-btn" id="cfb-prioridade" onclick="cfOpen('prioridade',this)">▼</button></div></th>
-            <th onclick="sortHist('data_crit')" style="cursor:pointer">
-              <div class="col-filter-wrap"><span class="col-label">Data Crítica <span id="sh-data_crit">↕</span></span>
-              <button class="cf-btn" id="cfb-data_crit" onclick="event.stopPropagation();cfOpen('data_crit',this)">▼</button></div>
-            </th>
-            <th style="width:90px">Ações</th>
           </tr>
         </thead>
         <tbody id="tbody-hist"></tbody>
@@ -7761,7 +7749,7 @@ function renderHist() {
   document.getElementById('badge-hist').textContent = data.length;
   const tbody = document.getElementById('tbody-hist');
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="17"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
     return;
   }
   tbody.innerHTML = data.map((r, i) => `<tr id="hist-row-${r._id}" class="hist-row" data-id="${r._id}">
@@ -7777,18 +7765,6 @@ function renderHist() {
     <td style="font-size:11px">${r.motorista || '—'}</td>
     <td class="mono" style="font-size:11px">${r.cavalinho || '—'}</td>
     <td>${ocupBar(r.ocup)}</td>
-    <td style="font-size:11px">${r.prev_fech || '—'}</td>
-    <td class="obs-cell" title="${r.obs}">${r.obs || '—'}</td>
-    <td>${priorBadge(calcPrioridade(r))}</td>
-    <td style="font-size:11px;color:var(--text2)">${r.data_crit || '—'}</td>
-    <td>
-      <div style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-sm" onclick="editProgramado(${r._id})" title="Editar"
-          style="color:var(--accent);border-color:rgba(0,178,0,0.3)">Editar</button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteProg(${r._id})" title="Excluir"
-          style="color:var(--red);border-color:rgba(220,38,38,0.3)">Excluir</button>
-      </div>
-    </td>
   </tr>`).join('');
 }
 
