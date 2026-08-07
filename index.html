@@ -13749,7 +13749,7 @@ function frotasProgramadasRenderizar() {
               '<thead>' +
                 '<tr>' +
                   '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#1a1a1a;vertical-align:bottom">Turno / Hoje</th>' +
-                  '<th colspan="5" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#1a1a1a;border-bottom:1px solid #2b2b2b">Fluxo de Fila — Peso OPL (kg)</th>' +
+                  '<th colspan="5" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#1a1a1a;border-bottom:1px solid #2b2b2b">Extrato do Dia — Peso OPL (kg)</th>' +
                 '</tr>' +
                 '<tr style="background:#151515">' +
                   '<th style="'+thNumO+'">Fila Inicial (kg)</th>' +
@@ -14340,7 +14340,11 @@ function gestaoVistaRenderizar() {
   var icdDiv = document.getElementById('gv-card-leaderboard');
   if (icdDiv) {
     var _icdAtrasado = 0, _icdHoje = 0, _icdNoPrazo = 0;
-    relData.forEach(function(r) {
+    // No OUT (Carregamento), o cálculo considera só o que está Disponível para carregamento
+    var _icdBase = (_gvVisaoAtual === 'out')
+      ? relData.filter(function(r){ return String(r.disp||'').trim().toLowerCase() === 'disponível'; })
+      : relData;
+    _icdBase.forEach(function(r) {
       var sit = (typeof _cargaCriticaSituacaoDe === 'function') ? _cargaCriticaSituacaoDe(r) : 'No Prazo';
       if (sit === 'Atrasado') _icdAtrasado++;
       else if (sit === 'Hoje') _icdHoje++;
@@ -14431,7 +14435,7 @@ function gestaoVistaRenderizar() {
             '<thead>' +
               '<tr>' +
                 '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#000;vertical-align:bottom">Turno / Hoje</th>' +
-                '<th colspan="6" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Fluxo de Fila — Peso OPL (kg)</th>' +
+                '<th colspan="6" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Extrato do Dia — Peso OPL (kg)</th>' +
               '</tr>' +
               '<tr style="background:#000">' +
                 '<th style="'+thNum+'">Início de Turno (kg)</th>' +
@@ -14450,7 +14454,7 @@ function gestaoVistaRenderizar() {
     entregaDiv.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 18px;height:100%;box-sizing:border-box">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">' +
-          '<div style="font-size:12px;font-weight:800;color:#e5e5e5">Fluxo de Fila — Descarga <span style="font-weight:400;color:#8a8a8a">(clique num turno para filtrar)</span></div>' +
+          '<div style="font-size:12px;font-weight:800;color:#e5e5e5">Extrato do Dia — Descarga <span style="font-weight:400;color:#8a8a8a">(clique num turno para filtrar)</span></div>' +
           '<span style="font-size:10px;font-weight:800;color:#4ade80;border:1px solid #2f6e43;background:rgba(34,197,94,.08);padding:4px 10px;border-radius:4px;letter-spacing:.06em;text-transform:uppercase">Fila atual: '+fmtKg(t2.filaFinal)+' kg</span>' +
         '</div>' +
         '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">'+subInfo+'</div>' +
@@ -14504,7 +14508,7 @@ function gestaoVistaRenderizar() {
     entregaDiv.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 18px;height:100%;box-sizing:border-box">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">' +
-          '<div style="font-size:12px;font-weight:800;color:#e5e5e5">Fluxo de Fila — Carregamento <span style="font-weight:400;color:#8a8a8a">(clique num turno para filtrar)</span></div>' +
+          '<div style="font-size:12px;font-weight:800;color:#e5e5e5">Extrato do Dia — Carregamento <span style="font-weight:400;color:#8a8a8a">(clique num turno para filtrar)</span></div>' +
           '<span style="font-size:10px;font-weight:800;color:#4ade80;border:1px solid #2f6e43;background:rgba(34,197,94,.08);padding:4px 10px;border-radius:4px;letter-spacing:.06em;text-transform:uppercase">Fila atual: '+fmtKgO(tO.filaFinal)+' kg</span>' +
         '</div>' +
         '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">'+subInfoO+'</div>' +
@@ -14513,7 +14517,7 @@ function gestaoVistaRenderizar() {
             '<thead>' +
               '<tr>' +
                 '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#000;vertical-align:bottom">Turno / Hoje</th>' +
-                '<th colspan="6" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Fluxo de Fila — Peso Disponível TMS (kg)</th>' +
+                '<th colspan="6" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Extrato do Dia — Peso Disponível TMS (kg)</th>' +
               '</tr>' +
               '<tr style="background:#000">' +
                 '<th style="'+thNumO+'">Início de Turno (kg)</th>' +
