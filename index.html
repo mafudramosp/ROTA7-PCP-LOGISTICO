@@ -14097,6 +14097,18 @@ function _gvFluxoFilaIN() {
     });
   });
 
+  // Horário em que cada MAC entrou na fila pela 1ª vez hoje (fato histórico fixo — não muda
+  // conforme o relógio avança). snapsHoje vem do mais recente pro mais antigo, então varremos
+  // de trás pra frente (mais antigo → mais recente) para pegar a 1ª ocorrência real de cada MAC.
+  var primeiraOcorrenciaHora = {};
+  for (var iSnap = snapsHoje.length - 1; iSnap >= 0; iSnap--) {
+    (snapsHoje[iSnap].filaSnapshot || []).forEach(function(f) {
+      if (primeiraOcorrenciaHora[f.mac] === undefined) {
+        primeiraOcorrenciaHora[f.mac] = new Date(snapsHoje[iSnap].dataHoraISO).toTimeString().substring(0,5);
+      }
+    });
+  }
+
   function turnoDe(horaStr) {
     var t = _gvTurnoDoHorario(horaStr);
     if (t) return t;
@@ -14115,7 +14127,10 @@ function _gvFluxoFilaIN() {
     var rec = acompData[mac] || {};
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
-    var t = turnoDe(temInicio ? rec.horaInicio : agoraHora);
+    // Turno é definido por um horário fixo (quando começou a ser trabalhado, ou quando entrou
+    // na fila) — nunca pelo horário atual, senão o item "foge" do turno original conforme o
+    // relógio avança e o Início de Turno diminui com o tempo.
+    var t = turnoDe(temInicio ? rec.horaInicio : (primeiraOcorrenciaHora[mac] || agoraHora));
     if (macsIniciais[mac]) linhas[t].filaInicial += peso; else linhas[t].entrouDepois += peso;
     linhas[t].qtdMacs++;
     if (temFim) { linhas[t].executado += peso; linhas[t].qtdExecutados++; }
@@ -14125,13 +14140,14 @@ function _gvFluxoFilaIN() {
   var lista = ordem.map(function(t) {
     var l = linhas[t];
     l.filaFinal = l.filaInicial + l.entrouDepois - l.executado;
-    l.pctExec = (l.filaInicial + l.entrouDepois) ? Math.round(l.executado / (l.filaInicial + l.entrouDepois) * 100) : 0;
+    // % Executado é sempre sobre o Início de Turno (não sobre Início + Entrou Depois)
+    l.pctExec = l.filaInicial ? Math.round(l.executado / l.filaInicial * 100) : 0;
     total.filaInicial += l.filaInicial; total.entrouDepois += l.entrouDepois; total.executado += l.executado;
     total.qtdMacs += l.qtdMacs; total.qtdExecutados += l.qtdExecutados;
     return l;
   });
   total.filaFinal = total.filaInicial + total.entrouDepois - total.executado;
-  total.pctExec = (total.filaInicial + total.entrouDepois) ? Math.round(total.executado / (total.filaInicial + total.entrouDepois) * 100) : 0;
+  total.pctExec = total.filaInicial ? Math.round(total.executado / total.filaInicial * 100) : 0;
 
   var horaPrimeiro = primeiroImport ? new Date(primeiroImport.dataHoraISO).toTimeString().substring(0,5) : null;
   var dataPrimeiro = primeiroImport ? new Date(primeiroImport.dataHoraISO).toLocaleDateString('pt-BR') : null;
