@@ -2145,34 +2145,18 @@ function _gradeAtualizarComMalha(rows) {
       <span class="search-icon">🔍</span>
       <input type="text" id="search-hist" placeholder="Destino, frota..." oninput="renderHist()">
     </div>
-    
+
     <div class="header-divider" style="height:20px;background:var(--border);margin:0 4px"></div>
     <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Período:</label>
-    <input type="text" id="filter-hist-de" placeholder="dd/mm/aaaa" maxlength="10" data-dtfmt="d"
-      oninput="renderHist()" style="width:110px;font-size:12px;font-weight:500;border:1px solid var(--border);border-radius:6px;padding:4px 8px">
-    <span style="font-size:11px;color:var(--text3);font-weight:600">até</span>
-    <input type="text" id="filter-hist-ate" placeholder="dd/mm/aaaa" maxlength="10" data-dtfmt="d"
-      oninput="renderHist()" style="width:110px;font-size:12px;font-weight:500;border:1px solid var(--border);border-radius:6px;padding:4px 8px">
-    <button class="btn btn-ghost btn-sm" onclick="limparFiltroData()" title="Limpar período" style="color:var(--text3);font-size:11px">✕</button>
-    <button class="btn btn-ghost btn-sm" onclick="filtroHoje()" style="font-size:11px" title="Ver registros de hoje">Hoje</button>
-    <button class="btn btn-ghost btn-sm" onclick="filtroOntem()" style="font-size:11px" title="Ver registros de ontem">Ontem</button>
-    <button class="btn btn-ghost btn-sm" onclick="filtroSemana()" style="font-size:11px" title="Ver últimos 7 dias">7 dias</button>
-    <button id="btn-excluir-sel" class="btn btn-danger btn-sm" onclick="excluirSelecionados()" style="display:inline-flex;align-items:center;gap:5px;opacity:0.4;cursor:not-allowed" disabled>Excluir selecionados</button>
-    <button class="btn btn-ghost btn-sm" onclick="exportCSV('programados')">Exportar Excel</button>
-      <button class="btn btn-ghost btn-sm" onclick="imprimirProgramados()">Imprimir</button>
-    <div style="margin-left:auto">
-      <button class="btn btn-success btn-sm" id="btn-email" onclick="enviarEmail()" style="display:flex;align-items:center;gap:7px;font-weight:600;padding:6px 16px">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-        Enviar por E-mail
-      </button>
-    </div>
+    <button id="btn-hist-periodo-hoje" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('hoje')" style="font-size:11px" title="Ver registros de hoje">Hoje</button>
+    <button id="btn-hist-periodo-24h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('24h')" style="font-size:11px" title="Ver registros das últimas 24 horas">24h</button>
+    <button id="btn-hist-periodo-48h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('48h')" style="font-size:11px" title="Ver registros das últimas 48 horas">48h</button>
   </div>
   <div class="main">
     <div class="table-wrap">
       <table>
         <thead>
           <tr id="hist-thead-row">
-            <th style="width:36px"><input type="checkbox" id="sel-all" onclick="selecionarTodos(this)"></th>
             <th>#</th>
             <th onclick="sortHist('gerado')" style="cursor:pointer">
               <div class="col-filter-wrap"><span class="col-label">Gerado em <span id="sh-gerado">↕</span></span>
@@ -5647,11 +5631,11 @@ function loadData() {
 }
 
 // Remove do banco compartilhado (Supabase) os registros de Recurso Programado com mais de
-// 24h — dias anteriores já concluídos não precisam ficar armazenados, e isso evita que
+// 48h — dias anteriores já concluídos não precisam ficar armazenados, e isso evita que
 // frotas antigas apareçam nas buscas por destino (ex: impressão do Carregamento de Produção)
 function progLimparAntigos() {
   var cutoff = new Date();
-  cutoff.setHours(cutoff.getHours() - 24);
+  cutoff.setHours(cutoff.getHours() - 48);
 
   var antigos = progData.filter(function(r) {
     if (!r.gerado) return false;
@@ -7605,6 +7589,21 @@ function limparFiltroCardGrade() {
 
 // ===== RENDER HISTÓRICO =====
 
+// ---- Filtro de Período: Hoje / 24h / 48h ----
+var _histFiltroPeriodo = 'hoje';
+function histFiltrarPeriodo(modo) {
+  _histFiltroPeriodo = modo;
+  ['hoje','24h','48h'].forEach(function(m) {
+    var b = document.getElementById('btn-hist-periodo-' + m);
+    if (!b) return;
+    var ativo = (m === modo);
+    b.style.background = ativo ? '#00B200' : '';
+    b.style.color = ativo ? '#fff' : '';
+    b.style.borderColor = ativo ? '#00B200' : '';
+  });
+  renderHist();
+}
+
 // ---- Programados column sorter ----
 var _histSortCol = 'prev_fech';
 var _histSortDir = 1; // 1=asc, -1=desc
@@ -7711,30 +7710,21 @@ function renderHist() {
   const search = (document.getElementById('search-hist')?.value || '').toLowerCase();
   const tipo = document.getElementById('filter-hist-tipo')?.value || '';
   // Only show user-saved records (have frota OR ocup > 0)
-  var filterDe = (document.getElementById('filter-hist-de')?.value || '').trim();
-  var filterAte = (document.getElementById('filter-hist-ate')?.value || '').trim();
 
-  function parseBRDate(s) {
-    if (!s) return null;
-    var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-    if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]), 0, 0, 0);
-    var m2 = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m2) return new Date(parseInt(m2[1]), parseInt(m2[2])-1, parseInt(m2[3]), 0, 0, 0);
-    return null;
-  }
-  var dDe = parseBRDate(filterDe);
-  var dAte = parseBRDate(filterAte);
-  if (dAte) dAte.setHours(23,59,59);
+  var agora = new Date();
+  var cutoffHoras = _histFiltroPeriodo === '48h' ? 48 : (_histFiltroPeriodo === '24h' ? 24 : null);
+  var cutoffData = cutoffHoras ? new Date(agora.getTime() - cutoffHoras * 60 * 60 * 1000) : null;
+  var hojeStr = getDataHoje();
 
   let data = progData.filter(r => {
     if (!r.frota && !r.ocup) return false;
     if (tipo && r.tipo !== tipo) return false;
-    // Date range filter
-    if (dDe || dAte) {
-      var gd = parseBRDate((r.gerado || '').substring(0, 10));
-      if (!gd) return false;
-      if (dDe && gd < dDe) return false;
-      if (dAte && gd > dAte) return false;
+    // Filtro de período: Hoje (mesma data civil) ou janela rolante de 24h/48h
+    if (cutoffData) {
+      var dg = parseDateTimeBR(r.gerado);
+      if (!dg || dg < cutoffData) return false;
+    } else {
+      if (!r.gerado || r.gerado.substring(0, 10) !== hojeStr) return false;
     }
     if (search) {
       const s = (r.destino + r.frota + r.composicao + r.obs + r.dia + (r.motorista||"") + (r.cavalinho||"")).toLowerCase();
@@ -7771,11 +7761,10 @@ function renderHist() {
   document.getElementById('badge-hist').textContent = data.length;
   const tbody = document.getElementById('tbody-hist');
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="18"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="17"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
     return;
   }
   tbody.innerHTML = data.map((r, i) => `<tr id="hist-row-${r._id}" class="hist-row" data-id="${r._id}">
-    <td style="width:36px;text-align:center"><input type="checkbox" class="hist-row-check" data-id="${r._id}" onchange="onRowCheck(this)" ${_selectedIds.has(r._id)?'checked':''} style="cursor:pointer;width:16px;height:16px"></td>
     <td class="row-pos">${i+1}</td>
     <td style="font-size:11px;color:var(--text3)">${r.gerado || '—'}</td>
     <td>${tipoBadge(r.tipo)}</td>
@@ -8635,7 +8624,7 @@ loadData();
 populateFilters();
 renderProg();
 renderGrade();
-renderHist();
+histFiltrarPeriodo('hoje');
 setTimeout(applyDTInputs, 500);
 setInterval(updateClock, 1000);
 setInterval(applyDTInputs, 2000); // Re-apply after renders
@@ -8880,6 +8869,12 @@ function editProgramado(id) {
   const ocupPct = Math.round((r.ocup||0)*100);
   const barColor = ocupPct>=100?'#16a34a':ocupPct>=71?'#65a30d':ocupPct>=51?'#ca8a04':ocupPct>=31?'#ea580c':ocupPct>0?'#dc2626':'#9ca3af';
 
+  // Status de Carregamento: somente leitura, sempre lido ao vivo da aba Acompanhamento OUT (Grupo OUT)
+  const acompOutRec = (typeof _acompOutData !== 'undefined') ? (_acompOutData[id] || {}) : {};
+  const statusCarreg = (typeof _descAcompStatusPorHoras === 'function')
+    ? _descAcompStatusPorHoras(acompOutRec.horaInicio, acompOutRec.horaFim)
+    : { label: 'Não iniciado', cor: '#9ca3af' };
+
   modal.innerHTML =
     '<div class="modal-title" style="font-size:15px;font-weight:700;margin-bottom:18px">' +
       '✏️ Editar — <span style="color:#00B200">' + r.destino + '</span>' +
@@ -8911,23 +8906,26 @@ function editProgramado(id) {
       '<div class="form-group"><label class="form-label">Nº Cavalinho</label>' +
       '<input id="ep-cavalinho" value="' + (r.cavalinho||'') + '"></div>' +
 
-      '<div class="form-group"><label class="form-label">Ocupação %</label>' +
+      '<div class="form-group"><label class="form-label">Ocupação % <span style="font-weight:400;color:var(--text3);text-transform:none">(somente leitura)</span></label>' +
       '<div style="display:flex;align-items:center;gap:6px">' +
-        '<input type="number" id="ep-ocup" min="0" max="100" value="' + ocupPct + '" style="width:80px" oninput="updateEpBar()">' +
+        '<input type="number" id="ep-ocup" min="0" max="100" value="' + ocupPct + '" style="width:80px" disabled>' +
         '<span style="color:var(--text3);font-size:12px">%</span>' +
         '<div style="flex:1;height:8px;background:#e4e7f0;border-radius:4px;overflow:hidden">' +
           '<div id="ep-bar" style="height:100%;border-radius:4px;background:' + barColor + ';width:' + ocupPct + '%;transition:width 0.2s"></div>' +
         '</div>' +
       '</div></div>' +
 
-      '<div class="form-group"><label class="form-label">Prev. Fechamento</label>' +
-      '<input type="text" id="ep-prev" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" style="font-size:13px;width:100%" value="' + toDatetimeLocal(r.prev_fech) + '"></div>' +
+      '<div class="form-group"><label class="form-label">Status de Carregamento <span style="font-weight:400;color:var(--text3);text-transform:none">(sincronizado — Acompanhamento OUT)</span></label>' +
+      '<div id="ep-status-carreg" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-weight:700;color:' + statusCarreg.cor + '">' + statusCarreg.label + '</div></div>' +
 
-      '<div class="form-group"><label class="form-label">Prioridade</label>' +
-      '<select id="ep-prior">' + priorOpts + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Prev. Fechamento <span style="font-weight:400;color:var(--text3);text-transform:none">(somente leitura)</span></label>' +
+      '<input type="text" id="ep-prev" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" style="font-size:13px;width:100%" value="' + toDatetimeLocal(r.prev_fech) + '" readonly disabled></div>' +
 
-      '<div class="form-group"><label class="form-label">Data Crítica</label>' +
-      '<input type="text" id="ep-crit" data-dtfmt="d" placeholder="dd/mm/aaaa" maxlength="10" value="' + (r.data_crit || '') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Prioridade <span style="font-weight:400;color:var(--text3);text-transform:none">(somente leitura)</span></label>' +
+      '<select id="ep-prior" disabled>' + priorOpts + '</select></div>' +
+
+      '<div class="form-group"><label class="form-label">Data Crítica <span style="font-weight:400;color:var(--text3);text-transform:none">(somente leitura)</span></label>' +
+      '<input type="text" id="ep-crit" data-dtfmt="d" placeholder="dd/mm/aaaa" maxlength="10" value="' + (r.data_crit || '') + '" readonly disabled></div>' +
 
       '<div class="form-group" style="grid-column:span 2"><label class="form-label">Observação</label>' +
       '<textarea id="ep-obs" rows="2" style="resize:vertical">' + (r.obs||'') + '</textarea></div>' +
