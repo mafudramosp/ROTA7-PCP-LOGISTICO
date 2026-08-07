@@ -14347,10 +14347,10 @@ function gestaoVistaRenderizar() {
       else _icdNoPrazo++;
     });
     var _icdTotalGeral = _icdAtrasado + _icdHoje + _icdNoPrazo;
-    // ICD = 1 - (Atrasado + Hoje) / Total Geral
-    var _icdPct = _icdTotalGeral ? Math.round((1 - (_icdAtrasado + _icdHoje) / _icdTotalGeral) * 100) : 0;
-    // IFN = 1 - No Prazo (Fluxo) / Total Geral
-    var _ifnPct = _icdTotalGeral ? Math.round((1 - _icdNoPrazo / _icdTotalGeral) * 100) : 0;
+    // ICD = (Atrasado + Hoje) / Total Geral — carga crítica
+    var _icdPct = _icdTotalGeral ? Math.round(((_icdAtrasado + _icdHoje) / _icdTotalGeral) * 100) : 0;
+    // IFN = No Prazo (Fluxo) / Total Geral — carga normal
+    var _ifnPct = _icdTotalGeral ? Math.round((_icdNoPrazo / _icdTotalGeral) * 100) : 0;
 
     icdDiv.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between">' +
