@@ -14355,13 +14355,14 @@ function gestaoVistaRenderizar() {
   if (entregaDiv && _gvVisaoAtual === 'in') {
     var fluxo = _gvFluxoFilaIN();
     var fmtKg = function(v){ return Math.round(v).toLocaleString('pt-BR'); };
-    var thNum = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;white-space:nowrap';
+    var thNum = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
     var tdNum = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#e5e5e5;white-space:nowrap';
 
     var linhasHtml = fluxo.linhas.map(function(l, i) {
       var selecionado = (_gvFiltroTurno === l.turno);
       var zebra = (i % 2 === 0) ? '#121212' : '#161616';
-      var tip = '<b>'+l.turno+'</b><br>Fila inicial: '+fmtKg(l.filaInicial)+' kg<br>Entrou depois: '+fmtKg(l.entrouDepois)+' kg<br>Executado: '+fmtKg(l.executado)+' kg ('+l.pctExec+'%)<br>Fila final: '+fmtKg(l.filaFinal)+' kg';
+      var totalCarga = l.filaInicial + l.entrouDepois;
+      var tip = '<b>'+l.turno+'</b><br>Início de turno: '+fmtKg(l.filaInicial)+' kg<br>Entrou depois: '+fmtKg(l.entrouDepois)+' kg<br>Executado: '+fmtKg(l.executado)+' kg ('+l.pctExec+'%)<br>Pendente: '+fmtKg(l.filaFinal)+' kg';
       return '<tr onclick="gestaoVistaFiltrarTurno(\''+l.turno+'\')" ' +
         'onmousemove="_gvTooltipMostrar(event, \''+tip.replace(/'/g,"\\'")+'\')" onmouseout="_gvTooltipEsconder()" ' +
         'style="cursor:pointer;background:'+(selecionado?'rgba(232,179,57,.12)':zebra)+'" ' +
@@ -14369,22 +14370,25 @@ function gestaoVistaRenderizar() {
         '<td style="padding:9px 14px;font-size:12.5px;font-weight:600;color:#d0d0d0;white-space:nowrap;border-right:1px solid #232323">'+l.turno+(selecionado?' <span style="color:#e8b339">✕</span>':'')+'</td>' +
         '<td style="'+tdNum+'">'+fmtKg(l.filaInicial)+'</td>' +
         '<td style="'+tdNum+'">'+fmtKg(l.entrouDepois)+'</td>' +
-        '<td style="'+tdNum+'">'+fmtKg(l.filaFinal)+'</td>' +
+        '<td style="'+tdNum+'">'+fmtKg(totalCarga)+'</td>' +
         '<td style="'+tdNum+';color:#4ade80;font-weight:700">'+fmtKg(l.executado)+'</td>' +
         '<td style="'+tdNum+';color:#f0b429;font-weight:800">'+l.pctExec+'%</td>' +
+        '<td style="'+tdNum+'">'+fmtKg(l.filaFinal)+'</td>' +
       '</tr>';
     }).join('');
 
     var t2 = fluxo.total;
+    var t2TotalCarga = t2.filaInicial + t2.entrouDepois;
     var tdTot = 'padding:10px 14px;text-align:right;font-size:13px;font-weight:800;color:#fff;white-space:nowrap;border-top:2px solid #3a3a3a;background:#1b1b1b';
     var totalHtml =
       '<tr>' +
         '<td style="padding:10px 14px;font-size:13px;font-weight:800;color:#fff;border-top:2px solid #3a3a3a;background:#1b1b1b;border-right:1px solid #232323">Total</td>' +
         '<td style="'+tdTot+'">'+fmtKg(t2.filaInicial)+'</td>' +
         '<td style="'+tdTot+'">'+fmtKg(t2.entrouDepois)+'</td>' +
-        '<td style="'+tdTot+'">'+fmtKg(t2.filaFinal)+'</td>' +
+        '<td style="'+tdTot+'">'+fmtKg(t2TotalCarga)+'</td>' +
         '<td style="'+tdTot+';color:#4ade80">'+fmtKg(t2.executado)+'</td>' +
         '<td style="'+tdTot+';color:#f0b429">'+t2.pctExec+'%</td>' +
+        '<td style="'+tdTot+'">'+fmtKg(t2.filaFinal)+'</td>' +
       '</tr>';
 
     var subInfo = fluxo.horaPrimeiroImport
@@ -14396,15 +14400,16 @@ function gestaoVistaRenderizar() {
           '<table id="gv-tab-fluxo" style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif">' +
             '<thead>' +
               '<tr>' +
-                '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#1a1a1a;vertical-align:bottom">Turno / Hoje</th>' +
-                '<th colspan="5" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#1a1a1a;border-bottom:1px solid #2b2b2b">Fluxo de Fila — Peso OPL (kg)</th>' +
+                '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#000;vertical-align:bottom">Turno / Hoje</th>' +
+                '<th colspan="6" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Fluxo de Fila — Peso OPL (kg)</th>' +
               '</tr>' +
-              '<tr style="background:#151515">' +
-                '<th style="'+thNum+'">Fila Inicial (kg)</th>' +
+              '<tr style="background:#000">' +
+                '<th style="'+thNum+'">Início de Turno (kg)</th>' +
                 '<th style="'+thNum+'">Entrou Depois (kg)</th>' +
-                '<th style="'+thNum+'">Fila Final (kg)</th>' +
+                '<th style="'+thNum+'">Total de Carga (kg)</th>' +
                 '<th style="'+thNum+';color:#4ade80">Executado (kg)</th>' +
-                '<th style="'+thNum+';color:#f0b429">% Exec.</th>' +
+                '<th style="'+thNum+';color:#f0b429">% Executado</th>' +
+                '<th style="'+thNum+'">Pendente (kg)</th>' +
               '</tr>' +
             '</thead>' +
             '<tbody>' + linhasHtml + totalHtml + '</tbody>' +
@@ -14425,14 +14430,15 @@ function gestaoVistaRenderizar() {
     // ── OUT: tabela Fluxo de Fila — Carregamento (fila do TMS no agregado + Executado por turno) ──
     var fo = fluxoOut || _gvFluxoFilaOUT();
     var fmtKgO = function(v){ return Math.round(v).toLocaleString('pt-BR'); };
-    var thNumO = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;white-space:nowrap';
+    var thNumO = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
     var tdNumO = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#e5e5e5;white-space:nowrap';
     var tdTraco = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#555;white-space:nowrap';
 
     var linhasO = fo.linhas.map(function(l, i) {
       var selecionado = (_gvFiltroTurno === l.turno);
       var zebra = (i % 2 === 0) ? '#121212' : '#161616';
-      var tip = '<b>'+l.turno+'</b><br>Fila Inicial: '+fmtKgO(l.filaInicial)+' kg<br>Fila Final: '+fmtKgO(l.filaFinal)+' kg<br>Executado: '+fmtKgO(l.executado)+' kg ('+l.pctExec+'%)';
+      var totalCargaO = l.filaInicial + l.entrouDepois;
+      var tip = '<b>'+l.turno+'</b><br>Início de turno: '+fmtKgO(l.filaInicial)+' kg<br>Pendente: '+fmtKgO(l.filaFinal)+' kg<br>Executado: '+fmtKgO(l.executado)+' kg ('+l.pctExec+'%)';
       return '<tr onclick="gestaoVistaFiltrarTurno(\''+l.turno+'\')" ' +
         'onmousemove="_gvTooltipMostrar(event, \''+tip.replace(/'/g,"\\'")+'\')" onmouseout="_gvTooltipEsconder()" ' +
         'style="cursor:pointer;background:'+(selecionado?'rgba(232,179,57,.12)':zebra)+'" ' +
@@ -14440,22 +14446,25 @@ function gestaoVistaRenderizar() {
         '<td style="padding:9px 14px;font-size:12.5px;font-weight:600;color:#d0d0d0;white-space:nowrap;border-right:1px solid #232323">'+l.turno+(selecionado?' <span style="color:#e8b339">✕</span>':'')+'</td>' +
         '<td style="'+tdNumO+'">'+fmtKgO(l.filaInicial)+'</td>' +
         '<td style="'+tdNumO+'">'+fmtKgO(l.entrouDepois)+'</td>' +
-        '<td style="'+tdNumO+'">'+fmtKgO(l.filaFinal)+'</td>' +
+        '<td style="'+tdNumO+'">'+fmtKgO(totalCargaO)+'</td>' +
         '<td style="'+tdNumO+';color:#4ade80;font-weight:700">'+fmtKgO(l.executado)+'</td>' +
         '<td style="'+tdNumO+';color:#f0b429;font-weight:800">'+l.pctExec+'%</td>' +
+        '<td style="'+tdNumO+'">'+fmtKgO(l.filaFinal)+'</td>' +
       '</tr>';
     }).join('');
 
     var tO = fo.total;
+    var tOTotalCarga = tO.filaInicial + tO.entrouDepois;
     var tdTotO = 'padding:10px 14px;text-align:right;font-size:13px;font-weight:800;color:#fff;white-space:nowrap;border-top:2px solid #3a3a3a;background:#1b1b1b';
     var totalO =
       '<tr>' +
         '<td style="padding:10px 14px;font-size:13px;font-weight:800;color:#fff;border-top:2px solid #3a3a3a;background:#1b1b1b;border-right:1px solid #232323">Total</td>' +
         '<td style="'+tdTotO+'">'+fmtKgO(tO.filaInicial)+'</td>' +
         '<td style="'+tdTotO+'">'+fmtKgO(tO.entrouDepois)+'</td>' +
-        '<td style="'+tdTotO+'">'+fmtKgO(tO.filaFinal)+'</td>' +
+        '<td style="'+tdTotO+'">'+fmtKgO(tOTotalCarga)+'</td>' +
         '<td style="'+tdTotO+';color:#4ade80">'+fmtKgO(tO.executado)+'</td>' +
         '<td style="'+tdTotO+';color:#f0b429">'+tO.pctExec+'%</td>' +
+        '<td style="'+tdTotO+'">'+fmtKgO(tO.filaFinal)+'</td>' +
       '</tr>';
 
     var subInfoO = fo.temTms
@@ -14473,15 +14482,16 @@ function gestaoVistaRenderizar() {
           '<table id="gv-tab-fluxo" style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif">' +
             '<thead>' +
               '<tr>' +
-                '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#1a1a1a;vertical-align:bottom">Turno / Hoje</th>' +
-                '<th colspan="5" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#1a1a1a;border-bottom:1px solid #2b2b2b">Fluxo de Fila — Peso Disponível TMS (kg)</th>' +
+                '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#000;vertical-align:bottom">Turno / Hoje</th>' +
+                '<th colspan="6" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Fluxo de Fila — Peso Disponível TMS (kg)</th>' +
               '</tr>' +
-              '<tr style="background:#151515">' +
-                '<th style="'+thNumO+'">Fila Inicial (kg)</th>' +
+              '<tr style="background:#000">' +
+                '<th style="'+thNumO+'">Início de Turno (kg)</th>' +
                 '<th style="'+thNumO+'">Entrou Depois (kg)</th>' +
-                '<th style="'+thNumO+'">Fila Final (kg)</th>' +
+                '<th style="'+thNumO+'">Total de Carga (kg)</th>' +
                 '<th style="'+thNumO+';color:#4ade80">Executado (kg)</th>' +
-                '<th style="'+thNumO+';color:#f0b429">% Exec.</th>' +
+                '<th style="'+thNumO+';color:#f0b429">% Executado</th>' +
+                '<th style="'+thNumO+'">Pendente (kg)</th>' +
               '</tr>' +
             '</thead>' +
             '<tbody>' + linhasO + totalO + '</tbody>' +
