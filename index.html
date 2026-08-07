@@ -14306,32 +14306,47 @@ function gestaoVistaRenderizar() {
       '</div>';
   }
 
-  // ── Ranking de destinos (respeita o filtro de turno, se ativo) ──
-  var pesoPorDestino = {};
-  if (_gvFiltroTurno) {
-    (dados.turnoItens[_gvFiltroTurno] || []).forEach(function(it) {
-      var nome = it.label.split(' — ')[1] || it.label;
-      pesoPorDestino[nome] = (pesoPorDestino[nome] || 0) + it.peso;
+  // ── ICD: Índice de Criticidade da Demanda / IFN: Índice de Fluxo Normal ──
+  var icdDiv = document.getElementById('gv-card-leaderboard');
+  if (icdDiv) {
+    var _icdAtrasado = 0, _icdHoje = 0, _icdNoPrazo = 0;
+    relData.forEach(function(r) {
+      var sit = (typeof _cargaCriticaSituacaoDe === 'function') ? _cargaCriticaSituacaoDe(r) : 'No Prazo';
+      if (sit === 'Atrasado') _icdAtrasado++;
+      else if (sit === 'Hoje') _icdHoje++;
+      else _icdNoPrazo++;
     });
-  } else {
-    pesoPorDestino = dados.pesoPorDestino;
-  }
-  var topDestinos = Object.keys(pesoPorDestino).map(function(d) { return { destino: d, peso: pesoPorDestino[d] }; })
-    .sort(function(a, b) { return b.peso - a.peso; }).slice(0, 7);
+    var _icdTotalGeral = _icdAtrasado + _icdHoje + _icdNoPrazo;
+    // ICD = 1 - (Atrasado + Hoje) / Total Geral
+    var _icdPct = _icdTotalGeral ? Math.round((1 - (_icdAtrasado + _icdHoje) / _icdTotalGeral) * 100) : 0;
+    // IFN = 1 - No Prazo (Fluxo) / Total Geral
+    var _ifnPct = _icdTotalGeral ? Math.round((1 - _icdNoPrazo / _icdTotalGeral) * 100) : 0;
 
-  var leaderDiv = document.getElementById('gv-card-leaderboard');
-  if (leaderDiv) {
-    var linhasLeader = topDestinos.length ? topDestinos.map(function(d) {
-      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #262626;font-size:12px">' +
-        '<span style="color:#e5e9f0">' + d.destino + '</span>' +
-        '<span style="color:#fff;font-weight:700">' + Math.round(d.peso).toLocaleString('pt-BR') + ' kg</span>' +
-      '</div>';
-    }).join('') : '<div style="color:#9a9a9a;font-size:12px;padding:12px 0">Sem dados ainda</div>';
-
-    leaderDiv.innerHTML =
-      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
-        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Ranking (kg)' + (_gvFiltroTurno ? ' — ' + _gvFiltroTurno : '') + '</div>' +
-        linhasLeader +
+    icdDiv.innerHTML =
+      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between">' +
+        '<div style="text-align:center">' +
+          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Índice de Criticidade de Demanda</div>' +
+          '<div style="background:#1e1e1e;border-radius:8px;padding:10px 0;display:inline-block;min-width:90px">' +
+            '<div class="gv-count" data-val="' + _icdPct + '" data-suf="%" style="font-size:24px;font-weight:800;color:#3fb950;line-height:1">' + _icdPct + '%</div>' +
+            '<div style="font-size:10px;color:#8a8a8a;margin-top:3px">ICD</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="border-top:2px solid #3fb950;margin:14px 0"></div>' +
+        '<div style="text-align:center">' +
+          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Índice de Fluxo Normal</div>' +
+          '<div style="background:#1e1e1e;border-radius:8px;padding:10px 0;display:inline-block;min-width:90px">' +
+            '<div class="gv-count" data-val="' + _ifnPct + '" data-suf="%" style="font-size:24px;font-weight:800;color:#3fb950;line-height:1">' + _ifnPct + '%</div>' +
+            '<div style="font-size:10px;color:#8a8a8a;margin-top:3px">IFN</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="border-top:2px solid #3fb950;margin:14px 0"></div>' +
+        '<div style="display:flex;text-align:center">' +
+          '<div style="flex:1"><div style="font-size:10px;color:#9a9a9a;text-transform:uppercase;margin-bottom:4px">Atrasado</div><div class="gv-count" data-val="' + _icdAtrasado + '" data-suf="" style="font-size:18px;font-weight:800;color:#ef4444">' + _icdAtrasado.toLocaleString('pt-BR') + '</div></div>' +
+          '<div style="width:1px;background:#2b2b2b;margin:2px 10px"></div>' +
+          '<div style="flex:1"><div style="font-size:10px;color:#9a9a9a;text-transform:uppercase;margin-bottom:4px">Hoje</div><div class="gv-count" data-val="' + _icdHoje + '" data-suf="" style="font-size:18px;font-weight:800;color:#f59e0b">' + _icdHoje.toLocaleString('pt-BR') + '</div></div>' +
+          '<div style="width:1px;background:#2b2b2b;margin:2px 10px"></div>' +
+          '<div style="flex:1"><div style="font-size:10px;color:#9a9a9a;text-transform:uppercase;margin-bottom:4px">No Prazo</div><div class="gv-count" data-val="' + _icdNoPrazo + '" data-suf="" style="font-size:18px;font-weight:800;color:#e5e5e5">' + _icdNoPrazo.toLocaleString('pt-BR') + '</div></div>' +
+        '</div>' +
       '</div>';
   }
 
@@ -14475,44 +14490,24 @@ function gestaoVistaRenderizar() {
       '</div>';
   }
 
-  // ── Indicadores do dia / Índice de Criticidade da Demanda (ICD/IFN — só na visão Descarga IN) ──
-  var atrasados = 0, hojeCount = 0, semMac = 0, fluxoCount = 0;
+  // ── Indicadores do dia ──
+  var atrasados = 0, hojeCount = 0, semMac = 0;
   relData.forEach(function(r) {
     var s = (typeof _cargaCriticaSituacaoDe === 'function') ? _cargaCriticaSituacaoDe(r) : '';
     if (s === 'Atrasado') atrasados++;
     else if (s === 'Hoje') hojeCount++;
-    else fluxoCount++; // 'No Prazo' = Fluxo
     if (!r.mac || !r.mac.trim()) semMac++;
   });
-  var totalGeralDemanda = atrasados + hojeCount + fluxoCount;
-  // ICD = 1 - (Atrasado + Hoje) / Total Geral
-  var icdPct = totalGeralDemanda ? (1 - (atrasados + hojeCount) / totalGeralDemanda) * 100 : 0;
-  // IFN = 1 - Fluxo / Total Geral
-  var ifnPct = totalGeralDemanda ? (1 - fluxoCount / totalGeralDemanda) * 100 : 0;
 
   var indicDiv = document.getElementById('gv-card-indicadores');
   if (indicDiv) {
-    if (_gvVisaoAtual === 'in') {
-      indicDiv.innerHTML =
-        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
-          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Índice de Criticidade da Demanda</div>' +
-          '<div style="display:flex;gap:14px;margin-bottom:14px">' +
-            '<div style="flex:1"><div style="font-size:22px;font-weight:800;color:#4ade80">' + icdPct.toFixed(0) + '%</div><div style="font-size:11px;color:#9a9a9a">ICD</div></div>' +
-            '<div style="flex:1"><div style="font-size:22px;font-weight:800;color:#3fb950">' + ifnPct.toFixed(0) + '%</div><div style="font-size:11px;color:#9a9a9a">IFN</div></div>' +
-          '</div>' +
-          '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+atrasados+'" data-suf="" style="font-size:24px;font-weight:800;color:#ef4444">' + atrasados.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Atrasados</div></div>' +
-          '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+hojeCount+'" data-suf="" style="font-size:24px;font-weight:800;color:#f59e0b">' + hojeCount.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Vencendo hoje</div></div>' +
-          '<div style="background:#1e1e1e;border-radius:8px;padding:10px"><div class="gv-count" data-val="'+semMac+'" data-suf="" style="font-size:20px;font-weight:800;color:#fff">' + semMac.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">CTRCs sem MAC atribuído</div></div>' +
-        '</div>';
-    } else {
-      indicDiv.innerHTML =
-        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
-          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Indicadores do Dia</div>' +
-          '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+atrasados+'" data-suf="" style="font-size:24px;font-weight:800;color:#ef4444">' + atrasados.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Atrasados</div></div>' +
-          '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+hojeCount+'" data-suf="" style="font-size:24px;font-weight:800;color:#f59e0b">' + hojeCount.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Vencendo hoje</div></div>' +
-          '<div style="background:#1e1e1e;border-radius:8px;padding:10px"><div class="gv-count" data-val="'+semMac+'" data-suf="" style="font-size:20px;font-weight:800;color:#fff">' + semMac.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">CTRCs sem MAC atribuído</div></div>' +
-        '</div>';
-    }
+    indicDiv.innerHTML =
+      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
+        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Indicadores do Dia</div>' +
+        '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+atrasados+'" data-suf="" style="font-size:24px;font-weight:800;color:#ef4444">' + atrasados.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Atrasados</div></div>' +
+        '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+hojeCount+'" data-suf="" style="font-size:24px;font-weight:800;color:#f59e0b">' + hojeCount.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Vencendo hoje</div></div>' +
+        '<div style="background:#1e1e1e;border-radius:8px;padding:10px"><div class="gv-count" data-val="'+semMac+'" data-suf="" style="font-size:20px;font-weight:800;color:#fff">' + semMac.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">CTRCs sem MAC atribuído</div></div>' +
+      '</div>';
   }
 
   // ── Sem Programação: MACs (IN) sem Hora Início preenchida no Acompanhamento ──
