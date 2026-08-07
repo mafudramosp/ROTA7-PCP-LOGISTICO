@@ -2095,6 +2095,11 @@ function _gradeAtualizarComMalha(rows) {
         <div id="gv-card-entrega"></div>
       </div>
 
+      <!-- Linha 2b: Gestão do Turno (subgrupo com os 3 turnos + resumo consolidado por turno) -->
+      <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px">
+        <div id="gv-card-gestao-turno"></div>
+      </div>
+
       <!-- Linha 3: visão do que está Sem Programação + Em Trânsito -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div id="gv-card-sem-programacao"></div>
@@ -13997,6 +14002,8 @@ function _gvFluxoFilaOUT() {
   var ordem = ['1º Turno','2º Turno','3º Turno'];
   var execTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var pesoAcompTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var qtdTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var qtdExecTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var execTotal = 0;
 
   itens.forEach(function(r) {
@@ -14006,12 +14013,14 @@ function _gvFluxoFilaOUT() {
     var pesoTms2 = pesoTMSOut(r.frota);
     var peso = pesoTms2 > 0 ? pesoTms2 : (_parsePesoBR(rec.pesoOpl));
     var t = turnoDe(temInicio ? rec.horaInicio : (rec.horaFim || agoraHora));
-    
+
     pesoAcompTurno[t] += peso;
-    
+    qtdTurno[t]++;
+
     if (temFim) {
       execTotal += peso;
       execTurno[t] += peso;
+      qtdExecTurno[t]++;
     }
   });
 
@@ -14022,9 +14031,11 @@ function _gvFluxoFilaOUT() {
   var total = {
     turno: 'Total', filaInicial: filaInicial, entrouDepois: entrouDepois,
     executado: execTotal, filaFinal: filaFinal,
-    pctExec: pctTotalExec
+    pctExec: pctTotalExec,
+    qtdMacs: qtdTurno['1º Turno'] + qtdTurno['2º Turno'] + qtdTurno['3º Turno'],
+    qtdExecutados: qtdExecTurno['1º Turno'] + qtdExecTurno['2º Turno'] + qtdExecTurno['3º Turno']
   };
-  
+
   // Distribui filaInicial proporcionalmente por turno baseado no acompanhamento
   var totalAcomp = execTotal + (ordem.reduce(function(sum, t) { return sum + (pesoAcompTurno[t] - execTurno[t]); }, 0));
   
@@ -14039,13 +14050,15 @@ function _gvFluxoFilaOUT() {
     // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
     if (pctT === 0 && execT > 0) pctT = 1;
     
-    return { 
-      turno: t, 
+    return {
+      turno: t,
       filaInicial: filaInicialT,
       entrouDepois: entrouDeT,
       filaFinal: faltaT,
-      executado: execT, 
-      pctExec: pctT
+      executado: execT,
+      pctExec: pctT,
+      qtdMacs: qtdTurno[t],
+      qtdExecutados: qtdExecTurno[t]
     };
   });
 
@@ -14095,7 +14108,7 @@ function _gvFluxoFilaIN() {
 
   var ordem = ['1º Turno','2º Turno','3º Turno'];
   var linhas = {};
-  ordem.forEach(function(t) { linhas[t] = { turno: t, filaInicial: 0, entrouDepois: 0, executado: 0 }; });
+  ordem.forEach(function(t) { linhas[t] = { turno: t, filaInicial: 0, entrouDepois: 0, executado: 0, qtdMacs: 0, qtdExecutados: 0 }; });
 
   Object.keys(macsUnicos).forEach(function(mac) {
     var peso = macsUnicos[mac].pesoOpl;
@@ -14104,15 +14117,17 @@ function _gvFluxoFilaIN() {
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
     var t = turnoDe(temInicio ? rec.horaInicio : agoraHora);
     if (macsIniciais[mac]) linhas[t].filaInicial += peso; else linhas[t].entrouDepois += peso;
-    if (temFim) linhas[t].executado += peso;
+    linhas[t].qtdMacs++;
+    if (temFim) { linhas[t].executado += peso; linhas[t].qtdExecutados++; }
   });
 
-  var total = { turno: 'Total', filaInicial: 0, entrouDepois: 0, executado: 0 };
+  var total = { turno: 'Total', filaInicial: 0, entrouDepois: 0, executado: 0, qtdMacs: 0, qtdExecutados: 0 };
   var lista = ordem.map(function(t) {
     var l = linhas[t];
     l.filaFinal = l.filaInicial + l.entrouDepois - l.executado;
     l.pctExec = (l.filaInicial + l.entrouDepois) ? Math.round(l.executado / (l.filaInicial + l.entrouDepois) * 100) : 0;
     total.filaInicial += l.filaInicial; total.entrouDepois += l.entrouDepois; total.executado += l.executado;
+    total.qtdMacs += l.qtdMacs; total.qtdExecutados += l.qtdExecutados;
     return l;
   });
   total.filaFinal = total.filaInicial + total.entrouDepois - total.executado;
@@ -14529,6 +14544,35 @@ function gestaoVistaRenderizar() {
       '</div>';
   }
 
+  // ── Gestão do Turno: subgrupo com os 3 turnos + resumo consolidado do que foi entregue em cada um ──
+  var gestaoTurnoDiv = document.getElementById('gv-card-gestao-turno');
+  if (gestaoTurnoDiv) {
+    var gtDados = (_gvVisaoAtual === 'out') ? fo : fluxo;
+    var gtLinhas = (gtDados && gtDados.linhas) ? gtDados.linhas : [];
+    var gtFmt = function(v){ return Math.round(v||0).toLocaleString('pt-BR'); };
+
+    var gtBotoes = gtLinhas.map(function(l) {
+      var ativo = (_gvFiltroTurno === l.turno);
+      return '<button onclick="gestaoVistaFiltrarTurno(\''+l.turno+'\')" style="padding:7px 18px;border-radius:4px;border:1px solid '+(ativo?corVisao:'#2f2f2f')+';background:'+(ativo?corVisao:'#1a1a1a')+';color:'+(ativo?'#141414':'#9a9a9a')+';font-size:12px;font-weight:800;cursor:pointer;font-family:\'Poppins\',sans-serif">'+l.turno+'</button>';
+    }).join('');
+
+    var gtResumos = gtLinhas.map(function(l) {
+      return '<div style="background:#1a1a1a;border:1px solid #2b2b2b;border-radius:6px;padding:14px 16px;flex:1;min-width:220px">' +
+        '<div style="font-size:11px;font-weight:800;color:#e5e5e5;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Resumo do ' + l.turno + '</div>' +
+        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#9a9a9a">Total de relatórios</span><span style="color:#e5e5e5;font-weight:700">' + (l.qtdMacs||0).toLocaleString('pt-BR') + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#9a9a9a">Entregas</span><span style="color:#4ade80;font-weight:700">' + gtFmt(l.executado) + ' kg</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#9a9a9a">Indicadores</span><span style="color:#f0b429;font-weight:800">' + (l.pctExec||0) + '% exec. · ' + gtFmt(l.filaFinal) + ' kg pendente</span></div>' +
+      '</div>';
+    }).join('');
+
+    gestaoTurnoDiv.innerHTML =
+      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box">' +
+        '<div style="font-size:12px;font-weight:800;color:#e5e5e5;margin-bottom:12px">Gestão do Turno</div>' +
+        '<div style="display:flex;gap:8px;margin-bottom:16px">' + gtBotoes + '</div>' +
+        '<div style="display:flex;gap:16px;flex-wrap:wrap">' + gtResumos + '</div>' +
+      '</div>';
+  }
+
   // ── Sem Programação: MACs (IN) sem Hora Início preenchida no Acompanhamento ──
   var semProgDiv = document.getElementById('gv-card-sem-programacao');
   if (semProgDiv) {
@@ -14614,7 +14658,7 @@ function _gvAnimarEntradaVisuais() {
   if (!painel) return;
 
   // 1) Entrada escalonada dos cards (fade + deslize)
-  var cards = ['gv-card-sales','gv-card-gauges','gv-card-leaderboard','gv-card-entrega','gv-card-sem-programacao','gv-card-transito'];
+  var cards = ['gv-card-sales','gv-card-gauges','gv-card-leaderboard','gv-card-entrega','gv-card-gestao-turno','gv-card-sem-programacao','gv-card-transito'];
   cards.forEach(function(id, i) {
     var el = document.getElementById(id);
     if (!el) return;
