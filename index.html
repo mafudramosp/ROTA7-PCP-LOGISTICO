@@ -14475,24 +14475,44 @@ function gestaoVistaRenderizar() {
       '</div>';
   }
 
-  // ── Indicadores do dia ──
-  var atrasados = 0, hojeCount = 0, semMac = 0;
+  // ── Indicadores do dia / Índice de Criticidade da Demanda (ICD/IFN — só na visão Descarga IN) ──
+  var atrasados = 0, hojeCount = 0, semMac = 0, fluxoCount = 0;
   relData.forEach(function(r) {
     var s = (typeof _cargaCriticaSituacaoDe === 'function') ? _cargaCriticaSituacaoDe(r) : '';
     if (s === 'Atrasado') atrasados++;
     else if (s === 'Hoje') hojeCount++;
+    else fluxoCount++; // 'No Prazo' = Fluxo
     if (!r.mac || !r.mac.trim()) semMac++;
   });
+  var totalGeralDemanda = atrasados + hojeCount + fluxoCount;
+  // ICD = 1 - (Atrasado + Hoje) / Total Geral
+  var icdPct = totalGeralDemanda ? (1 - (atrasados + hojeCount) / totalGeralDemanda) * 100 : 0;
+  // IFN = 1 - Fluxo / Total Geral
+  var ifnPct = totalGeralDemanda ? (1 - fluxoCount / totalGeralDemanda) * 100 : 0;
 
   var indicDiv = document.getElementById('gv-card-indicadores');
   if (indicDiv) {
-    indicDiv.innerHTML =
-      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
-        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Indicadores do Dia</div>' +
-        '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+atrasados+'" data-suf="" style="font-size:24px;font-weight:800;color:#ef4444">' + atrasados.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Atrasados</div></div>' +
-        '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+hojeCount+'" data-suf="" style="font-size:24px;font-weight:800;color:#f59e0b">' + hojeCount.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Vencendo hoje</div></div>' +
-        '<div style="background:#1e1e1e;border-radius:8px;padding:10px"><div class="gv-count" data-val="'+semMac+'" data-suf="" style="font-size:20px;font-weight:800;color:#fff">' + semMac.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">CTRCs sem MAC atribuído</div></div>' +
-      '</div>';
+    if (_gvVisaoAtual === 'in') {
+      indicDiv.innerHTML =
+        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
+          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Índice de Criticidade da Demanda</div>' +
+          '<div style="display:flex;gap:14px;margin-bottom:14px">' +
+            '<div style="flex:1"><div style="font-size:22px;font-weight:800;color:#4ade80">' + icdPct.toFixed(0) + '%</div><div style="font-size:11px;color:#9a9a9a">ICD</div></div>' +
+            '<div style="flex:1"><div style="font-size:22px;font-weight:800;color:#3fb950">' + ifnPct.toFixed(0) + '%</div><div style="font-size:11px;color:#9a9a9a">IFN</div></div>' +
+          '</div>' +
+          '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+atrasados+'" data-suf="" style="font-size:24px;font-weight:800;color:#ef4444">' + atrasados.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Atrasados</div></div>' +
+          '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+hojeCount+'" data-suf="" style="font-size:24px;font-weight:800;color:#f59e0b">' + hojeCount.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Vencendo hoje</div></div>' +
+          '<div style="background:#1e1e1e;border-radius:8px;padding:10px"><div class="gv-count" data-val="'+semMac+'" data-suf="" style="font-size:20px;font-weight:800;color:#fff">' + semMac.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">CTRCs sem MAC atribuído</div></div>' +
+        '</div>';
+    } else {
+      indicDiv.innerHTML =
+        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
+          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Indicadores do Dia</div>' +
+          '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+atrasados+'" data-suf="" style="font-size:24px;font-weight:800;color:#ef4444">' + atrasados.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Atrasados</div></div>' +
+          '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+hojeCount+'" data-suf="" style="font-size:24px;font-weight:800;color:#f59e0b">' + hojeCount.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Vencendo hoje</div></div>' +
+          '<div style="background:#1e1e1e;border-radius:8px;padding:10px"><div class="gv-count" data-val="'+semMac+'" data-suf="" style="font-size:20px;font-weight:800;color:#fff">' + semMac.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">CTRCs sem MAC atribuído</div></div>' +
+        '</div>';
+    }
   }
 
   // ── Sem Programação: MACs (IN) sem Hora Início preenchida no Acompanhamento ──
