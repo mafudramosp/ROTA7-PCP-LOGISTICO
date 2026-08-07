@@ -2100,11 +2100,6 @@ function _gradeAtualizarComMalha(rows) {
         <div id="gv-card-sem-programacao"></div>
         <div id="gv-card-transito"></div>
       </div>
-
-      <!-- Linha 4: Frotas Programadas no turno (substitui o antigo seletor de Frotas) -->
-      <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-top:16px">
-        <div id="gv-card-frotas-prog"></div>
-      </div>
     </div>
 
     <!-- Container para visão Frotas Programadas -->
@@ -14609,24 +14604,6 @@ function gestaoVistaRenderizar() {
       '</div>';
   }
 
-  // ── Frotas Programadas: resumo rápido + botão para o dashboard dedicado ──
-  var frotasProgDiv = document.getElementById('gv-card-frotas-prog');
-  if (frotasProgDiv) {
-    var fpResumo = _gvFrotasProgramadasColeta();
-    frotasProgDiv.innerHTML =
-      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">' +
-        '<div>' +
-          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Frotas Programadas</div>' +
-          '<div style="font-size:10px;color:#6b6b6b;margin-bottom:10px">Motorista/cavalo + frota carreta, peso em carregamento e críticos — em um painel próprio</div>' +
-          '<div style="display:flex;gap:20px">' +
-            '<div><span style="font-size:18px;font-weight:800;color:#3fb950">' + fpResumo.completoGeral + '</span> <span style="font-size:11px;color:#9a9a9a">programados</span></div>' +
-            '<div><span style="font-size:18px;font-weight:800;color:#ef4444">' + (fpResumo.parcialGeral + fpResumo.naoProgGeral) + '</span> <span style="font-size:11px;color:#9a9a9a">faltam programar</span></div>' +
-          '</div>' +
-        '</div>' +
-        '<button onclick="gestaoVistaTrocarVisao(\'fp\')" style="padding:11px 20px;border-radius:4px;border:none;background:#f0b429;color:#141414;font-size:12.5px;font-weight:800;cursor:pointer;font-family:\'Poppins\',sans-serif;white-space:nowrap">Ver Dashboard Completo →</button>' +
-      '</div>';
-  }
-
   // ── Replay das animações a cada visita à aba ──
   if (animarEntrada) _gvAnimarEntradaVisuais();
 }
@@ -14637,7 +14614,7 @@ function _gvAnimarEntradaVisuais() {
   if (!painel) return;
 
   // 1) Entrada escalonada dos cards (fade + deslize)
-  var cards = ['gv-card-sales','gv-card-gauges','gv-card-leaderboard','gv-card-entrega','gv-card-sem-programacao','gv-card-transito','gv-card-frotas-prog'];
+  var cards = ['gv-card-sales','gv-card-gauges','gv-card-leaderboard','gv-card-entrega','gv-card-sem-programacao','gv-card-transito'];
   cards.forEach(function(id, i) {
     var el = document.getElementById(id);
     if (!el) return;
