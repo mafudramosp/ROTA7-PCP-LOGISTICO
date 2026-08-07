@@ -2090,10 +2090,9 @@ function _gradeAtualizarComMalha(rows) {
         <div id="gv-card-leaderboard"></div>
       </div>
 
-      <!-- Linha 2: entrega total do dia (gráfico) + indicadores do dia -->
-      <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;margin-bottom:16px">
+      <!-- Linha 2: fluxo de fila (ocupa toda a largura disponível) -->
+      <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px">
         <div id="gv-card-entrega"></div>
-        <div id="gv-card-indicadores"></div>
       </div>
 
       <!-- Linha 3: visão do que está Sem Programação + Em Trânsito -->
@@ -14095,7 +14094,8 @@ function _gvFluxoFilaIN() {
   total.pctExec = (total.filaInicial + total.entrouDepois) ? Math.round(total.executado / (total.filaInicial + total.entrouDepois) * 100) : 0;
 
   var horaPrimeiro = primeiroImport ? new Date(primeiroImport.dataHoraISO).toTimeString().substring(0,5) : null;
-  return { linhas: lista, total: total, horaPrimeiroImport: horaPrimeiro, qtdImportsHoje: snapsHoje.length };
+  var dataPrimeiro = primeiroImport ? new Date(primeiroImport.dataHoraISO).toLocaleDateString('pt-BR') : null;
+  return { linhas: lista, total: total, horaPrimeiroImport: horaPrimeiro, dataPrimeiroImport: dataPrimeiro, qtdImportsHoje: snapsHoje.length };
 }
 
 function gestaoVistaRenderizar() {
@@ -14388,8 +14388,8 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfo = fluxo.horaPrimeiroImport
-      ? 'DESCARGA · KG · Hoje · 1º import às ' + fluxo.horaPrimeiroImport + ' · ' + fluxo.qtdImportsHoje + ' import(s) no dia'
-      : 'DESCARGA · KG · Hoje';
+      ? 'Importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
+      : 'Sem importação registrada hoje';
 
     var corpoTabela = fluxo.horaPrimeiroImport
       ? '<div style="overflow-x:auto">' +
@@ -14487,26 +14487,6 @@ function gestaoVistaRenderizar() {
             '<tbody>' + linhasO + totalO + '</tbody>' +
           '</table>' +
         '</div>' +
-      '</div>';
-  }
-
-  // ── Indicadores do dia ──
-  var atrasados = 0, hojeCount = 0, semMac = 0;
-  relData.forEach(function(r) {
-    var s = (typeof _cargaCriticaSituacaoDe === 'function') ? _cargaCriticaSituacaoDe(r) : '';
-    if (s === 'Atrasado') atrasados++;
-    else if (s === 'Hoje') hojeCount++;
-    if (!r.mac || !r.mac.trim()) semMac++;
-  });
-
-  var indicDiv = document.getElementById('gv-card-indicadores');
-  if (indicDiv) {
-    indicDiv.innerHTML =
-      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
-        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Indicadores do Dia</div>' +
-        '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+atrasados+'" data-suf="" style="font-size:24px;font-weight:800;color:#ef4444">' + atrasados.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Atrasados</div></div>' +
-        '<div style="margin-bottom:14px"><div class="gv-count" data-val="'+hojeCount+'" data-suf="" style="font-size:24px;font-weight:800;color:#f59e0b">' + hojeCount.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">Vencendo hoje</div></div>' +
-        '<div style="background:#1e1e1e;border-radius:8px;padding:10px"><div class="gv-count" data-val="'+semMac+'" data-suf="" style="font-size:20px;font-weight:800;color:#fff">' + semMac.toLocaleString('pt-BR') + '</div><div style="font-size:11px;color:#9a9a9a">CTRCs sem MAC atribuído</div></div>' +
       '</div>';
   }
 
@@ -14613,7 +14593,7 @@ function _gvAnimarEntradaVisuais() {
   if (!painel) return;
 
   // 1) Entrada escalonada dos cards (fade + deslize)
-  var cards = ['gv-card-sales','gv-card-gauges','gv-card-leaderboard','gv-card-entrega','gv-card-indicadores','gv-card-sem-programacao','gv-card-transito','gv-card-frotas-prog'];
+  var cards = ['gv-card-sales','gv-card-gauges','gv-card-leaderboard','gv-card-entrega','gv-card-sem-programacao','gv-card-transito','gv-card-frotas-prog'];
   cards.forEach(function(id, i) {
     var el = document.getElementById(id);
     if (!el) return;
