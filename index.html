@@ -5313,11 +5313,21 @@ function sbInicializarRealtime() {
           // Histórico de Relatório mudou em outra máquina (nova importação ou exclusão) — recarrega
           if (typeof _relatorioHistoricoCarregarSupabase === 'function') _relatorioHistoricoCarregarSupabase();
         } else if (chave === 'descarga_acomp_data') {
-          // Dados do Acompanhamento de Produção (horas/conferente/impressões) mudaram em outra máquina
-          if (typeof _descAcompCarregarSupabase === 'function') _descAcompCarregarSupabase();
+          // Dados do Acompanhamento de Produção (horas/conferente/impressões) mudaram em outra máquina.
+          // Usa o valor já entregue no payload do realtime — evita um novo GET que podia ler um
+          // snapshot desatualizado (anterior ao commit) e apagar dados recém-salvos localmente.
+          if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompAplicarDadosRemotos === 'function') {
+            _descAcompAplicarDadosRemotos(payload.new.valor);
+          } else if (typeof _descAcompCarregarSupabase === 'function') {
+            _descAcompCarregarSupabase();
+          }
         } else if (chave === 'descarga_acomp_lista') {
           // Lista/fila do Acompanhamento de Produção (inclui "Finalizado Anteriormente") mudou em outra máquina
-          if (typeof _descAcompListaCarregarSupabase === 'function') _descAcompListaCarregarSupabase();
+          if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompListaAplicarDadosRemotos === 'function') {
+            _descAcompListaAplicarDadosRemotos(payload.new.valor);
+          } else if (typeof _descAcompListaCarregarSupabase === 'function') {
+            _descAcompListaCarregarSupabase();
+          }
         } else if (chave === 'acomp_out_data') {
           // Dados do Acompanhamento OUT (horas/peso/conferente) mudaram em outra máquina
           if (typeof _acompOutCarregarSupabase === 'function') _acompOutCarregarSupabase();
@@ -11296,8 +11306,18 @@ function _descAcompResetarImpressoes() {
   }
 }
 
+// Mesma proteção contra eco do realtime usada em _descAcompSalvandoLocal, aplicada à lista.
+var _descAcompListaSalvandoLocal = false;
+var _descAcompListaSalvandoLocalTimer = null;
+function _descAcompListaMarcarSalvandoLocal() {
+  _descAcompListaSalvandoLocal = true;
+  clearTimeout(_descAcompListaSalvandoLocalTimer);
+  _descAcompListaSalvandoLocalTimer = setTimeout(function(){ _descAcompListaSalvandoLocal = false; }, 4000);
+}
+
 function _descAcompListaSalvar() {
   try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(ex) {}
+  _descAcompListaMarcarSalvandoLocal();
   _descAcompListaSalvarSupabase(); // compartilha com todos os usuários
 }
 
@@ -11312,41 +11332,52 @@ function _descAcompListaSalvarSupabase() {
   } catch(e) {}
 }
 
-// Carrega a lista do Supabase (chamado no início do app e via realtime)
+// Aplica um valor (string JSON) de _descAcompLista vindo do servidor — usado tanto
+// pelo carregamento inicial/polling quanto pelo payload do realtime.
+function _descAcompListaAplicarDadosRemotos(valorStr) {
+  if (!valorStr) return;
+  if (_descAcompListaSalvandoLocal) return; // edição local em andamento — não sobrescrever
+  try {
+    _descAcompLista = JSON.parse(valorStr);
+  } catch(e) { return; }
+
+  // Limpeza automática: remover finalizados há mais de 3 dias
+  var agora = new Date();
+  var tresDias = 3 * 24 * 60 * 60 * 1000;
+  var mudou = false;
+  _descAcompLista = _descAcompLista.filter(function(m) {
+    var rec = _descAcompData[m.mac];
+    if (rec && rec.dataFimISO) {
+      var dtFim = new Date(rec.dataFimISO);
+      if (agora - dtFim > tresDias) {
+        delete _descAcompData[m.mac];
+        mudou = true;
+        return false;
+      }
+    }
+    return true;
+  });
+  if (mudou) {
+    _descAcompListaSalvar();
+    _descAcompSalvar();
+  }
+
+  try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
+  if (typeof descargaAcompRenderizar === 'function') {
+    var tab = document.getElementById('tab-descargaAcomp-content');
+    if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
+  }
+}
+
+// Carrega a lista do Supabase (chamado no início do app; via realtime usa-se o
+// payload direto, ver _descAcompListaAplicarDadosRemotos)
 function _descAcompListaCarregarSupabase() {
   try {
     fetch(SB_URL + '/configuracoes?chave=eq.descarga_acomp_lista&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
       if (data && data.length && data[0].valor) {
-        _descAcompLista = JSON.parse(data[0].valor);
-        
-        // Limpeza automática: remover finalizados há mais de 3 dias
-        var agora = new Date();
-        var tresDias = 3 * 24 * 60 * 60 * 1000;
-        var mudou = false;
-        _descAcompLista = _descAcompLista.filter(function(m) {
-          var rec = _descAcompData[m.mac];
-          if (rec && rec.dataFimISO) {
-            var dtFim = new Date(rec.dataFimISO);
-            if (agora - dtFim > tresDias) {
-              delete _descAcompData[m.mac];
-              mudou = true;
-              return false;
-            }
-          }
-          return true;
-        });
-        if (mudou) {
-          _descAcompListaSalvar();
-          _descAcompSalvar();
-        }
-
-        try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
-        if (typeof descargaAcompRenderizar === 'function') {
-          var tab = document.getElementById('tab-descargaAcomp-content');
-          if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
-        }
+        _descAcompListaAplicarDadosRemotos(data[0].valor);
       }
     }).catch(function(){});
   } catch(e) {}
@@ -11388,8 +11419,21 @@ function _descAcompListaMerge() {
 }
 
 
+// Janela de proteção: enquanto true, ignora atualizações remotas (realtime) para
+// não sobrescrever uma edição local recém-feita com um eco desatualizado do próprio
+// salvamento (causa da perda de dados: o GET do realtime podia ler um snapshot
+// anterior ao commit e substituir o valor recém-digitado).
+var _descAcompSalvandoLocal = false;
+var _descAcompSalvandoLocalTimer = null;
+function _descAcompMarcarSalvandoLocal() {
+  _descAcompSalvandoLocal = true;
+  clearTimeout(_descAcompSalvandoLocalTimer);
+  _descAcompSalvandoLocalTimer = setTimeout(function(){ _descAcompSalvandoLocal = false; }, 4000);
+}
+
 function _descAcompSalvar() {
   try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(ex) {}
+  _descAcompMarcarSalvandoLocal();
   _descAcompSalvarSupabase(); // compartilha com todos os usuários
 }
 
@@ -11404,19 +11448,31 @@ function _descAcompSalvarSupabase() {
   } catch(e) {}
 }
 
-// Carrega os dados de cada MAC do Supabase (chamado no início do app e via realtime)
+// Aplica um valor (string JSON) de _descAcompData vindo do servidor — usado tanto
+// pelo carregamento inicial/polling quanto pelo payload do realtime (evita um 2º
+// fetch que poderia ler um snapshot desatualizado e apagar dados recém-salvos).
+function _descAcompAplicarDadosRemotos(valorStr) {
+  if (!valorStr) return;
+  if (_descAcompSalvandoLocal) return; // edição local em andamento — não sobrescrever
+  try {
+    _descAcompData = JSON.parse(valorStr);
+  } catch(e) { return; }
+  try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
+  if (typeof descargaAcompRenderizar === 'function') {
+    var tab = document.getElementById('tab-descargaAcomp-content');
+    if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
+  }
+}
+
+// Carrega os dados de cada MAC do Supabase (chamado no início do app; via realtime
+// usa-se o payload direto, ver _descAcompAplicarDadosRemotos)
 function _descAcompCarregarSupabase() {
   try {
     fetch(SB_URL + '/configuracoes?chave=eq.descarga_acomp_data&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
       if (data && data.length && data[0].valor) {
-        _descAcompData = JSON.parse(data[0].valor);
-        try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
-        if (typeof descargaAcompRenderizar === 'function') {
-          var tab = document.getElementById('tab-descargaAcomp-content');
-          if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
-        }
+        _descAcompAplicarDadosRemotos(data[0].valor);
       }
     }).catch(function(){});
   } catch(e) {}
