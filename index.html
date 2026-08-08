@@ -2127,12 +2127,18 @@ function _gradeAtualizarComMalha(rows) {
     <button id="btn-hist-periodo-hoje" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('hoje')" style="font-size:11px" title="Ver registros de hoje">Hoje</button>
     <button id="btn-hist-periodo-24h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('24h')" style="font-size:11px" title="Ver registros das últimas 24 horas">24h</button>
     <button id="btn-hist-periodo-48h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('48h')" style="font-size:11px" title="Ver registros das últimas 48 horas">48h</button>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button id="btn-excluir-sel" class="btn btn-danger btn-sm" onclick="excluirSelecionados()" disabled style="opacity:0.4;cursor:not-allowed" title="Excluir os registros selecionados">Excluir selecionados</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV('hist')" title="Exportar os registros para Excel">Exportar Excel</button>
+      <button class="btn btn-ghost btn-sm" onclick="enviarEmail()" title="Gerar imagem da tabela e abrir o e-mail">Enviar por e-mail</button>
+    </div>
   </div>
   <div class="main">
     <div class="table-wrap">
       <table>
         <thead>
           <tr id="hist-thead-row">
+            <th style="width:32px;text-align:center"><input type="checkbox" id="sel-all" onclick="selecionarTodos(this)" title="Selecionar todos" style="cursor:pointer"></th>
             <th>#</th>
             <th onclick="sortHist('gerado')" style="cursor:pointer">
               <div class="col-filter-wrap"><span class="col-label">Gerado em <span id="sh-gerado">↕</span></span>
@@ -2169,6 +2175,7 @@ function _gradeAtualizarComMalha(rows) {
               <div class="col-filter-wrap"><span class="col-label">Status Carregamento <span id="sh-ocup">↕</span></span>
               <button class="cf-btn" id="cfb-ocup" onclick="event.stopPropagation();cfOpen('ocup',this)">▼</button></div>
             </th>
+            <th style="text-align:center">Ações</th>
           </tr>
         </thead>
         <tbody id="tbody-hist"></tbody>
@@ -7795,10 +7802,12 @@ function renderHist() {
   if (_badgeHist) { _badgeHist.textContent = data.length; _badgeHist.style.display = data.length > 0 ? '' : 'none'; }
   const tbody = document.getElementById('tbody-hist');
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
+    atualizarBtnExcluir();
     return;
   }
   tbody.innerHTML = data.map((r, i) => `<tr id="hist-row-${r._id}" class="hist-row" data-id="${r._id}">
+    <td style="text-align:center"><input type="checkbox" class="hist-row-check" data-id="${r._id}" onclick="onRowCheck(this)" ${_selectedIds.has(r._id) ? 'checked' : ''} style="cursor:pointer"></td>
     <td class="row-pos">${i+1}</td>
     <td style="font-size:11px;color:var(--text3)">${r.gerado || '—'}</td>
     <td>${tipoBadge(r.tipo)}</td>
@@ -7811,7 +7820,14 @@ function renderHist() {
     <td style="font-size:11px">${r.motorista || '—'}</td>
     <td class="mono" style="font-size:11px">${r.cavalinho || '—'}</td>
     <td>${ocupBar(r.ocup)}</td>
+    <td style="white-space:nowrap;text-align:center">
+      <button class="btn btn-ghost btn-sm" onclick="editProgramado(${r._id})" title="Editar"
+        style="color:var(--accent);border-color:rgba(0,178,0,0.3)">Editar</button>
+      <button class="btn btn-ghost btn-sm" onclick="deleteProg(${r._id})" title="Excluir"
+        style="color:var(--red);border-color:rgba(220,38,38,0.3);margin-left:6px">Excluir</button>
+    </td>
   </tr>`).join('');
+  atualizarBtnExcluir();
 }
 
 // ===== POPULATE FILTERS =====
