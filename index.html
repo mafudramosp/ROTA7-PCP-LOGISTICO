@@ -5326,8 +5326,11 @@ function sbInicializarRealtime() {
 
 // Converte registro interno → Supabase
 function recToSb(r) {
+  // V62 FIX — id sempre número válido, nunca "-Infinity" ou string vazia
+  var numId = parseInt(r._id);
+  if (!isFinite(numId) || numId <= 0) numId = 0;
   return {
-    id: String(r._id||''), gerado: r.gerado||'', origem: r.origem||'GRU',
+    id: String(numId), gerado: r.gerado||'', origem: r.origem||'GRU',
     destino: r.destino||'', regiao: r.regiao||'', composicao: r.composicao||'',
     saida: r.saida||'', dia: r.dia||'', tipo: r.tipo||'', frota: r.frota||'',
     ocup: Math.round((r.ocup||0)*100), prev_fech: r.prev_fech||'',
@@ -5372,7 +5375,15 @@ function _removerColunasAusentes(payload) {
 }
 
 async function fbSave(r) {
-  if (!r || !r._id) return;
+  // V62 FIX — nunca enviar registro sem id numérico válido; isso gerava
+  // a linha "-Infinity" no Supabase que quebrava a sincronização
+  if (!r || r._id === null || r._id === undefined) return;
+  var numId = parseInt(r._id);
+  if (!isFinite(numId) || numId <= 0) {
+    console.warn('sbSave: id inválido ignorado', r._id);
+    throw new Error('id inválido: ' + r._id);
+  }
+  r._id = numId;
   try {
     var payload = recToSb(r);
     _removerColunasAusentes(payload);
@@ -5383,8 +5394,14 @@ async function fbSave(r) {
       body: JSON.stringify(payload)
     });
     if (resPatch.ok) {
-      var updated = await resPatch.json();
-      if (Array.isArray(updated) && updated.length > 0) return; // já existia e foi atualizado
+      // V62 FIX — return=representation com Prefer pode retornar 204 (sem corpo) mesmo
+      // com atualização bem-sucedida; o parse vazio geraria exceção e derrubaria para o
+      // POST criando duplicata. Tratar 204/200 como sucesso.
+      if (resPatch.status === 204) return;
+      try {
+        var updated = await resPatch.json();
+        if (Array.isArray(updated) && updated.length > 0) return; // já existia e foi atualizado
+      } catch(e) { return; }
     } else {
       var errPatchTxt = await resPatch.text();
       var colunaMissing = false;
@@ -5404,8 +5421,11 @@ async function fbSave(r) {
           body: JSON.stringify(payload)
         });
         if (resPatchRetry.ok) {
-          var updatedRetry = await resPatchRetry.json();
-          if (Array.isArray(updatedRetry) && updatedRetry.length > 0) return;
+          if (resPatchRetry.status === 204) return;
+          try {
+            var updatedRetry = await resPatchRetry.json();
+            if (Array.isArray(updatedRetry) && updatedRetry.length > 0) return;
+          } catch(e) { return; }
         } else {
           // Segunda coluna ausente detectada (ex.: cavalinho após já ter removido motorista).
           // Detecta, remove e faz um PATCH adicional — nunca cair no POST para registros existentes.
@@ -5427,8 +5447,11 @@ async function fbSave(r) {
               body: JSON.stringify(payload)
             });
             if (resPatchRetry2.ok) {
-              var updatedRetry2 = await resPatchRetry2.json();
-              if (Array.isArray(updatedRetry2) && updatedRetry2.length > 0) return;
+              if (resPatchRetry2.status === 204) return;
+              try {
+                var updatedRetry2 = await resPatchRetry2.json();
+                if (Array.isArray(updatedRetry2) && updatedRetry2.length > 0) return;
+              } catch(e) { return; }
             }
           }
         }
@@ -5485,7 +5508,11 @@ async function fbSave(r) {
       // Bug fix 4: lançar erro para que _syncEnviar capture e adicione à fila de retry
       throw new Error('POST falhou: ' + resPost.status + ' ' + err.substring(0,60));
     }
-  } catch(e) { console.warn('sbSave:', e.message); }
+    // PATCH retornou ok mas não atualizou nenhuma linha E o POST também falhou
+    // (registro inexistente no banco e criação negada): tratar como falha para retry
+    console.warn('Supabase SAVE: registro id=' + payload.id + ' não pôde ser atualizado nem criado');
+    throw new Error('Upsert falhou: id=' + payload.id + ' sem confirmação');
+  } catch(e) { console.warn('sbSave:', e.message); throw e; }
 }
 
 // Deletar um registro
@@ -5576,9 +5603,17 @@ function loadData() {
   fbGetAll().then(function(records) {
     hideSyncStatus();
     if (records && records.length > 0) {
-      var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+      // V62 FIX — descartar registros com id inválido (ex: "-Infinity") que quebram
+      // upserts no Supabase e a correspondência na tela dos outros usuários
+      var filtered = records.filter(function(r){
+        if (_deletedIds.has(String(r._id))) return false;
+        var num = parseInt(r._id);
+        return isFinite(num) && num > 0;
+      });
       progData = deduplicar(filtered);
-      nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
+      var maxId = 0;
+      progData.forEach(function(r){ var n = parseInt(r._id)||0; if (isFinite(n) && n > maxId) maxId = n; });
+      nextId = Math.max(nextId, maxId + 1);
       saveLocal(); renderProg(); renderHist();
       showToast('✅ ' + progData.length + ' registros carregados!', 'success');
     } else if (progData.length > 0) {
@@ -5594,19 +5629,25 @@ function loadData() {
   });
 }
 
-// Remove do banco compartilhado (Supabase) os registros de Recurso Programado com mais de
-// 48h — dias anteriores já concluídos não precisam ficar armazenados, e isso evita que
-// frotas antigas apareçam nas buscas por destino (ex: impressão do Carregamento de Produção)
+// Remove do banco compartilhado (Supabase) os registros de Recurso Programado de dias
+// CIVIS anteriores — dias anteriores já concluídos não precisam ficar armazenados, e isso
+// evita que frotas antigas apareçam nas buscas por destino (ex: impressão do Carregamento
+// de Produção).
+// V62 FIX — antes o corte era de 48h atrás: um registro salvo hoje às 9h era deletado do
+// banco hoje às 9h do dia seguinte ANTES do fim do dia, e em sessões longas (timer de 1h)
+// a limpeza rodava em loop apagando dados do mesmo dia. Agora só apaga registros cujo dia
+// civil já passou, rodando apenas UMA vez por sessão.
+var _progLimpezaJaRodou = false;
 function progLimparAntigos() {
-  var cutoff = new Date();
-  cutoff.setHours(cutoff.getHours() - 48);
+  // Registros salvos hoje NUNCA são apagados — mesmo em sessões que passam da meia-noite
+  if (_progLimpezaJaRodou) return; // uma execução por sessão
+  var hojeCivil = getDataHoje(); // "dd/MM/yyyy"
 
   var antigos = progData.filter(function(r) {
     if (!r.gerado) return false;
-    var d = parseDateTimeBR(r.gerado);
-    return d && d < cutoff;
+    return r.gerado.substring(0, 10) !== hojeCivil;
   });
-  if (!antigos.length) return;
+  if (!antigos.length) { _progLimpezaJaRodou = true; return; }
 
   antigos.forEach(function(r) {
     _deletedIds.add(String(r._id));
@@ -5615,13 +5656,12 @@ function progLimparAntigos() {
 
   progData = progData.filter(function(r) {
     if (!r.gerado) return true;
-    var d = parseDateTimeBR(r.gerado);
-    return !(d && d < cutoff);
+    return r.gerado.substring(0, 10) === hojeCivil;
   });
 
+  _progLimpezaJaRodou = true;
   saveLocal();
-  renderProg();
-  renderHist();
+  renderProg(); renderHist();
   console.log('[limpeza] ' + antigos.length + ' registro(s) de dias anteriores removido(s) do banco compartilhado');
 }
 
@@ -5650,7 +5690,9 @@ function sbPollUmaVez() {
       return _syncPendentes.has(String(r._id)) && !sbIds.has(String(r._id)) && !_deletedIds.has(String(r._id));
     });
     progData = deduplicar(f.concat(localPendentes));
-    nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
+    var maxIdPoll = 0;
+    progData.forEach(function(r){ var n = parseInt(r._id)||0; if (isFinite(n) && n > maxIdPoll) maxIdPoll = n; });
+    nextId = Math.max(nextId, maxIdPoll + 1);
     saveLocal(); renderProg(); renderHist();
     showToast('🔄 Dados atualizados', 'info');
   }).catch(function(){}).finally(function(){
@@ -6158,7 +6200,9 @@ function syncManual() {
         return _syncPendentes.has(String(r._id)) && !sbIds.has(String(r._id)) && !_deletedIds.has(String(r._id));
       });
       progData = deduplicar(f.concat(localPendentes));
-      nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
+      var maxIdMan = 0;
+      progData.forEach(function(r){ var n = parseInt(r._id)||0; if (isFinite(n) && n > maxIdMan) maxIdMan = n; });
+      nextId = Math.max(nextId, maxIdMan + 1);
       autoPreencherDataCrit();
       saveLocal();
     }
@@ -6334,22 +6378,23 @@ function loadLocal() {
   const stored = localStorage.getItem('prog_veiculo_v4');
   if (stored) {
     var all = JSON.parse(stored);
-    // Filter out entries older than 24 hours
-    var cutoff = new Date();
-    cutoff.setHours(cutoff.getHours() - 24);
-    progData = all.filter(function(r) {
-      if (!r.gerado) return false;
-      var d = parseDateTimeBR(r.gerado);
-      return d && d > cutoff;
-    });
-    // If filtered some out, save back
-    if (progData.length !== all.length) {
-      localStorage.setItem('prog_veiculo_v4', JSON.stringify(progData));
-    }
+    // V62 FIX — NÃO expirar registros do cache local por tempo.
+    // O cache local deve apenas guardar tudo o que o usuário salvou; a exibição de
+    // "hoje" é feita pela Programar (gerado do dia) e a limpeza do banco compartilhado
+    // é feita pela progLimparAntigos. Expirar aqui fazia os dados "sumirem" do
+    // usuário local enquanto ainda estavam no Supabase, e sem rede o usuário via tela vazia.
+    progData = all.filter(function(r) { return r && r._id !== null && r._id !== undefined; });
   } else {
     progData = [];
   }
-  nextId = parseInt(localStorage.getItem('prog_nextid_v4') || '4000');
+  // V62 FIX — proteger nextId contra NaN/Infinity (causado por listas vazias:
+  // Math.max.apply(null,[]) retorna -Infinity e o +1 produzia o id inválido "-Infinity")
+  var localNext = parseInt(localStorage.getItem('prog_nextid_v4') || '4000');
+  nextId = (isNaN(localNext) || !isFinite(localNext)) ? 4000 : localNext;
+  if (progData.length) {
+    var maxLocal = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; }));
+    if (isFinite(maxLocal) && maxLocal >= nextId) nextId = maxLocal + 1;
+  }
 }
 
 function parseDateTimeBR(s) {
@@ -6461,6 +6506,12 @@ function sheetsGetWithRetry(n) {
 
 
 function deduplicar(records) {
+  // V62 FIX — ignorar registros com id inválido (ex: "-Infinity") vindos do servidor,
+  // que quebram a correspondência na tela e os upserts de todos os usuários
+  records = records.filter(function(r){
+    var n = parseInt(r._id);
+    return isFinite(n) && n > 0;
+  });
   // Remove duplicatas pelo _id (identidade real do registro).
   // ATENÇÃO: nunca deduplicar por destino+saida+dia+frota — são campos que
   // legitimamente se repetem entre programações DIFERENTES (várias pessoas
@@ -7353,9 +7404,13 @@ function autoSalvarLinha(rowId, destino, saida, dia, existingId) {
   var numIdAtual = parseInt(existingId);
   var recAtual = (!isNaN(numIdAtual)) ? progData.find(function(p) { return p._id === numIdAtual; }) : null;
   var obs = recAtual ? (recAtual.obs || '') : '';
+  var prevFixo = _lerPrevFech(rowId);
 
-  // If all main fields are empty AND record exists → delete it
-  if (!frota && !ocupPct && !obs && !motorista && !cavalinho) {
+  // V62 FIX — prev_fech (Previsão de Fechamento) agora conta como campo válido:
+  // se o usuário preencheu apenas a previsão, o registro deve ser salvo,
+  // e nunca deletado automaticamente (antes a linha era apagada ao limpar
+  // os outros campos, fazendo o dado compartilhado "sumir" para todos).
+  if (!frota && !ocupPct && !obs && !motorista && !cavalinho && !prevFixo) {
     if (existingId !== null && existingId !== undefined && existingId !== 'null') {
       var numId = parseInt(existingId);
       if (!isNaN(numId)) {
@@ -7377,6 +7432,10 @@ function autoSalvarLinha(rowId, destino, saida, dia, existingId) {
   salvarLinha(rowId, destino, saida, dia, existingId, true);
 }
 
+function _lerPrevFech(rowId) {
+  return fromDatetimeLocal(document.getElementById('prev_' + rowId)?.value || '');
+}
+
 function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
   const ocupPct = parseInt(document.getElementById('ocup_' + rowId)?.value) || 0;
   const tipo = document.getElementById('tipo_' + rowId)?.value || 'Carro da Malha';
@@ -7385,8 +7444,10 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
   const motorista = document.getElementById('motorista_' + rowId)?.value || '';
   const cavalinho = document.getElementById('cavalinho_' + rowId)?.value || '';
 
-  if (!frota && !ocupPct && !motorista && !cavalinho) {
-    showToast('Preencha a frota, a ocupação, o motorista ou o cavalinho antes de salvar', 'error');
+  // V62 FIX — prev_fech (Previsão de Fechamento) agora conta como campo válido:
+  // a linha salva se qualquer um destes estiver preenchido
+  if (!frota && !ocupPct && !motorista && !cavalinho && !prev_fech) {
+    showToast('Preencha a frota, a ocupação, o motorista, o cavalinho ou a Previsão de Fechamento antes de salvar', 'error');
     return;
   }
 
@@ -7400,6 +7461,12 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
       rec.ocup = ocupPct / 100;
       rec.tipo = tipo; rec.frota = frota; rec.prev_fech = prev_fech; rec.motorista = motorista; rec.cavalinho = cavalinho;
       rec.gerado = now();
+    } else {
+      // V62 FIX — registro existia na lista local mas não foi encontrado: recriá-lo
+      // com o mesmo _id para não gerar duplicata com id novo
+      progData.push({ _id: existingId, gerado: now(), origem: gradeRow ? gradeRow.origem : 'GRU',
+        destino, regiao: gradeRow ? gradeRow.regiao : '', composicao: gradeRow ? gradeRow.composicao : '',
+        saida, dia, tipo, frota, motorista, cavalinho, ocup: ocupPct / 100, prev_fech, obs: '', tipo_prior: '', data_crit: '', id: '' });
     }
   } else {
     // New record
@@ -7431,7 +7498,7 @@ function salvarTodos() {
     const prev_fech = fromDatetimeLocal(document.getElementById('prev_' + r._rowId)?.value || '');
     const motorista = document.getElementById('motorista_' + r._rowId)?.value || '';
     const cavalinho = document.getElementById('cavalinho_' + r._rowId)?.value || '';
-    if (!frota && !ocupPct && !motorista && !cavalinho) return; // pula linhas totalmente vazias
+    if (!frota && !ocupPct && !motorista && !cavalinho && !prev_fech) return; // pula linhas totalmente vazias
     if (r._id !== null) {
       const rec = progData.find(p => p._id === r._id);
       // obs/tipo_prior/data_crit não são editados aqui — preserva o que já estava salvo
@@ -10215,6 +10282,8 @@ function autoFormatDT(input, isDatetime) {
 }
 function applyDTInputs() {
   document.querySelectorAll('input[data-dtfmt]').forEach(function(inp) {
+    // V62 FIX — nunca reformatar/limpar um input que o usuário está digitando
+    if (document.activeElement === inp) return;
     if (inp._dtBound) return;
     inp._dtBound = true;
     var isDT = inp.getAttribute('data-dtfmt') === 'dt';
