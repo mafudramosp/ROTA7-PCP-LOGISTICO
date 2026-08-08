@@ -6629,6 +6629,21 @@ function ocupBar(v) {
     <span class="ocup-label" style="color:${labelColor};font-size:10px;font-weight:700;min-width:68px">${label}</span>
   </div>`;
 }
+// Mesma barra do ocupBar, porém com o rótulo lido do Acompanhamento OUT (igual ao modal Editar)
+function ocupBarAcompOut(v, id) {
+  var color = ocupColorLegacy(v);
+  var pct = Math.round((v || 0) * 100);
+  var rec = (typeof _acompOutData !== 'undefined' && _acompOutData) ? (_acompOutData[id] || {}) : {};
+  var st = (typeof _descAcompStatusPorHoras === 'function')
+    ? _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim)
+    : { label: 'Não iniciado', cor: '#9ca3af' };
+  // Finalizado no Acompanhamento OUT: barra cheia em verde
+  if (st.valor === 'finalizado') { pct = 100; color = st.cor; }
+  return '<div class="ocup-cell">' +
+    '<div class="ocup-bar-bg"><div class="ocup-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+    '<span class="ocup-label" style="color:' + st.cor + ';font-size:10px;font-weight:700;min-width:68px">' + st.label + '</span>' +
+  '</div>';
+}
 function formatDT(s) {
   if (!s) return '—';
   return s;
@@ -7819,7 +7834,7 @@ function renderHist() {
     <td class="frota-cell mono" title="${r.frota}">${r.frota || '—'}</td>
     <td style="font-size:11px">${r.motorista || '—'}</td>
     <td class="mono" style="font-size:11px">${r.cavalinho || '—'}</td>
-    <td>${ocupBar(r.ocup)}</td>
+    <td>${ocupBarAcompOut(r.ocup, r._id)}</td>
     <td style="white-space:nowrap;text-align:center">
       <button class="btn btn-ghost btn-sm" onclick="editProgramado(${r._id})" title="Editar"
         style="color:var(--accent);border-color:rgba(0,178,0,0.3)">Editar</button>
