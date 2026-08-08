@@ -5615,6 +5615,23 @@ function loadData() {
   }).catch(function() {
     hideSyncStatus();
     showToast('⚠️ Supabase offline — usando cache local', 'info');
+    // Bug fix: mesmo se o carregamento inicial falhar (rede instável no momento em que a
+    // página abriu), o polling/realtime tem que arrancar do mesmo jeito — senão a sessão
+    // fica presa em "modo local" pro resto do dia, sem nunca ver o que outros usuários
+    // salvam nem reenviar o que essa aba salva.
+    iniciarEscutaRealtime();
+    // Tenta buscar os dados completos de novo em alguns segundos (a 1ª falha pode ter sido
+    // só um soluço momentâneo de rede/DNS logo na abertura da página).
+    setTimeout(function() {
+      fbGetAll().then(function(records) {
+        if (!records || !records.length) return;
+        var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+        progData = deduplicar(filtered.concat(progData.filter(function(r){ return _syncPendentes.has(String(r._id)); })));
+        nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
+        saveLocal(); renderProg(); renderHist();
+        showToast('✅ Conectado ao Supabase — ' + progData.length + ' registros', 'success');
+      }).catch(function(){});
+    }, 8000);
   });
 }
 
@@ -6275,13 +6292,18 @@ function _syncEnviar(record) {
     console.warn('[sync] fbSave falhou, adicionando à fila pendente id=' + record._id, e);
     _syncPendentes.add(String(record._id));
     _syncSalvarFila();
+    // Avisa na hora — antes isso falhava em silêncio e só reaparecia no console,
+    // dando a impressão de que "sumiu" sem explicação nenhuma.
+    if (typeof showToast === 'function') showToast('⚠️ Não deu pra salvar agora, tentando de novo...', 'error');
     // Tentar novamente em 5s
     setTimeout(function() {
       var r = progData.find(function(x){ return String(x._id) === String(record._id); });
       if (r) fbSave(r).then(function() {
         _syncPendentes.delete(String(r._id));
         _syncSalvarFila();
-      }).catch(function(){});
+      }).catch(function() {
+        if (typeof showToast === 'function') showToast('❌ Registro ainda não salvou no servidor — verifique a conexão', 'error');
+      });
     }, 5000);
   });
 }
