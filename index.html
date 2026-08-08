@@ -5591,8 +5591,23 @@ async function fbGetAll() {
   }
 }
 
+// Verifica se motorista/cavalinho existem na tabela e reseta as flags de sessão.
+// Resolve o caso em que ALTER TABLE foi rodado DEPOIS de a flag ter sido setada na sessão.
+function _sbVerificarColunas() {
+  fetch(SB_URL + '/programados?select=motorista,cavalinho&limit=1', { headers: SB_HEADERS })
+    .then(function(res) {
+      if (res.ok) {
+        _sbSemColunaMotorista = false;
+        _sbSemColunaCavalinho = false;
+        console.log('[startup] Colunas motorista/cavalinho confirmadas ✅');
+      }
+    })
+    .catch(function(){});
+}
+
 // Carregar dados do Firebase
 function loadData() {
+  _sbVerificarColunas();
   loadLocal();
   renderProg();
   renderHist();
