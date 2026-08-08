@@ -6648,6 +6648,8 @@ function ocupBarAcompOut(v, id) {
   var st = _acompOutStatusDe(id);
   // Finalizado no Acompanhamento OUT: barra cheia em verde
   if (st.valor === 'finalizado') { pct = 100; color = st.cor; }
+  // Em andamento: barra parcial em âmbar (nunca abaixo da metade)
+  else if (st.valor === 'em-andamento') { pct = Math.max(pct, 50); color = st.cor; }
   return '<div class="ocup-cell">' +
     '<div class="ocup-bar-bg"><div class="ocup-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
     '<span class="ocup-label" style="color:' + st.cor + ';font-size:10px;font-weight:700;min-width:68px">' + st.label + '</span>' +
