@@ -1613,28 +1613,21 @@
 
 </div>
 
-<div class="nav">
-  <button class="nav-btn active" onclick="showTab('programacao')" id="nav-programacao">
-    Programação <span class="nav-badge" id="badge-prog">0</span>
-  </button>
-  <button class="nav-btn" onclick="showTab('nova')" id="nav-nova">
-    Adicionar programação
-  </button>
-  <button class="nav-btn" onclick="showTab('grade')" id="nav-grade">
-    Grade <span class="nav-badge" id="badge-grade">0</span>
-  </button>
-  <button class="nav-btn" onclick="showTab('historico')" id="nav-historico">
-    Programados <span class="nav-badge" id="badge-hist">0</span>
-  </button>
-<button class="nav-btn" onclick="showTab('plataforma')" id="nav-plataforma"
-    style="border-left:2px solid var(--border);margin-left:8px;color:#00B200;font-weight:600">
-    Acesso Plataforma
-  </button>
-
-</div>
 <div class="app-layout">
 <nav class="sidebar" id="sidebar">
   <div class="sb-toggle"><button onclick="toggleSidebar()">☰</button></div>
+  <!-- Grupo: Gestão a Vista -->
+  <div class="sb-group" id="grp-gestaoavista">
+    <div class="sb-group-header" onclick="toggleSbGroup('gestaoavista')">
+      <span class="sb-group-title">Gestão a Vista</span>
+      <span class="sb-group-arrow" id="arrow-gestaoavista">›</span>
+    </div>
+    <div class="sb-group-items" id="items-gestaoavista">
+      <button class="sb-item" id="tab-gestaoVista" onclick="showTab('gestaoVista')" data-tip="Painel Executivo"><span class="sb-text">Painel Executivo</span></button>
+
+    </div>
+  </div>
+
   <!-- Grupo: Terminal | Filial (antigo "Estoque") -->
   <div class="sb-group" id="grp-estoque">
     <div class="sb-group-header" onclick="toggleSbGroup('estoque')">
@@ -1687,18 +1680,6 @@
     </div>
     <div class="sb-group-items" id="items-emtransito">
       <button class="sb-item" id="tab-transito" onclick="showTab('transito')" data-tip="Trânsito"><span class="sb-text">Trânsito</span></button>
-    </div>
-  </div>
-
-  <!-- Grupo: Gestão a Vista -->
-  <div class="sb-group" id="grp-gestaoavista">
-    <div class="sb-group-header" onclick="toggleSbGroup('gestaoavista')">
-      <span class="sb-group-title">Gestão a Vista</span>
-      <span class="sb-group-arrow" id="arrow-gestaoavista">›</span>
-    </div>
-    <div class="sb-group-items" id="items-gestaoavista">
-      <button class="sb-item" id="tab-gestaoVista" onclick="showTab('gestaoVista')" data-tip="Painel Executivo"><span class="sb-text">Painel Executivo</span></button>
-
     </div>
   </div>
 
@@ -2093,11 +2074,6 @@ function _gradeAtualizarComMalha(rows) {
       <!-- Linha 2: fluxo de fila (ocupa toda a largura disponível) -->
       <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px">
         <div id="gv-card-entrega"></div>
-      </div>
-
-      <!-- Linha 2b: Gestão do Turno (subgrupo com os 3 turnos + resumo consolidado por turno) -->
-      <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px">
-        <div id="gv-card-gestao-turno"></div>
       </div>
 
       <!-- Linha 3: visão do que está Sem Programação + Em Trânsito -->
@@ -3263,7 +3239,7 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
   var carregando = 0;
   if (typeof progData !== 'undefined') {
     carregando = progData.filter(function(r) {
-      if (!r.frota && !r.ocup) return false;
+      if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
       var gd = (r.gerado || '').substring(0, 10);
       var gdBR = gd.indexOf('-') !== -1 ? gd.split('-')[2]+'/'+gd.split('-')[1]+'/'+gd.split('-')[0] : gd;
       return gdBR === _hoje;
@@ -5238,8 +5214,8 @@ document.addEventListener('click',function(e){
 var USAR_SHEETS = true;
 var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby4Si2hISPctQGbopa_nseae3JZVfk4yT_GKqkyiH_rAvSPtiA8jujXVr6vMjitoduGIA/exec';
 var EMAIL_TO = 'kaique.souza@tragetta.com.br,patrick.ramos@tragetta.com.br,trafegocentral@tragetta.com.br,francisco.lemos@tragetta.com.br,julio.lemos@tragetta.com.br';
-var SB_URL = 'https://axnancdexgepzkzdfkjk.supabase.co/rest/v1';
-var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4bmFuY2RleGdlcHpremRma2prIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2OTk0ODcsImV4cCI6MjA5ODI3NTQ4N30.yNbe1rRtVFLaf6XCSXHJ0Vxu2c-N50lfjTQ-ZP9Dq_4';
+var SB_URL = 'https://yntfhsutwcmvusomsdyb.supabase.co/rest/v1';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InludGZoc3V0d2NtdnVzb21zZHliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MDE1NDUsImV4cCI6MjA5ODI3NzU0NX0.u6V1pd1tSqht4k-YOHPtaDGczCYb6edB21I5qpOuwwI';
 var SB_HEADERS = {
   'apikey': SB_KEY,
   'Authorization': 'Bearer ' + SB_KEY,
@@ -5509,7 +5485,7 @@ async function fbSave(r) {
       // Bug fix 4: lançar erro para que _syncEnviar capture e adicione à fila de retry
       throw new Error('POST falhou: ' + resPost.status + ' ' + err.substring(0,60));
     }
-  } catch(e) { console.warn('sbSave:', e.message); throw e; }
+  } catch(e) { console.warn('sbSave:', e.message); }
 }
 
 // Deletar um registro
@@ -5591,23 +5567,8 @@ async function fbGetAll() {
   }
 }
 
-// Verifica se motorista/cavalinho existem na tabela e reseta as flags de sessão.
-// Resolve o caso em que ALTER TABLE foi rodado DEPOIS de a flag ter sido setada na sessão.
-function _sbVerificarColunas() {
-  fetch(SB_URL + '/programados?select=motorista,cavalinho&limit=1', { headers: SB_HEADERS })
-    .then(function(res) {
-      if (res.ok) {
-        _sbSemColunaMotorista = false;
-        _sbSemColunaCavalinho = false;
-        console.log('[startup] Colunas motorista/cavalinho confirmadas ✅');
-      }
-    })
-    .catch(function(){});
-}
-
 // Carregar dados do Firebase
 function loadData() {
-  _sbVerificarColunas();
   loadLocal();
   renderProg();
   renderHist();
@@ -5630,23 +5591,6 @@ function loadData() {
   }).catch(function() {
     hideSyncStatus();
     showToast('⚠️ Supabase offline — usando cache local', 'info');
-    // Bug fix: mesmo se o carregamento inicial falhar (rede instável no momento em que a
-    // página abriu), o polling/realtime tem que arrancar do mesmo jeito — senão a sessão
-    // fica presa em "modo local" pro resto do dia, sem nunca ver o que outros usuários
-    // salvam nem reenviar o que essa aba salva.
-    iniciarEscutaRealtime();
-    // Tenta buscar os dados completos de novo em alguns segundos (a 1ª falha pode ter sido
-    // só um soluço momentâneo de rede/DNS logo na abertura da página).
-    setTimeout(function() {
-      fbGetAll().then(function(records) {
-        if (!records || !records.length) return;
-        var filtered = records.filter(function(r){ return !_deletedIds.has(String(r._id)); });
-        progData = deduplicar(filtered.concat(progData.filter(function(r){ return _syncPendentes.has(String(r._id)); })));
-        nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
-        saveLocal(); renderProg(); renderHist();
-        showToast('✅ Conectado ao Supabase — ' + progData.length + ' registros', 'success');
-      }).catch(function(){});
-    }, 8000);
   });
 }
 
@@ -5694,41 +5638,9 @@ function sbPollUmaVez() {
   _sbPollRunning = true;
   fbGetAll().then(function(recs) {
     if (!recs || !recs.length) { _sbPollRunning = false; return; }
-    var agoraTs = Date.now();
-    var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); }).map(function(r) {
-      // Bug fix 3: se este id foi salvo por nós há pouco (< 8s), mantém a versão local em vez
-      // do que veio do GET — evita reverter um campo recém-digitado por causa de uma leitura
-      // desatualizada (o commit do PATCH pode ainda não estar visível pra leitura no instante
-      // em que este poll roda, especialmente quando disparado pelo próprio realtime do save).
-      var idStr = String(r._id);
-      var savedAt = _progSalvosLocalmente[idStr];
-      if (savedAt && (agoraTs - savedAt) < 8000) {
-        var localRec = progData.find(function(p){ return String(p._id) === idStr; });
-        if (localRec) return localRec;
-      }
-      return r;
-    });
-    // Hash com .sort() para ordenação estável — evita falso "mudou" por variação
-    // na ordem de retorno do Supabase entre chamadas consecutivas
-    var hash = f.map(function(r){ return r._id+':'+r.gerado; }).sort().join('|');
+    var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+    var hash = f.map(function(r){ return r._id+':'+r.gerado; }).join('|');
     if (hash === _sbLastHash) { _sbPollRunning = false; return; }
-
-    // Bug fix 4: distinguir eco do próprio PATCH vs mudança vinda de outro usuário.
-    // Só re-renderiza a tabela Programar quando há mudança externa — evita destruir
-    // campos em andamento enquanto o Realtime devolve o eco do save que acabamos de fazer.
-    var localIds = new Set(progData.map(function(r){ return String(r._id); }));
-    var temMudancaExterna = f.some(function(r) {
-      var idStr = String(r._id);
-      // Registro novo (outro usuário adicionou linha)
-      if (!localIds.has(idStr)) return true;
-      // Salvo por nós há menos de 8s → é eco do nosso próprio PATCH
-      var savedAt = _progSalvosLocalmente[idStr];
-      if (savedAt && (agoraTs - savedAt) < 8000) return false;
-      // Gerado diferente do local → outro usuário modificou
-      var localRec = progData.find(function(p){ return String(p._id) === idStr; });
-      return !localRec || localRec.gerado !== r.gerado;
-    });
-
     _sbLastHash = hash;
     // Bug fix 2: MERGE ao invés de replace — preserva SÓ registros genuinamente
     // pendentes de envio (rastreados em _syncPendentes), nunca registros que
@@ -5739,14 +5651,8 @@ function sbPollUmaVez() {
     });
     progData = deduplicar(f.concat(localPendentes));
     nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
-    saveLocal(); renderHist();
-    // Só re-renderiza a tabela Programar e exibe toast quando a mudança veio de outro
-    // usuário — ecos do Realtime do nosso próprio salvamento não devem sobrescrever
-    // campos que o usuário ainda está preenchendo em outras linhas da mesma tela
-    if (temMudancaExterna) {
-      renderProg();
-      showToast('🔄 Dados atualizados', 'info');
-    }
+    saveLocal(); renderProg(); renderHist();
+    showToast('🔄 Dados atualizados', 'info');
   }).catch(function(){}).finally(function(){
     _sbPollRunning = false;
   });
@@ -6315,14 +6221,7 @@ function _syncReenviarPendentes() {
   });
 }
 
-// Marca (por id) o instante do último salvamento local — usado por sbPollUmaVez para não
-// deixar um GET com leitura desatualizada (eco do nosso próprio salvamento, antes do commit
-// ficar visível pra leitura) sobrescrever um campo que acabamos de digitar (motorista,
-// cavalinho, frota, prev. fechamento etc.) na tela Programar.
-var _progSalvosLocalmente = {};
-
 function _syncEnviar(record) {
-  _progSalvosLocalmente[String(record._id)] = Date.now();
   fbSave(record).then(function() {
     // sucesso: garantir que não está na fila de pendentes
     _syncPendentes.delete(String(record._id));
@@ -6332,18 +6231,13 @@ function _syncEnviar(record) {
     console.warn('[sync] fbSave falhou, adicionando à fila pendente id=' + record._id, e);
     _syncPendentes.add(String(record._id));
     _syncSalvarFila();
-    // Avisa na hora — antes isso falhava em silêncio e só reaparecia no console,
-    // dando a impressão de que "sumiu" sem explicação nenhuma.
-    if (typeof showToast === 'function') showToast('⚠️ Não deu pra salvar agora, tentando de novo...', 'error');
     // Tentar novamente em 5s
     setTimeout(function() {
       var r = progData.find(function(x){ return String(x._id) === String(record._id); });
       if (r) fbSave(r).then(function() {
         _syncPendentes.delete(String(r._id));
         _syncSalvarFila();
-      }).catch(function() {
-        if (typeof showToast === 'function') showToast('❌ Registro ainda não salvou no servidor — verifique a conexão', 'error');
-      });
+      }).catch(function(){});
     }, 5000);
   });
 }
@@ -7321,8 +7215,8 @@ function getFilteredProg() {
     }
     // Apply stat card filter
     if (_selectedStatFilter) {
-      if (_selectedStatFilter === 'preenchidos' && !(r.ocupPct > 0 || r.frota)) return false;
-      if (_selectedStatFilter === 'pendentes' && (r.ocupPct > 0 || r.frota)) return false;
+      if (_selectedStatFilter === 'preenchidos' && !(r.ocupPct > 0 || r.frota || r.motorista || r.cavalinho)) return false;
+      if (_selectedStatFilter === 'pendentes' && (r.ocupPct > 0 || r.frota || r.motorista || r.cavalinho)) return false;
       if (_selectedStatFilter === 'cheios' && r.ocupPct < 100) return false;
     }
     return true;
@@ -7340,7 +7234,7 @@ function renderProg() {
   // Calculate stats from ALL data (not filtered)
   const allRows = buildProgRows();
   const total = allRows.length;
-  const preenchidos = allRows.filter(r => r.ocupPct > 0 || r.frota).length;
+  const preenchidos = allRows.filter(r => r.ocupPct > 0 || r.frota || r.motorista || r.cavalinho).length;
   const cheios = allRows.filter(r => r.ocupPct >= 100).length;
   const pendentes = total - preenchidos;
 
@@ -7359,7 +7253,8 @@ function renderProg() {
     <div class="stat-card ${isCheiosSel ? 'selected' : ''}" onclick="setStatFilter('cheios')"><span class="stat-label">100% Cheios</span><span class="stat-value green">${cheios}</span></div>
   `;
   setTimeout(applyDTInputs, 100);
-  document.getElementById('badge-prog').textContent = total;
+  var _badgeProg = document.getElementById('badge-prog');
+  if (_badgeProg) { _badgeProg.textContent = total; _badgeProg.style.display = total > 0 ? '' : 'none'; }
 
   const tbody = document.getElementById('tbody-prog');
   if (!data.length) {
@@ -7465,18 +7360,14 @@ function autoSalvarLinha(rowId, destino, saida, dia, existingId) {
       var numId = parseInt(existingId);
       if (!isNaN(numId)) {
         progData = progData.filter(function(r) { return r._id !== numId; });
-        // Bug: isto apagava só localmente e chamava sheetsPost('delete', ...), que vai pro
-        // Google Apps Script legado — NUNCA apagava a linha no Supabase (backend real, usado
-        // pela sincronização entre usuários). O registro "vazio" continuava vivo lá, e o
-        // próximo polling/realtime trazia ele de volta com o valor antigo (ex: cavalinho
-        // "voltando sozinho" depois de apagado). Agora usa o mesmo apagamento real usado em
-        // excluirSelecionados(): soft-delete no Supabase + bloqueio permanente em _deletedIds
-        // pra nunca mais ser reinserido por um sync.
-        _deletedIds.add(String(numId));
-        deleteFromSheets(numId);
         saveLocal();
+        if (typeof sheetsPost === 'function' && USAR_SHEETS) {
+          sheetsPost('delete', { id: String(numId) });
+        }
         renderHist();
-        renderProg();
+        // Flash row to indicate deletion
+        var row = document.getElementById('tr-' + rowId);
+        if (row) { row.style.opacity = '0.4'; setTimeout(function(){ renderProg(); }, 500); }
       }
     }
     return;
@@ -7629,7 +7520,8 @@ function renderGrade() {
     filteredData = data.filter(r => r.destino === _selectedDestino);
   }
 
-  document.getElementById('badge-grade').textContent = data.length;
+  var _badgeGrade = document.getElementById('badge-grade');
+  if (_badgeGrade) { _badgeGrade.textContent = data.length; _badgeGrade.style.display = data.length > 0 ? '' : 'none'; }
   const tbody = document.getElementById('tbody-grade');
   if (!filteredData.length) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Nenhuma rota encontrada</div></div></td></tr>';
@@ -7791,7 +7683,7 @@ function renderHist() {
   var hojeStr = getDataHoje();
 
   let data = progData.filter(r => {
-    if (!r.frota && !r.ocup) return false;
+    if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
     if (tipo && r.tipo !== tipo) return false;
     // Filtro de período: Hoje (mesma data civil) ou janela rolante de 24h/48h
     if (cutoffData) {
@@ -7832,7 +7724,8 @@ function renderHist() {
     var vb = String(b[col] || '').toLowerCase();
     return va.localeCompare(vb) * dir;
   });
-  document.getElementById('badge-hist').textContent = data.length;
+  var _badgeHist = document.getElementById('badge-hist');
+  if (_badgeHist) { _badgeHist.textContent = data.length; _badgeHist.style.display = data.length > 0 ? '' : 'none'; }
   const tbody = document.getElementById('tbody-hist');
   if (!data.length) {
     tbody.innerHTML = '<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
@@ -8252,7 +8145,7 @@ function exportCSV(type) {
   if (dAte) dAte.setHours(23, 59, 59);
 
   var data = progData.filter(function(r) {
-    if (!r.frota && !r.ocup) return false;
+    if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
     if (tipo && r.tipo !== tipo) return false;
     if (dDe || dAte) {
       var gd = parseBRDate((r.gerado || '').substring(0, 10));
@@ -8698,7 +8591,7 @@ updateClock();
 // ===== ENVIAR POR E-MAIL =====
 
 async function enviarEmail() {
-  const programados = progData.filter(r => r.frota || r.ocup);
+  const programados = progData.filter(r => r.frota || r.ocup || r.motorista || r.cavalinho);
   if (!programados.length) {
     showToast('Nenhum registro programado para enviar', 'error');
     return;
@@ -9933,16 +9826,6 @@ function salvarAddPlat() {
   showToast(destino + ' adicionado com sucesso!', 'success');
 }
 
-function platEnviarMsg() {
-  var _platInput = document.getElementById('plat-msg-input');
-  const msg = _platInput ? _platInput.value.trim() : '';
-  if (!msg) return;
-  enviarAlertaViaGet('plataforma', msg);
-  document.getElementById('plat-msg-input').value = '';
-  showToast('Mensagem enviada ao Planejamento!', 'success');
-  addMsgPlataforma(msg, new Date().toLocaleString('pt-BR'));
-}
-
 function abrirAlertPanel() {
   const p = document.getElementById('plan-alert-panel');
   if (p) { p.style.transform = 'translateY(0)'; setTimeout(() => document.getElementById('plan-alert-input')?.focus(), 300); }
@@ -10174,7 +10057,7 @@ function imprimirProgramados() {
   if (dAte) dAte.setHours(23, 59, 59);
 
   var data = progData.filter(function(r) {
-    if (!r.frota && !r.ocup) return false;
+    if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
     if (dDe || dAte) {
       var gd = parseBRDate((r.gerado || '').substring(0, 10));
       if (!gd) return false;
@@ -12468,7 +12351,7 @@ function acompOutRenderizar() {
   if (dAte) dAte.setHours(23,59,59);
 
   var data = progData.filter(function(r) {
-    if (!r.frota && !r.ocup) return false;
+    if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
     if (busca) {
       var s = (String(r.destino||'') + String(r.frota||'') + String(r.composicao||'') + String(r.dia||'')).toLowerCase();
       if (s.indexOf(busca) < 0) return false;
@@ -13359,7 +13242,7 @@ function resumoMalhaRenderizar() {
 // causa da ordem de navegação entre abas.
 function _gvAcompOutBase() {
   var lista = (typeof progData !== 'undefined') ? progData : [];
-  return lista.filter(function(r) { return !!(r.frota || r.ocup); });
+  return lista.filter(function(r) { return !!(r.frota || r.ocup || r.motorista || r.cavalinho); });
 }
 
 // ── Seletor de Frotas antigo removido — substituído pelo dashboard "Frotas Programadas no Turno" ──
@@ -13545,7 +13428,7 @@ function _gvFrotasProgramadasColeta() {
     if (!porTurno[turno]) { porTurno[turno] = { total: 0, completo: 0, parcial: 0, naoProg: 0, ocupSoma: 0, ocupCount: 0 }; ordem.push(turno); }
 
     var temFrota = !!(r.frota && String(r.frota).trim());
-    var temMotorista = !!(r.motorista && String(r.motorista).trim());
+    var temMotoristaCavalo = !!((r.motorista && String(r.motorista).trim()) || (r.cavalinho && String(r.cavalinho).trim()));
 
     porTurno[turno].total++;
     totalGeral++;
@@ -13555,9 +13438,14 @@ function _gvFrotasProgramadasColeta() {
       ocupSomaGeral += (r.ocupPct || 0); ocupCountGeral++;
     }
 
-    // Completo = tem frota carreta (motorista é opcional — coluna pode não existir no Supabase)
-    if (temFrota) {
+    // Completo = tem frota carreta E motorista/cavalo (o conjunto completo pra sair)
+    // Parcial  = tem só um dos dois (frota carreta OU motorista/cavalo) — já é progresso, mas falta fechar
+    // Não Programado = não tem nenhum dos dois ainda
+    if (temFrota && temMotoristaCavalo) {
       porTurno[turno].completo++; completoGeral++;
+    } else if (temFrota || temMotoristaCavalo) {
+      porTurno[turno].parcial++; parcialGeral++;
+      pendentes.push({ destino: r.destino, saida: r.saida, turno: turno, tipo: r.tipo, falta: temFrota ? 'motorista/cavalo' : 'frota carreta' });
     } else {
       porTurno[turno].naoProg++; naoProgGeral++;
       pendentes.push({ destino: r.destino, saida: r.saida, turno: turno, tipo: r.tipo, falta: 'tudo' });
@@ -13688,7 +13576,8 @@ function _fpColeta() {
   return {
     totalRotas: base.totalGeral,
     programadosCount: base.completoGeral,
-    faltandoCount: base.naoProgGeral,
+    parcialCount: base.parcialGeral,
+    faltandoCount: base.parcialGeral + base.naoProgGeral,
     pendentes: base.pendentes,
     ordem: ordem,
     pesoExecutado: pesoExecutado, pesoAndamento: pesoAndamento,
@@ -13707,6 +13596,122 @@ function _fpKpiCard(label, valor, cor, sufixo, sub) {
   '</div>';
 }
 
+// Coleta exclusiva da tabela Resumo por Turno / Frotas Programadas.
+// Usa diretamente as programações salvas em progData para também incluir
+// Carro Extra, Fora da Malha e futuras classificações que não sejam da malha.
+function _fpResumoVeiculosPorTurno(agoraReferencia) {
+  var ordem = ['1º Turno', '2º Turno', '3º Turno'];
+  var porTurno = {};
+  ordem.forEach(function(turno) {
+    porTurno[turno] = {
+      turno: turno,
+      malhaInicial: 0,
+      rotaExtra: 0,
+      totalPlanejado: 0,
+      executado: 0,
+      pctExec: 0
+    };
+  });
+
+  var registros = (typeof progData !== 'undefined' && Array.isArray(progData)) ? progData : [];
+  var acompData = (typeof _acompOutData !== 'undefined' && _acompOutData) ? _acompOutData : {};
+  var agora = (agoraReferencia instanceof Date && !isNaN(agoraReferencia.getTime()))
+    ? agoraReferencia
+    : new Date();
+
+  // Dia operacional: 06h00 até 05h59 do dia seguinte, mantendo o 3º turno unido.
+  var inicioDiaOperacional = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 6, 0, 0, 0);
+  if (agora.getTime() < inicioDiaOperacional.getTime()) {
+    inicioDiaOperacional.setDate(inicioDiaOperacional.getDate() - 1);
+  }
+  var fimDiaOperacional = new Date(inicioDiaOperacional.getTime());
+  fimDiaOperacional.setDate(fimDiaOperacional.getDate() + 1);
+
+  function texto(valor) {
+    return String(valor == null ? '' : valor).trim();
+  }
+
+  function normalizar(valor) {
+    return texto(valor).toUpperCase().replace(/\s+/g, ' ');
+  }
+
+  function dataDoRegistro(valor) {
+    var data = (typeof parseDateTimeBR === 'function') ? parseDateTimeBR(valor) : null;
+    if (data && !isNaN(data.getTime())) return data;
+    data = new Date(valor);
+    return isNaN(data.getTime()) ? null : data;
+  }
+
+  function idValido(id) {
+    var idTxt = texto(id);
+    if (!idTxt) return false;
+    var idNormalizado = idTxt.toUpperCase();
+    return idNormalizado !== '0' && idNormalizado !== '#N/A' &&
+      idNormalizado !== 'N/A' && idNormalizado !== 'NULL' &&
+      idNormalizado !== 'UNDEFINED' && idNormalizado !== 'NAN';
+  }
+
+  var chavesVistas = {};
+  registros.forEach(function(r) {
+    if (!r) return;
+
+    var frota = texto(r.frota || r.placa);
+    var saida = texto(r.saida);
+    var tipo = texto(r.tipo);
+    if (!frota || !saida || !tipo) return;
+
+    var dataGeracao = dataDoRegistro(r.gerado);
+    if (!dataGeracao ||
+        dataGeracao.getTime() < inicioDiaOperacional.getTime() ||
+        dataGeracao.getTime() >= fimDiaOperacional.getTime()) return;
+
+    var temId = idValido(r._id);
+    var chave = temId
+      ? 'id:' + texto(r._id)
+      : 'programacao:' + [frota, r.destino, saida, tipo].map(normalizar).join('|');
+    if (chavesVistas[chave]) return;
+    chavesVistas[chave] = true;
+
+    var turno = (typeof calcTurnoCorte === 'function') ? calcTurnoCorte(saida) : '—';
+    if (!porTurno[turno]) return;
+
+    if (normalizar(tipo) === 'CARRO DA MALHA') porTurno[turno].malhaInicial++;
+    else porTurno[turno].rotaExtra++;
+    porTurno[turno].totalPlanejado++;
+
+    var acompanhamento = temId ? (acompData[r._id] || acompData[texto(r._id)] || {}) : {};
+    if (texto(acompanhamento.horaFim)) porTurno[turno].executado++;
+  });
+
+  var linhas = ordem.map(function(turno) {
+    var linha = porTurno[turno];
+    linha.pctExec = linha.totalPlanejado
+      ? Math.round(linha.executado / linha.totalPlanejado * 100)
+      : 0;
+    return linha;
+  });
+
+  var total = {
+    turno: 'Total',
+    malhaInicial: 0,
+    rotaExtra: 0,
+    totalPlanejado: 0,
+    executado: 0,
+    pctExec: 0
+  };
+  linhas.forEach(function(linha) {
+    total.malhaInicial += linha.malhaInicial;
+    total.rotaExtra += linha.rotaExtra;
+    total.totalPlanejado += linha.totalPlanejado;
+    total.executado += linha.executado;
+  });
+  total.pctExec = total.totalPlanejado
+    ? Math.round(total.executado / total.totalPlanejado * 100)
+    : 0;
+
+  return { linhas: linhas, total: total, qtdRegistros: total.totalPlanejado };
+}
+
 var _fpAnimarEntrada = false;
 
 function frotasProgramadasRenderizar() {
@@ -13723,8 +13728,8 @@ function frotasProgramadasRenderizar() {
   var kpisDiv = document.getElementById('fp-kpis');
   if (kpisDiv) {
     kpisDiv.innerHTML =
-      _fpKpiCard('Veículos Programados', d.programadosCount, '#3fb950', '', 'Já têm frota carreta definida') +
-      _fpKpiCard('Faltam Programar', d.faltandoCount, '#ef4444', '', 'Ainda sem frota carreta') +
+      _fpKpiCard('Veículos Programados', d.programadosCount, '#3fb950', '', 'Já têm frota carreta e motorista/cavalo definidos') +
+      _fpKpiCard('Faltam Programar', d.faltandoCount, '#ef4444', '', 'Falta frota carreta, motorista/cavalo ou os dois') +
       _fpKpiCard('Peso em Carregamento', Math.round(d.pesoAndamento), '#f0b429', ' kg', 'Carregando agora, nos veículos já programados') +
       _fpKpiCard('Críticos', d.criticosCount, '#ef4444', '', 'Destinos programados atrasados ou vencendo hoje');
   }
@@ -13786,69 +13791,68 @@ function frotasProgramadasRenderizar() {
       '</div>';
   }
 
-  // ── Tabela: Resumo por Turno (estilo Fluxo de Fila com Histórico) ──
+  // ── Tabela: Resumo por Turno — quantidades de veículos planejados ──
   var tabTurnoDiv = document.getElementById('fp-tabela-turno');
   if (tabTurnoDiv) {
-    var fo = _gvFluxoFilaOUT();
-    var fmtKgO = function(v){ return Math.round(v).toLocaleString('pt-BR'); };
+    var resumoVeiculos = _fpResumoVeiculosPorTurno();
+    var fmtQtdO = function(v){ return Math.round(v || 0).toLocaleString('pt-BR'); };
     var thNumO = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;white-space:nowrap';
     var tdNumO = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#e5e5e5;white-space:nowrap';
 
-    var linhasO = fo.linhas.map(function(l, i) {
+    var linhasO = resumoVeiculos.linhas.map(function(l, i) {
       var zebra = (i % 2 === 0) ? '#121212' : '#161616';
-      var tip = '<b>'+l.turno+'</b><br>Fila Inicial: '+fmtKgO(l.filaInicial)+' kg<br>Fila Final: '+fmtKgO(l.filaFinal)+' kg<br>Executado: '+fmtKgO(l.executado)+' kg ('+l.pctExec+'%)';
+      var tip = '<b>'+l.turno+'</b><br>Malha Inicial: '+fmtQtdO(l.malhaInicial)+' veículo(s)<br>Rota Extra: '+fmtQtdO(l.rotaExtra)+' veículo(s)<br>Total Planejado: '+fmtQtdO(l.totalPlanejado)+' veículo(s)<br>Executado: '+fmtQtdO(l.executado)+' veículo(s) ('+l.pctExec+'%)';
       return '<tr onmousemove="_gvTooltipMostrar(event, \''+tip.replace(/'/g,"\\'")+'\')" onmouseout="_gvTooltipEsconder()" ' +
         'style="background:'+zebra+'" ' +
         'onmouseover="this.style.background=\'#1d1d1d\'" onmouseleave="this.style.background=\''+zebra+'\'">' +
         '<td style="padding:9px 14px;font-size:12.5px;font-weight:600;color:#d0d0d0;white-space:nowrap;border-right:1px solid #232323">'+l.turno+'</td>' +
-        '<td style="'+tdNumO+'">'+fmtKgO(l.filaInicial)+'</td>' +
-        '<td style="'+tdNumO+'">'+fmtKgO(l.entrouDepois)+'</td>' +
-        '<td style="'+tdNumO+'">'+fmtKgO(l.filaFinal)+'</td>' +
-        '<td style="'+tdNumO+';color:#4ade80;font-weight:700">'+fmtKgO(l.executado)+'</td>' +
+        '<td style="'+tdNumO+'">'+fmtQtdO(l.malhaInicial)+'</td>' +
+        '<td style="'+tdNumO+'">'+fmtQtdO(l.rotaExtra)+'</td>' +
+        '<td style="'+tdNumO+'">'+fmtQtdO(l.totalPlanejado)+'</td>' +
+        '<td style="'+tdNumO+';color:#4ade80;font-weight:700">'+fmtQtdO(l.executado)+'</td>' +
         '<td style="'+tdNumO+';color:#f0b429;font-weight:800">'+l.pctExec+'%</td>' +
       '</tr>';
     }).join('');
 
-    var tO = fo.total;
+    var tO = resumoVeiculos.total;
     var tdTotO = 'padding:10px 14px;text-align:right;font-size:13px;font-weight:800;color:#fff;white-space:nowrap;border-top:2px solid #3a3a3a;background:#1b1b1b';
     var totalO =
       '<tr>' +
         '<td style="padding:10px 14px;font-size:13px;font-weight:800;color:#fff;border-top:2px solid #3a3a3a;background:#1b1b1b;border-right:1px solid #232323">Total</td>' +
-        '<td style="'+tdTotO+'">'+fmtKgO(tO.filaInicial)+'</td>' +
-        '<td style="'+tdTotO+'">'+fmtKgO(tO.entrouDepois)+'</td>' +
-        '<td style="'+tdTotO+'">'+fmtKgO(tO.filaFinal)+'</td>' +
-        '<td style="'+tdTotO+';color:#4ade80">'+fmtKgO(tO.executado)+'</td>' +
+        '<td style="'+tdTotO+'">'+fmtQtdO(tO.malhaInicial)+'</td>' +
+        '<td style="'+tdTotO+'">'+fmtQtdO(tO.rotaExtra)+'</td>' +
+        '<td style="'+tdTotO+'">'+fmtQtdO(tO.totalPlanejado)+'</td>' +
+        '<td style="'+tdTotO+';color:#4ade80">'+fmtQtdO(tO.executado)+'</td>' +
         '<td style="'+tdTotO+';color:#f0b429">'+tO.pctExec+'%</td>' +
       '</tr>';
 
-    var subInfoO = fo.temTms
-      ? 'CARREGAMENTO · KG · Hoje · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) no dia'
-      : 'CARREGAMENTO · KG · Hoje · Plano = soma da lista do Acompanhamento';
+    var subInfoO = 'VEÍCULOS · Hoje · Fonte: Recurso Programado · ' +
+      fmtQtdO(resumoVeiculos.qtdRegistros) + ' veículo(s) planejado(s)';
 
     tabTurnoDiv.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box">' +
         '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Resumo por Turno</div>' +
         '<div style="font-size:10px;color:#6b6b6b;margin-bottom:12px">'+subInfoO+'</div>' +
-        (fo.linhas.length ?
+        (resumoVeiculos.linhas.length ?
           '<div style="overflow-x:auto">' +
             '<table style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif">' +
               '<thead>' +
                 '<tr>' +
                   '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#1a1a1a;vertical-align:bottom">Turno / Hoje</th>' +
-                  '<th colspan="5" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#1a1a1a;border-bottom:1px solid #2b2b2b">Extrato do Dia — Peso OPL (kg)</th>' +
+                  '<th colspan="5" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#1a1a1a;border-bottom:1px solid #2b2b2b">Extrato do Dia — Veículos Planejados</th>' +
                 '</tr>' +
                 '<tr style="background:#151515">' +
-                  '<th style="'+thNumO+'">Fila Inicial (kg)</th>' +
-                  '<th style="'+thNumO+'">Entrou Depois (kg)</th>' +
-                  '<th style="'+thNumO+'">Fila Final (kg)</th>' +
-                  '<th style="'+thNumO+';color:#4ade80">Executado (kg)</th>' +
+                  '<th style="'+thNumO+'">Malha Inicial</th>' +
+                  '<th style="'+thNumO+'">Rota Extra</th>' +
+                  '<th style="'+thNumO+'">Total Planejado</th>' +
+                  '<th style="'+thNumO+';color:#4ade80">Executado</th>' +
                   '<th style="'+thNumO+';color:#f0b429">% Exec.</th>' +
                 '</tr>' +
               '</thead>' +
               '<tbody>' + linhasO + totalO + '</tbody>' +
             '</table>' +
           '</div>'
-          : '<div style="color:#9a9a9a;font-size:12px">Nenhuma rota programada hoje ainda.</div>') +
+          : '<div style="color:#9a9a9a;font-size:12px">Nenhum veículo planejado no dia operacional.</div>') +
       '</div>';
   }
 
@@ -13926,7 +13930,7 @@ function frotasProgramadasRenderizar() {
 function _gvColetarDadosOUT() {
   // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
   var itens = (typeof progData !== 'undefined' && progData.length) 
-    ? progData.filter(function(r) { return !!(r.frota || r.ocup); })
+    ? progData.filter(function(r) { return !!(r.frota || r.ocup || r.motorista || r.cavalinho); })
     : [];
   var acompData = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
   var relD = (typeof _relData !== 'undefined') ? _relData : [];
@@ -14012,7 +14016,7 @@ function _gvFluxoFilaOUT() {
   var historico = (typeof _cargaCriticaHistorico !== 'undefined') ? _cargaCriticaHistorico : [];
   // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
   var itensBase = (typeof progData !== 'undefined' && progData.length)
-    ? progData.filter(function(r) { return !!(r.frota || r.ocup); })
+    ? progData.filter(function(r) { return !!(r.frota || r.ocup || r.motorista || r.cavalinho); })
     : [];
   var acompData = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
   var hojeStr = new Date().toLocaleDateString('pt-BR');
@@ -14088,8 +14092,6 @@ function _gvFluxoFilaOUT() {
   var ordem = ['1º Turno','2º Turno','3º Turno'];
   var execTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var pesoAcompTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
-  var qtdTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
-  var qtdExecTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var execTotal = 0;
 
   itens.forEach(function(r) {
@@ -14099,14 +14101,12 @@ function _gvFluxoFilaOUT() {
     var pesoTms2 = pesoTMSOut(r.frota);
     var peso = pesoTms2 > 0 ? pesoTms2 : (_parsePesoBR(rec.pesoOpl));
     var t = turnoDe(temInicio ? rec.horaInicio : (rec.horaFim || agoraHora));
-
+    
     pesoAcompTurno[t] += peso;
-    qtdTurno[t]++;
-
+    
     if (temFim) {
       execTotal += peso;
       execTurno[t] += peso;
-      qtdExecTurno[t]++;
     }
   });
 
@@ -14117,11 +14117,9 @@ function _gvFluxoFilaOUT() {
   var total = {
     turno: 'Total', filaInicial: filaInicial, entrouDepois: entrouDepois,
     executado: execTotal, filaFinal: filaFinal,
-    pctExec: pctTotalExec,
-    qtdMacs: qtdTurno['1º Turno'] + qtdTurno['2º Turno'] + qtdTurno['3º Turno'],
-    qtdExecutados: qtdExecTurno['1º Turno'] + qtdExecTurno['2º Turno'] + qtdExecTurno['3º Turno']
+    pctExec: pctTotalExec
   };
-
+  
   // Distribui filaInicial proporcionalmente por turno baseado no acompanhamento
   var totalAcomp = execTotal + (ordem.reduce(function(sum, t) { return sum + (pesoAcompTurno[t] - execTurno[t]); }, 0));
   
@@ -14136,15 +14134,13 @@ function _gvFluxoFilaOUT() {
     // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
     if (pctT === 0 && execT > 0) pctT = 1;
     
-    return {
-      turno: t,
+    return { 
+      turno: t, 
       filaInicial: filaInicialT,
       entrouDepois: entrouDeT,
       filaFinal: faltaT,
-      executado: execT,
-      pctExec: pctT,
-      qtdMacs: qtdTurno[t],
-      qtdExecutados: qtdExecTurno[t]
+      executado: execT, 
+      pctExec: pctT
     };
   });
 
@@ -14155,45 +14151,16 @@ function _gvFluxoFilaOUT() {
   };
 }
 
-// ── Fluxo de Fila (IN): compara o 1º import do dia com o estado atual, por turno ──
-// Fila Inicial  = peso OPL dos MACs presentes no PRIMEIRO snapshot de hoje (1º import)
-// Entrou Depois = peso OPL dos MACs que só apareceram em imports posteriores
+// ── Fluxo de Fila (IN): primeiro relatório e novas entradas de cada turno ──
+// Fila Inicial  = peso OPL dos MACs únicos presentes no PRIMEIRO relatório do turno
+// Entrou Depois = peso OPL dos MACs únicos vistos pela primeira vez nos relatórios seguintes do turno
 // Executado     = MACs com Hora Fim no Acompanhamento (peso mais atual, mesma dedup do painel)
 // Fila Final    = Fila Inicial + Entrou Depois − Executado (identidade contábil por linha)
 function _gvFluxoFilaIN() {
   var historico = (typeof _relatorioHistorico !== 'undefined') ? _relatorioHistorico : [];
   var acompData = (typeof _descAcompData !== 'undefined') ? _descAcompData : {};
-  var hojeStr = new Date().toLocaleDateString('pt-BR');
-  var agoraHora = new Date().toTimeString().substring(0,5);
-
-  // snapshots de hoje (o histórico vem do mais recente p/ o mais antigo)
-  var snapsHoje = historico.filter(function(h) {
-    return new Date(h.dataHoraISO).toLocaleDateString('pt-BR') === hojeStr;
-  });
-  var primeiroImport = snapsHoje.length ? snapsHoje[snapsHoje.length - 1] : null;
-
-  var macsIniciais = {};
-  if (primeiroImport) (primeiroImport.filaSnapshot || []).forEach(function(f) { macsIniciais[f.mac] = true; });
-
-  // dedup idêntica à _gvColetarDadosIN: 1ª ocorrência na varredura = peso OPL mais atual do MAC
-  var macsUnicos = {};
-  snapsHoje.forEach(function(h) {
-    (h.filaSnapshot || []).forEach(function(f) {
-      if (macsUnicos[f.mac] === undefined) macsUnicos[f.mac] = { pesoOpl: f.pesoOpl || 0, origem: f.origem || '—' };
-    });
-  });
-
-  // Horário em que cada MAC entrou na fila pela 1ª vez hoje (fato histórico fixo — não muda
-  // conforme o relógio avança). snapsHoje vem do mais recente pro mais antigo, então varremos
-  // de trás pra frente (mais antigo → mais recente) para pegar a 1ª ocorrência real de cada MAC.
-  var primeiraOcorrenciaHora = {};
-  for (var iSnap = snapsHoje.length - 1; iSnap >= 0; iSnap--) {
-    (snapsHoje[iSnap].filaSnapshot || []).forEach(function(f) {
-      if (primeiraOcorrenciaHora[f.mac] === undefined) {
-        primeiraOcorrenciaHora[f.mac] = new Date(snapsHoje[iSnap].dataHoraISO).toTimeString().substring(0,5);
-      }
-    });
-  }
+  var agora = new Date();
+  var agoraHora = agora.toTimeString().substring(0,5);
 
   function turnoDe(horaStr) {
     var t = _gvTurnoDoHorario(horaStr);
@@ -14206,35 +14173,104 @@ function _gvFluxoFilaIN() {
 
   var ordem = ['1º Turno','2º Turno','3º Turno'];
   var linhas = {};
-  ordem.forEach(function(t) { linhas[t] = { turno: t, filaInicial: 0, entrouDepois: 0, executado: 0, qtdMacs: 0, qtdExecutados: 0 }; });
+  ordem.forEach(function(t) { linhas[t] = { turno: t, filaInicial: 0, entrouDepois: 0, executado: 0 }; });
+
+  function chaveMac(valor) {
+    return String(valor == null ? '' : valor).trim().toUpperCase();
+  }
+
+  function pesoMac(valor) {
+    var peso = parseFloat(valor);
+    return isNaN(peso) ? 0 : peso;
+  }
+
+  // Garante que um mesmo MAC seja considerado uma única vez dentro de cada relatório.
+  function macsUnicosDoRelatorio(relatorio) {
+    var unicos = {};
+    ((relatorio && relatorio.filaSnapshot) || []).forEach(function(f) {
+      var chave = chaveMac(f.mac);
+      if (!chave || unicos[chave] !== undefined) return;
+      unicos[chave] = {
+        mac: String(f.mac == null ? '' : f.mac).trim(),
+        pesoOpl: pesoMac(f.pesoOpl),
+        origem: f.origem || '—'
+      };
+    });
+    return unicos;
+  }
+
+  // O dia operacional acompanha os turnos existentes no sistema: começa às 06h
+  // e termina às 05h59 do dia seguinte, mantendo o 3º turno (23h–06h) unido.
+  var inicioDiaOperacional = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 6, 0, 0, 0);
+  if (agora.getTime() < inicioDiaOperacional.getTime()) inicioDiaOperacional.setDate(inicioDiaOperacional.getDate() - 1);
+  var fimDiaOperacional = new Date(inicioDiaOperacional.getTime() + 24 * 60 * 60 * 1000);
+
+  // Ordenação cronológica: o primeiro item de cada grupo é, de fato, o primeiro input do turno.
+  var snapsHoje = historico.filter(function(h) {
+    var dataImport = new Date(h.dataHoraISO);
+    return !isNaN(dataImport.getTime()) &&
+      dataImport.getTime() >= inicioDiaOperacional.getTime() &&
+      dataImport.getTime() < fimDiaOperacional.getTime();
+  }).slice().sort(function(a, b) {
+    return new Date(a.dataHoraISO).getTime() - new Date(b.dataHoraISO).getTime();
+  });
+
+  var snapsPorTurno = {'1º Turno':[],'2º Turno':[],'3º Turno':[]};
+  snapsHoje.forEach(function(h) {
+    var dataImport = new Date(h.dataHoraISO);
+    var horaImport = ('0' + dataImport.getHours()).slice(-2) + ':' + ('0' + dataImport.getMinutes()).slice(-2);
+    var turnoImport = turnoDe(horaImport);
+    snapsPorTurno[turnoImport].push(h);
+  });
+
+  // Em cada turno, fixa o primeiro relatório como início e só soma, uma vez,
+  // os MACs inéditos encontrados nos relatórios posteriores daquele mesmo turno.
+  ordem.forEach(function(t) {
+    var vistosNoTurno = {};
+    snapsPorTurno[t].forEach(function(h, indiceRelatorio) {
+      var unicosDoRelatorio = macsUnicosDoRelatorio(h);
+      Object.keys(unicosDoRelatorio).forEach(function(chave) {
+        if (vistosNoTurno[chave]) return;
+        vistosNoTurno[chave] = true;
+        var peso = unicosDoRelatorio[chave].pesoOpl;
+        if (indiceRelatorio === 0) linhas[t].filaInicial += peso;
+        else linhas[t].entrouDepois += peso;
+      });
+    });
+  });
+
+  // Mantém a regra já existente do Executado: MAC único no período, com o peso
+  // mais atual, distribuído pelo turno da Hora Início registrada no acompanhamento.
+  var macsUnicos = {};
+  snapsHoje.forEach(function(h) {
+    var unicosDoRelatorio = macsUnicosDoRelatorio(h);
+    Object.keys(unicosDoRelatorio).forEach(function(chave) {
+      macsUnicos[chave] = unicosDoRelatorio[chave];
+    });
+  });
 
   Object.keys(macsUnicos).forEach(function(mac) {
     var peso = macsUnicos[mac].pesoOpl;
-    var rec = acompData[mac] || {};
+    var macOriginal = macsUnicos[mac].mac;
+    var rec = acompData[macOriginal] || acompData[mac] || {};
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
-    // Turno é definido por um horário fixo (quando começou a ser trabalhado, ou quando entrou
-    // na fila) — nunca pelo horário atual, senão o item "foge" do turno original conforme o
-    // relógio avança e o Início de Turno diminui com o tempo.
-    var t = turnoDe(temInicio ? rec.horaInicio : (primeiraOcorrenciaHora[mac] || agoraHora));
-    if (macsIniciais[mac]) linhas[t].filaInicial += peso; else linhas[t].entrouDepois += peso;
-    linhas[t].qtdMacs++;
-    if (temFim) { linhas[t].executado += peso; linhas[t].qtdExecutados++; }
+    var t = turnoDe(temInicio ? rec.horaInicio : agoraHora);
+    if (temFim) linhas[t].executado += peso;
   });
 
-  var total = { turno: 'Total', filaInicial: 0, entrouDepois: 0, executado: 0, qtdMacs: 0, qtdExecutados: 0 };
+  var total = { turno: 'Total', filaInicial: 0, entrouDepois: 0, executado: 0 };
   var lista = ordem.map(function(t) {
     var l = linhas[t];
     l.filaFinal = l.filaInicial + l.entrouDepois - l.executado;
-    // % Executado é sempre sobre o Início de Turno (não sobre Início + Entrou Depois)
-    l.pctExec = l.filaInicial ? Math.round(l.executado / l.filaInicial * 100) : 0;
+    l.pctExec = (l.filaInicial + l.entrouDepois) ? Math.round(l.executado / (l.filaInicial + l.entrouDepois) * 100) : 0;
     total.filaInicial += l.filaInicial; total.entrouDepois += l.entrouDepois; total.executado += l.executado;
-    total.qtdMacs += l.qtdMacs; total.qtdExecutados += l.qtdExecutados;
     return l;
   });
   total.filaFinal = total.filaInicial + total.entrouDepois - total.executado;
-  total.pctExec = total.filaInicial ? Math.round(total.executado / total.filaInicial * 100) : 0;
+  total.pctExec = (total.filaInicial + total.entrouDepois) ? Math.round(total.executado / (total.filaInicial + total.entrouDepois) * 100) : 0;
 
+  var primeiroImport = snapsHoje.length ? snapsHoje[0] : null;
   var horaPrimeiro = primeiroImport ? new Date(primeiroImport.dataHoraISO).toTimeString().substring(0,5) : null;
   var dataPrimeiro = primeiroImport ? new Date(primeiroImport.dataHoraISO).toLocaleDateString('pt-BR') : null;
   return { linhas: lista, total: total, horaPrimeiroImport: horaPrimeiro, dataPrimeiroImport: dataPrimeiro, qtdImportsHoje: snapsHoje.length };
@@ -14301,7 +14337,7 @@ function gestaoVistaRenderizar() {
   if (_gvVisaoAtual === 'out') {
     // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
     var itensOut = (typeof progData !== 'undefined' && progData.length)
-      ? progData.filter(function(r) { return !!(r.frota || r.ocup); })
+      ? progData.filter(function(r) { return !!(r.frota || r.ocup || r.motorista || r.cavalinho); })
       : [];
     var acompOut = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
     var relD3 = (typeof _relData !== 'undefined') ? _relData : [];
@@ -14646,35 +14682,6 @@ function gestaoVistaRenderizar() {
       '</div>';
   }
 
-  // ── Gestão do Turno: subgrupo com os 3 turnos + resumo consolidado do que foi entregue em cada um ──
-  var gestaoTurnoDiv = document.getElementById('gv-card-gestao-turno');
-  if (gestaoTurnoDiv) {
-    var gtDados = (_gvVisaoAtual === 'out') ? fo : fluxo;
-    var gtLinhas = (gtDados && gtDados.linhas) ? gtDados.linhas : [];
-    var gtFmt = function(v){ return Math.round(v||0).toLocaleString('pt-BR'); };
-
-    var gtBotoes = gtLinhas.map(function(l) {
-      var ativo = (_gvFiltroTurno === l.turno);
-      return '<button onclick="gestaoVistaFiltrarTurno(\''+l.turno+'\')" style="padding:7px 18px;border-radius:4px;border:1px solid '+(ativo?corVisao:'#2f2f2f')+';background:'+(ativo?corVisao:'#1a1a1a')+';color:'+(ativo?'#141414':'#9a9a9a')+';font-size:12px;font-weight:800;cursor:pointer;font-family:\'Poppins\',sans-serif">'+l.turno+'</button>';
-    }).join('');
-
-    var gtResumos = gtLinhas.map(function(l) {
-      return '<div style="background:#1a1a1a;border:1px solid #2b2b2b;border-radius:6px;padding:14px 16px;flex:1;min-width:220px">' +
-        '<div style="font-size:11px;font-weight:800;color:#e5e5e5;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Resumo do ' + l.turno + '</div>' +
-        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#9a9a9a">Total de relatórios</span><span style="color:#e5e5e5;font-weight:700">' + (l.qtdMacs||0).toLocaleString('pt-BR') + '</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#9a9a9a">Entregas</span><span style="color:#4ade80;font-weight:700">' + gtFmt(l.executado) + ' kg</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#9a9a9a">Indicadores</span><span style="color:#f0b429;font-weight:800">' + (l.pctExec||0) + '% exec. · ' + gtFmt(l.filaFinal) + ' kg pendente</span></div>' +
-      '</div>';
-    }).join('');
-
-    gestaoTurnoDiv.innerHTML =
-      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box">' +
-        '<div style="font-size:12px;font-weight:800;color:#e5e5e5;margin-bottom:12px">Gestão do Turno</div>' +
-        '<div style="display:flex;gap:8px;margin-bottom:16px">' + gtBotoes + '</div>' +
-        '<div style="display:flex;gap:16px;flex-wrap:wrap">' + gtResumos + '</div>' +
-      '</div>';
-  }
-
   // ── Sem Programação: MACs (IN) sem Hora Início preenchida no Acompanhamento ──
   var semProgDiv = document.getElementById('gv-card-sem-programacao');
   if (semProgDiv) {
@@ -14760,7 +14767,7 @@ function _gvAnimarEntradaVisuais() {
   if (!painel) return;
 
   // 1) Entrada escalonada dos cards (fade + deslize)
-  var cards = ['gv-card-sales','gv-card-gauges','gv-card-leaderboard','gv-card-entrega','gv-card-gestao-turno','gv-card-sem-programacao','gv-card-transito'];
+  var cards = ['gv-card-sales','gv-card-gauges','gv-card-leaderboard','gv-card-entrega','gv-card-sem-programacao','gv-card-transito'];
   cards.forEach(function(id, i) {
     var el = document.getElementById(id);
     if (!el) return;
