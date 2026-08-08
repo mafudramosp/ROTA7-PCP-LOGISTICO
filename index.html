@@ -7425,14 +7425,18 @@ function autoSalvarLinha(rowId, destino, saida, dia, existingId) {
       var numId = parseInt(existingId);
       if (!isNaN(numId)) {
         progData = progData.filter(function(r) { return r._id !== numId; });
+        // Bug: isto apagava só localmente e chamava sheetsPost('delete', ...), que vai pro
+        // Google Apps Script legado — NUNCA apagava a linha no Supabase (backend real, usado
+        // pela sincronização entre usuários). O registro "vazio" continuava vivo lá, e o
+        // próximo polling/realtime trazia ele de volta com o valor antigo (ex: cavalinho
+        // "voltando sozinho" depois de apagado). Agora usa o mesmo apagamento real usado em
+        // excluirSelecionados(): soft-delete no Supabase + bloqueio permanente em _deletedIds
+        // pra nunca mais ser reinserido por um sync.
+        _deletedIds.add(String(numId));
+        deleteFromSheets(numId);
         saveLocal();
-        if (typeof sheetsPost === 'function' && USAR_SHEETS) {
-          sheetsPost('delete', { id: String(numId) });
-        }
         renderHist();
-        // Flash row to indicate deletion
-        var row = document.getElementById('tr-' + rowId);
-        if (row) { row.style.opacity = '0.4'; setTimeout(function(){ renderProg(); }, 500); }
+        renderProg();
       }
     }
     return;
