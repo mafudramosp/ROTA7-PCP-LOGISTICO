@@ -6629,14 +6629,23 @@ function ocupBar(v) {
     <span class="ocup-label" style="color:${labelColor};font-size:10px;font-weight:700;min-width:68px">${label}</span>
   </div>`;
 }
+// Status de carregamento lido do Acompanhamento OUT (fonte única: barra, filtro e ordenação)
+function _acompOutStatusDe(id) {
+  var rec = (typeof _acompOutData !== 'undefined' && _acompOutData) ? (_acompOutData[id] || {}) : {};
+  return (typeof _descAcompStatusPorHoras === 'function')
+    ? _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim)
+    : { label: 'Não iniciado', cor: '#9ca3af', valor: 'nao-iniciado' };
+}
+// Ordem de exibição: Finalizado (0) → Em andamento (1) → Não iniciado (2)
+function _acompOutStatusRank(id) {
+  var v = _acompOutStatusDe(id).valor;
+  return v === 'finalizado' ? 0 : (v === 'em-andamento' ? 1 : 2);
+}
 // Mesma barra do ocupBar, porém com o rótulo lido do Acompanhamento OUT (igual ao modal Editar)
 function ocupBarAcompOut(v, id) {
   var color = ocupColorLegacy(v);
   var pct = Math.round((v || 0) * 100);
-  var rec = (typeof _acompOutData !== 'undefined' && _acompOutData) ? (_acompOutData[id] || {}) : {};
-  var st = (typeof _descAcompStatusPorHoras === 'function')
-    ? _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim)
-    : { label: 'Não iniciado', cor: '#9ca3af' };
+  var st = _acompOutStatusDe(id);
   // Finalizado no Acompanhamento OUT: barra cheia em verde
   if (st.valor === 'finalizado') { pct = 100; color = st.cor; }
   return '<div class="ocup-cell">' +
@@ -7796,6 +7805,13 @@ function renderHist() {
     var col = _histSortCol;
     var dir = _histSortDir;
 
+    // Finalizados (Acompanhamento OUT) sempre no topo
+    if (typeof _acompOutStatusRank === 'function') {
+      var ra = _acompOutStatusRank(a._id), rb = _acompOutStatusRank(b._id);
+      if (col === 'ocup') return (ra - rb) * dir;
+      if (ra !== rb) return ra - rb;
+    }
+
     // Always put prev_fech records first when sorting by prev_fech
     if (col === 'prev_fech' || col === 'data_crit') {
       var pa = a[col] || '';
@@ -8551,7 +8567,7 @@ function cfVal(r, c) {
   if (c==='saida') return r.saida||'';
   if (c==='dia') return r.dia||'';
   if (c==='frota') return r.frota||'';
-  if (c==='ocup') { var p=Math.round((r.ocup||0)*100); return p>=100?'Finalizado':p>1?'Carregando':'Vazio'; }
+  if (c==='ocup') return (typeof _acompOutStatusDe === 'function') ? _acompOutStatusDe(r._id).label : '';
   if (c==='prev_fech') return (r.prev_fech||'').slice(0,10)||'(sem data)';
   if (c==='data_crit') return (r.data_crit||'').slice(0,10)||'(sem data)';
   if (c==='prioridade') return calcPrioridade(r)||'';
