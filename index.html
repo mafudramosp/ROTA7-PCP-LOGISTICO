@@ -5662,7 +5662,20 @@ function sbPollUmaVez() {
   _sbPollRunning = true;
   fbGetAll().then(function(recs) {
     if (!recs || !recs.length) { _sbPollRunning = false; return; }
-    var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+    var agoraTs = Date.now();
+    var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); }).map(function(r) {
+      // Bug fix 3: se este id foi salvo por nós há pouco (< 5s), mantém a versão local em vez
+      // do que veio do GET — evita reverter um campo recém-digitado por causa de uma leitura
+      // desatualizada (o commit do PATCH pode ainda não estar visível pra leitura no instante
+      // em que este poll roda, especialmente quando disparado pelo próprio realtime do save).
+      var idStr = String(r._id);
+      var savedAt = _progSalvosLocalmente[idStr];
+      if (savedAt && (agoraTs - savedAt) < 5000) {
+        var localRec = progData.find(function(p){ return String(p._id) === idStr; });
+        if (localRec) return localRec;
+      }
+      return r;
+    });
     var hash = f.map(function(r){ return r._id+':'+r.gerado; }).join('|');
     if (hash === _sbLastHash) { _sbPollRunning = false; return; }
     _sbLastHash = hash;
@@ -6245,7 +6258,14 @@ function _syncReenviarPendentes() {
   });
 }
 
+// Marca (por id) o instante do último salvamento local — usado por sbPollUmaVez para não
+// deixar um GET com leitura desatualizada (eco do nosso próprio salvamento, antes do commit
+// ficar visível pra leitura) sobrescrever um campo que acabamos de digitar (motorista,
+// cavalinho, frota, prev. fechamento etc.) na tela Programar.
+var _progSalvosLocalmente = {};
+
 function _syncEnviar(record) {
+  _progSalvosLocalmente[String(record._id)] = Date.now();
   fbSave(record).then(function() {
     // sucesso: garantir que não está na fila de pendentes
     _syncPendentes.delete(String(record._id));
