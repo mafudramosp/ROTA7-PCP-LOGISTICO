@@ -5681,20 +5681,39 @@ function sbPollUmaVez() {
     if (!recs || !recs.length) { _sbPollRunning = false; return; }
     var agoraTs = Date.now();
     var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); }).map(function(r) {
-      // Bug fix 3: se este id foi salvo por nós há pouco (< 5s), mantém a versão local em vez
+      // Bug fix 3: se este id foi salvo por nós há pouco (< 8s), mantém a versão local em vez
       // do que veio do GET — evita reverter um campo recém-digitado por causa de uma leitura
       // desatualizada (o commit do PATCH pode ainda não estar visível pra leitura no instante
       // em que este poll roda, especialmente quando disparado pelo próprio realtime do save).
       var idStr = String(r._id);
       var savedAt = _progSalvosLocalmente[idStr];
-      if (savedAt && (agoraTs - savedAt) < 5000) {
+      if (savedAt && (agoraTs - savedAt) < 8000) {
         var localRec = progData.find(function(p){ return String(p._id) === idStr; });
         if (localRec) return localRec;
       }
       return r;
     });
-    var hash = f.map(function(r){ return r._id+':'+r.gerado; }).join('|');
+    // Hash com .sort() para ordenação estável — evita falso "mudou" por variação
+    // na ordem de retorno do Supabase entre chamadas consecutivas
+    var hash = f.map(function(r){ return r._id+':'+r.gerado; }).sort().join('|');
     if (hash === _sbLastHash) { _sbPollRunning = false; return; }
+
+    // Bug fix 4: distinguir eco do próprio PATCH vs mudança vinda de outro usuário.
+    // Só re-renderiza a tabela Programar quando há mudança externa — evita destruir
+    // campos em andamento enquanto o Realtime devolve o eco do save que acabamos de fazer.
+    var localIds = new Set(progData.map(function(r){ return String(r._id); }));
+    var temMudancaExterna = f.some(function(r) {
+      var idStr = String(r._id);
+      // Registro novo (outro usuário adicionou linha)
+      if (!localIds.has(idStr)) return true;
+      // Salvo por nós há menos de 8s → é eco do nosso próprio PATCH
+      var savedAt = _progSalvosLocalmente[idStr];
+      if (savedAt && (agoraTs - savedAt) < 8000) return false;
+      // Gerado diferente do local → outro usuário modificou
+      var localRec = progData.find(function(p){ return String(p._id) === idStr; });
+      return !localRec || localRec.gerado !== r.gerado;
+    });
+
     _sbLastHash = hash;
     // Bug fix 2: MERGE ao invés de replace — preserva SÓ registros genuinamente
     // pendentes de envio (rastreados em _syncPendentes), nunca registros que
@@ -5705,8 +5724,14 @@ function sbPollUmaVez() {
     });
     progData = deduplicar(f.concat(localPendentes));
     nextId = Math.max.apply(null, progData.map(function(r){ return parseInt(r._id)||0; })) + 1;
-    saveLocal(); renderProg(); renderHist();
-    showToast('🔄 Dados atualizados', 'info');
+    saveLocal(); renderHist();
+    // Só re-renderiza a tabela Programar e exibe toast quando a mudança veio de outro
+    // usuário — ecos do Realtime do nosso próprio salvamento não devem sobrescrever
+    // campos que o usuário ainda está preenchendo em outras linhas da mesma tela
+    if (temMudancaExterna) {
+      renderProg();
+      showToast('🔄 Dados atualizados', 'info');
+    }
   }).catch(function(){}).finally(function(){
     _sbPollRunning = false;
   });
