@@ -2061,6 +2061,9 @@ function _gradeAtualizarComMalha(rows) {
 
     <!-- Container para visão IN/OUT -->
     <div id="gv-inout-container">
+      <!-- KPIs de peso do dia — visões Descarga (IN) e Carregamento (OUT) -->
+      <div id="gv-kpis-peso" style="display:none;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px"></div>
+
       <!-- Barra de 3 estágios: Executado / Programado / Plano -->
       <div id="gv-barra-estagios" style="margin-bottom:20px"></div>
 
@@ -3964,7 +3967,7 @@ function relExecutarImpressao() {
   var posicaoColor = {'Fila de descarga':'#854d0e','Disponível':'#2563eb','Carregando':'#16a34a'};
 
   var theadRow = '<tr>' + selCols.map(function(k){
-    return '<th style="padding:5px 8px;background:#1e293b;color:#fff;font-size:9px;font-weight:700;text-transform:uppercase;white-space:nowrap;border:1px solid #0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact">' + colMap[k].l + '</th>';
+    return '<th style="padding:7px 8px;background:#1e293b;color:#fff;font-size:12px;font-weight:700;text-transform:uppercase;white-space:nowrap;border:1px solid #0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact">' + colMap[k].l + '</th>';
   }).join('') + '</tr>';
 
   function celulaHTML(r, k) {
@@ -3978,7 +3981,7 @@ function relExecutarImpressao() {
     } else if (col.type === 'num') {
       txt = k==='valor' ? 'R$ '+relFmtNum(v||0,2) : relFmtNum(v||0,3);
     } else { txt = v||'—'; }
-    var st = 'padding:4px 7px;font-size:9px;border:1px solid #e2e8f0;white-space:nowrap;';
+    var st = 'padding:6px 7px;font-size:12px;border:1px solid #e2e8f0;white-space:nowrap;';
     if (col.right) st += 'text-align:right;';
     return '<td style="'+st+'">'+txt+'</td>';
   }
@@ -3994,7 +3997,7 @@ function relExecutarImpressao() {
   ordemDestinos.sort();
 
   // 2) Para cada destino: totais, Frota (vinda de Recurso Programado / progData) e paginação
-  var ROWS_POR_PAGINA = 18;
+  var ROWS_POR_PAGINA = 13;
   var folhas = [];
 
   ordemDestinos.forEach(function(dest) {
@@ -4029,7 +4032,7 @@ function relExecutarImpressao() {
 
     var cabecalho =
       '<div style="display:flex;justify-content:space-between;gap:24px;border:1.5px solid #111827;border-radius:6px;padding:10px 14px">' +
-        '<div style="display:flex;flex-direction:column;gap:4px;font-size:10px">' +
+        '<div style="display:flex;flex-direction:column;gap:4px;font-size:13px">' +
           '<div><strong>FILIAL DE DESTINO:</strong> ' + dest + '</div>' +
           '<div><strong>FROTA:</strong> ' + frotaStr + '</div>' +
           '<div><strong>TOTAL DE CTRCS:</strong> ' + totalCtrcs.toLocaleString('pt-BR') + '</div>' +
@@ -4038,7 +4041,7 @@ function relExecutarImpressao() {
           '<div><strong>TOTAL DE VALOR MERCK:</strong> R$ ' + totalValorMerck.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div>' +
           '<div><strong>TOTAL DE VOLUMES:</strong> ' + totalVolumes.toLocaleString('pt-BR') + '</div>' +
         '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:7px;font-size:10px;min-width:280px">' +
+        '<div style="display:flex;flex-direction:column;gap:9px;font-size:13px;min-width:300px">' +
           '<div>TURNO DE CARREGAMENTO: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:170px">&nbsp;</span></div>' +
           '<div>INÍCIO DO CARREGAMENTO: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:160px">&nbsp;</span></div>' +
           '<div>FIM DO CARREGAMENTO: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:170px">&nbsp;</span></div>' +
@@ -4067,7 +4070,7 @@ function relExecutarImpressao() {
     var topo =
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
         '<img src="' + LOGO_B64 + '" style="height:34px;width:auto">' +
-        '<span style="font-size:11px;font-weight:700;color:#111827">' + dataStr + ' – ' + horaStr + ' – Página ' + pageNum + '/' + totalPaginasGeral + '</span>' +
+        '<span style="font-size:14px;font-weight:700;color:#111827">' + dataStr + ' – ' + horaStr + ' – Página ' + pageNum + '/' + totalPaginasGeral + '</span>' +
       '</div>' +
       (folha.primeiraDoGrupo ? '<div style="margin-bottom:8px">' + folha.cabecalho + '</div>' : '');
 
@@ -4087,8 +4090,9 @@ function relExecutarImpressao() {
   }
 
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Carregamento de Produção</title>' +
-    '<style>body{font-family:Arial,sans-serif;font-size:10px;margin:12px} table{border-collapse:collapse;width:100%} ' +
+    '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:12px} table{border-collapse:collapse;width:100%} ' +
     'th{-webkit-print-color-adjust:exact;print-color-adjust:exact} ' +
+    'td *{font-size:12px!important} ' +
     '@page{size:landscape;margin:10mm} @media print{button{display:none}}</style></head><body>' +
     '<button onclick="window.print()" style="margin-bottom:10px;padding:5px 14px;background:#333333;color:#fff;border:none;border-radius:5px;cursor:pointer">Imprimir</button>' +
     paginasHTML + '</body></html>';
@@ -4296,6 +4300,10 @@ function relProcessarRows(rows) {
         motivo:String(row[cMotivo]||'').trim(),frotaPlan:String(row[cPlan]||'').trim(),
         mac: macFinal,
         isAN: usaMacAN,
+        // Critérios da fila de Coletas (não afetam Transferências):
+        // colB = coluna B (510/540) | acZeroOuVazio = coluna AC igual a 0 ou em branco
+        colB: colBNum,
+        acZeroOuVazio: !eqP,
         // B = 510/540 → remetente/origem vem da coluna E
         // B diferente disso → origem vem da coluna V (padrão)
         macDest: ehB510540 ? String(row[cRem]||'').trim() : String(row[cMacDest]||'').trim(),
@@ -4435,6 +4443,22 @@ function relGerarPlanejamento(destinoImpresso) {
   }
 
   showToast('✅ Planejamento registrado: ' + snapshot.ctrcsAfetados + ' CTRCs marcados (' + d + ' ' + t + ')', 'success');
+}
+
+// Peso total (kg) registrado HOJE no Histórico de Relatório OUT.
+// Usa exatamente o mesmo parsing do card "Peso" daquela tela (hro-c-peso),
+// para que o valor exibido no Painel Executivo seja o mesmo visto ali.
+function _histRelOutPesoHoje() {
+  var lista = (typeof _histRelOut !== 'undefined' && _histRelOut) ? _histRelOut : [];
+  var hojeStr = new Date().toLocaleDateString('pt-BR');
+  var total = 0;
+  lista.forEach(function(s) {
+    if (!s || !s.ts) return;
+    var d = new Date(s.ts);
+    if (isNaN(d.getTime()) || d.toLocaleDateString('pt-BR') !== hojeStr) return;
+    total += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
+  });
+  return total;
 }
 
 function histRelOutRenderizar() {
@@ -4795,18 +4819,18 @@ document.addEventListener('click',function(e){
     <table>
       <thead>
         <tr>
-          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Gerado em</th>
-          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Destino</th>
-          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Região</th>
-          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Composição</th>
-          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Frota</th>
-          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;background:#111827">Status Carregamento</th>
-          <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Peso OPL (kg)</th>
-          <th style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Conferente</th>
-          <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Qtd. Conf.</th>
-          <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Qtd. Ajud.</th>
-          <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Início</th>
-          <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Fim</th>
+          <th onclick="acompOutOrdenar('gerado')" title="Ordenar por Gerado em" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Gerado em<span id="acompOut-arw-gerado"></span></th>
+          <th onclick="acompOutOrdenar('destino')" title="Ordenar por Destino" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Destino<span id="acompOut-arw-destino"></span></th>
+          <th onclick="acompOutOrdenar('regiao')" title="Ordenar por Região" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Região<span id="acompOut-arw-regiao"></span></th>
+          <th onclick="acompOutOrdenar('composicao')" title="Ordenar por Composição" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Composição<span id="acompOut-arw-composicao"></span></th>
+          <th onclick="acompOutOrdenar('frota')" title="Ordenar por Frota" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Frota<span id="acompOut-arw-frota"></span></th>
+          <th onclick="acompOutOrdenar('status')" title="Ordenar por Status Carregamento" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;background:#111827;cursor:pointer;user-select:none">Status Carregamento<span id="acompOut-arw-status"></span></th>
+          <th onclick="acompOutOrdenar('pesoOpl')" title="Ordenar por Peso OPL" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Peso OPL (kg)<span id="acompOut-arw-pesoOpl"></span></th>
+          <th onclick="acompOutOrdenar('conferente')" title="Ordenar por Conferente" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Conferente<span id="acompOut-arw-conferente"></span></th>
+          <th onclick="acompOutOrdenar('qtdConf')" title="Ordenar por Qtd. Conf." style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Qtd. Conf.<span id="acompOut-arw-qtdConf"></span></th>
+          <th onclick="acompOutOrdenar('qtdAjud')" title="Ordenar por Qtd. Ajud." style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Qtd. Ajud.<span id="acompOut-arw-qtdAjud"></span></th>
+          <th onclick="acompOutOrdenar('horaInicio')" title="Ordenar por Início" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Início<span id="acompOut-arw-horaInicio"></span></th>
+          <th onclick="acompOutOrdenar('horaFim')" title="Ordenar por Fim" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Fim<span id="acompOut-arw-horaFim"></span></th>
           <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827">Tempo Total</th>
           <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827" title="Peso (kg) ÷ 1000 ÷ (tempo total em decimal × qtd. ajudantes) — ton/hora-homem, quanto maior melhor">Produtividade</th>
         </tr>
@@ -5048,7 +5072,7 @@ document.addEventListener('click',function(e){
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <div>
-      <div style="font-size:16px;font-weight:700;color:#1e293b">🔴 Prioridade de Descarga</div>
+      <div style="font-size:16px;font-weight:700;color:#1e293b">Prioridade de Descarga</div>
       <div style="font-size:11px;color:#94a3b8">Clique em um MAC para ver os CTRCs</div>
     </div>
     <div style="display:flex;gap:8px;margin-left:auto;align-items:flex-start">
@@ -5060,6 +5084,7 @@ document.addEventListener('click',function(e){
         <span style="font-size:9px;color:#94a3b8;text-align:center">TMS &gt; Relatório &gt; Operacional &gt; Mercadorias &gt; No Armazém</span>
       </div>
       <button onclick="descargaImprimir()" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Imprimir</button>
+      <button onclick="descargaImprimirTodos()" title="Gera o relatório de todos os MACs da fila, um por vez, sem misturar" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Imprimir Todos</button>
       <button onclick="imprimirListaDescarga()" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Lista Plataforma</button>
     </div>
   </div>
@@ -5775,6 +5800,9 @@ function _relComprimir(r) {
     rb:r.reboque||'', vo:r.vols||'',
     mdst:r.macDest||'',
     nt:r.nota||'',
+    // Campos da fila de Coletas — sem eles a fila some ao recarregar do Supabase
+    cb:r.colB||null,
+    az:(r.acZeroOuVazio === true) || null,
     pg:r.programacao||''
   };
   // Remove nulos/vazios para economizar espaço
@@ -5806,6 +5834,8 @@ function _relDescomprimir(o) {
     reboque:o.rb||'', vols:o.vo||'',
     macDest:o.mdst||'',
     nota:o.nt||'',
+    colB:o.cb||0,
+    acZeroOuVazio:(o.az === true),
     programacao:o.pg||''
   };
 }
@@ -11009,14 +11039,126 @@ function hubSaveNote(key,val) {}
 .desc-mac-item.selected { outline:3px solid #fff; outline-offset:2px; }
 .desc-rel-row td { padding:6px 10px; border-bottom:1px solid #f1f5f9; }
 .desc-rel-row:last-child td { border-bottom:none; }
-.desc-rel-row.crit { background:#fff7ed; }
-.desc-rel-row.atras { background:#fef2f2; }
 </style>
 
 <script>
 var _descMacSel = null;
 var _descMacRanking = [];
 var _descSort = {col: null, asc: false};
+
+// ═══════════ FILA DE COLETAS ═══════════
+// Bloco independente das Transferências: nada aqui altera macMap, _descMacRanking
+// ou qualquer regra já existente da fila de Transferências.
+var _descColetaRanking = [];
+
+// Destinos de rota curta (coluna AJ) — mesma classificação já usada na Consolidação:
+// Rota Curta = regiões SUL + SÃO PAULO
+function _descColetaEhRotaCurta(destinoAJ) {
+  var sigla = String(destinoAJ || '').trim().toUpperCase();
+  if (!sigla) return false;
+  var regiao = (typeof CG_FILIAL_REGIAO !== 'undefined') ? CG_FILIAL_REGIAO[sigla] : null;
+  if (!regiao) return false;
+  var curtas = (typeof CONSOLIDACAO_ROTA_REGIOES !== 'undefined')
+    ? (CONSOLIDACAO_ROTA_REGIOES['Rota Curta'] || []) : ['SUL','SÃO PAULO'];
+  return curtas.indexOf(regiao) !== -1;
+}
+
+// Converte 'dd/mm/aaaa' ou 'dd/mm/aaaa hh:mm' em Date (null se inválida)
+function _descColetaParseData(str) {
+  var s = String(str || '').trim();
+  if (!s || s === '—') return null;
+  var partes = s.split(' ');
+  var d = partes[0].split('/');
+  if (d.length < 3) return null;
+  var hh = 0, mm = 0;
+  if (partes[1]) { var t = partes[1].split(':'); hh = parseInt(t[0],10)||0; mm = parseInt(t[1],10)||0; }
+  var dt = new Date(parseInt(String(d[2]).substring(0,4),10), (parseInt(d[1],10)||1)-1, parseInt(d[0],10)||1, hh, mm);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+// Rótulo do card de Coleta. A coluna AN normalmente já vem com o prefixo do tipo
+// (ex.: "510-148228372"); só prefixa o valor de B quando ele ainda não está no MEC.
+function _descColetaRotulo(c) {
+  var mec = String(c.mac || '').trim();
+  var pref = String(c.colB || '');
+  var texto = (pref && mec.indexOf(pref) !== 0) ? (pref + ' – ' + mec) : mec;
+  return texto + ' – ' + c.nome;
+}
+
+function _descMontarFilaColetas() {
+  if (!_relData || !_relData.length) return [];
+
+  var agora = new Date();
+  var hoje0 = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  var ontem0 = new Date(hoje0.getTime() - 24*60*60*1000);
+  var amanha0 = new Date(hoje0.getTime() + 24*60*60*1000);
+  var h24 = 24*60*60*1000;
+
+  // ── Etapa 1: quais MECs entram na fila ──
+  // Basta uma linha do MEC atender aos 3 critérios (B=510/540 + AC zero/vazio + coluna A ontem/hoje)
+  var mecsElegiveis = {};
+  _relData.forEach(function(r) {
+    if (r.colB !== 510 && r.colB !== 540) return;
+    if (r.acZeroOuVazio !== true) return;
+    var dtA = _descColetaParseData(r.dtColA);
+    if (!dtA || dtA < ontem0 || dtA >= amanha0) return;
+    var mec = String(r.mac || '').trim();
+    if (mec) mecsElegiveis[mec] = true;
+  });
+
+  // ── Etapa 2: agrega TODOS os CTRCs de cada MEC elegível ──
+  // Usa a mesma base que descargaSelectMac() exibe ao clicar no card, para que a
+  // contagem do card seja sempre igual ao número de linhas abertas.
+  var mecMap = {};
+  _relData.forEach(function(r) {
+    var mec = String(r.mac || '').trim();
+    if (!mec || !mecsElegiveis[mec]) return;
+
+    var dtA = _descColetaParseData(r.dtColA);
+
+    if (!mecMap[mec]) {
+      mecMap[mec] = {
+        mac: mec,
+        colB: r.colB,
+        nome: String(r.macDest || r.remetente || '—').trim() || '—',
+        destinoAJ: String(r.destino || '').trim(),
+        ctrcs: 0, atras: 0, hoje: 0, peso: 0,
+        dtA: dtA, dataStr: r.dtColA || '—',
+        _ctrcs: {}
+      };
+    }
+    var m = mecMap[mec];
+    if (!m.nome || m.nome === '—') m.nome = String(r.macDest || r.remetente || '—').trim() || '—';
+    if (!m.destinoAJ) m.destinoAJ = String(r.destino || '').trim();
+    if (dtA && (!m.dtA || dtA < m.dtA)) { m.dtA = dtA; m.dataStr = r.dtColA || m.dataStr; }
+    m.peso += r.peso || 0;
+
+    // Conta CTRC único, guardando a situação da coluna AH
+    var chave = String(r.ctrc || '').trim() || ('N' + (r.nota||'') + '|' + (r.remetente||''));
+    if (m._ctrcs[chave] === undefined) m._ctrcs[chave] = String(r.sitAH || '').trim();
+    else if (!m._ctrcs[chave] && r.sitAH) m._ctrcs[chave] = String(r.sitAH).trim();
+  });
+
+  // Pontuação de prioridade das Coletas
+  return Object.keys(mecMap).map(function(k) {
+    var m = mecMap[k];
+    Object.keys(m._ctrcs).forEach(function(c) {
+      m.ctrcs++;
+      if (m._ctrcs[c] === 'Atrasado') m.atras++;
+      else if (m._ctrcs[c] === 'Hoje') m.hoje++;
+    });
+    m.maior24h = m.dtA ? ((agora - m.dtA) > h24) : false;
+    m.rotaCurta = _descColetaEhRotaCurta(m.destinoAJ);
+    m.score = (m.atras * 3) + (m.hoje * 2) + (m.maior24h ? 5 : 0) + (m.rotaCurta ? 4 : 0);
+    return m;
+  }).filter(function(m) {
+    return m.ctrcs > 5; // coletas de 1 a 5 CTRCs não entram na fila
+  }).sort(function(a, b) {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.atras !== a.atras) return b.atras - a.atras;
+    return (a.dtA ? a.dtA.getTime() : 0) - (b.dtA ? b.dtA.getTime() : 0); // empate: a mais antiga primeiro
+  });
+}
 
 function descargaRenderizar() {
   if (!_relData || !_relData.length) return;
@@ -11092,7 +11234,25 @@ function descargaRenderizar() {
 
   var list = document.getElementById('desc-mac-list');
   if (!list) return;
-  list.innerHTML = _descMacRanking.map(function(m,i) {
+
+  // ═══ FILA DE COLETAS ═══ (acrescentada às Transferências; não altera nenhuma regra delas)
+  // Critérios: coluna B = 510 ou 540 · coluna AC = 0 ou em branco · coluna A = ontem ou hoje
+  _descColetaRanking = _descMontarFilaColetas();
+
+  var htmlColetas = _descColetaRanking.map(function(c, i) {
+    var pos = (i+1) + 'º';
+    return '<div class="desc-mac-item' + (c.mac===_descMacSel?' selected':'') + '"' +
+      ' style="background:#ffffff;color:#111111;border:2px solid #15803d"' +
+      ' title="' + ('Coleta · ' + c.ctrcs + ' CTRCs · ' + c.atras + ' atrasado(s) · ' + c.hoje + ' hoje').split('"').join('&quot;') + '"' +
+      ' onclick="descargaSelectMac(\'' + c.mac.split("'").join("\\'") + '\')">' +
+      '<div><span style="font-size:10px;opacity:.7">' + pos + '</span>' +
+      '<span style="font-weight:800;margin-left:6px">MEC: ' + _descColetaRotulo(c) + '</span></div>' +
+      '<div style="text-align:right"><div style="font-size:13px;font-weight:800">' + c.ctrcs + '</div>' +
+      '<div style="font-size:9px;opacity:.75">' + String(c.dataStr||'').split(' ')[0] + '</div></div>' +
+    '</div>';
+  }).join('');
+
+  list.innerHTML = htmlColetas + _descMacRanking.map(function(m,i) {
     var pos = (i+1) + 'º';
     var usaRemetente = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase()==='EXA' && m.remetente);
     var bg = usaRemetente ? '#f97316' : '#111111';
@@ -11119,9 +11279,9 @@ function descargaRenderizar() {
   var cardsDiv = document.getElementById('descarga-cards');
   if (cardsDiv) {
     var pesoTotalFila = _descMacRanking.reduce(function(s, m){ return s + (m.pesoTotal || 0); }, 0);
-    cardsDiv.innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:160px;flex:1;max-width:240px">' +
+    cardsDiv.innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:140px;flex:1;max-width:200px">' +
       '<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Peso Total na Fila</div>' +
-      '<div style="font-size:18px;font-weight:800;color:#1e293b;margin-top:4px">' + Math.round(pesoTotalFila).toLocaleString('pt-BR') + ' kg</div></div>';
+      '<div style="font-size:20px;font-weight:800;color:#475569;margin-top:4px">' + Math.round(pesoTotalFila).toLocaleString('pt-BR') + ' kg</div></div>';
   }
 }
 
@@ -11162,14 +11322,34 @@ function _descSortRows(rows) {
     return asc ? va.localeCompare(vb) : vb.localeCompare(va);
   });
 }
+// Monta o <tr> de um CTRC no relatório de Descarga. Extraído de descFiltrar() para
+// que a impressão em lote (todos os MACs) gere exatamente as mesmas linhas.
+function _descLinhaHTML(r) {
+  var critBadge = {'⚠ Cliente critico':'#ea580c','⚠ Agendamento':'#d97706','Fluxo':'#64748b'};
+  var rowCls = r.sitAH==='Atrasado'?'atras':r.cliente==='⚠ Cliente critico'?'crit':'';
+  return '<tr class="desc-rel-row '+rowCls+'">' +
+    '<td style="white-space:nowrap;font-weight:'+(r.sitAH?'700':'400')+'">'+(r.dtPrev||'—')+'</td>' +
+    '<td style="white-space:nowrap">'+(r.dataMax||'—')+'</td>' +
+    '<td><span style="font-size:10px;color:'+( critBadge[r.cliente]||'#64748b')+'">'+( r.cliente||'Fluxo')+'</span></td>' +
+    '<td style="white-space:nowrap">'+(r.origem||'—')+'</td>' +
+    '<td style="white-space:nowrap;font-weight:700">'+(r.destino||'—')+'</td>' +
+    '<td style="font-family:monospace;font-size:10px;white-space:nowrap">'+(r.ctrc||'—')+'</td>' +
+    '<td style="font-family:monospace;font-size:10px;white-space:nowrap">'+(r.nota||'—')+'</td>' +
+    '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.remetente||'').replace(/"/g,'&quot;')+'">'+(r.remetente||'—')+'</td>' +
+    '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.destinatario||'').replace(/"/g,'&quot;')+'">'+(r.destinatario||'—')+'</td>' +
+    '<td>'+(r.modal||'—')+'</td>' +
+    '<td style="font-family:monospace">'+(r.mac||'—')+'</td>' +
+    '<td style="text-align:right">'+(r.vols||'—')+'</td>' +
+    '<td style="text-align:right;white-space:nowrap">'+(r.peso?r.peso.toLocaleString('pt-BR',{maximumFractionDigits:1}):'—')+'</td>' +
+    '<td style="text-align:right;white-space:nowrap">'+(r.valor?'R$ '+r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—')+'</td>' +
+  '</tr>';
+}
+
 function descFiltrar() {
   var filters = [];
   document.querySelectorAll('.desc-filter-inp').forEach(function(inp) {
     filters[parseInt(inp.getAttribute('data-col'))] = inp.value.toLowerCase().trim();
   });
-
-  var critBadge = {'⚠ Cliente critico':'#ea580c','⚠ Agendamento':'#d97706','Fluxo':'#64748b'};
-  var sitColor  = {'Atrasado':'#dc2626','Hoje':'#d97706','':'#374151'};
 
   var html = _descSortRows(_descRows.filter(function(r) {
     var cells = [r.dtPrev||'', r.dataMax||'', r.cliente||'', r.origem||'', r.destino||'',
@@ -11178,26 +11358,7 @@ function descFiltrar() {
       if (filters[i] && cells[i].toLowerCase().indexOf(filters[i]) === -1) return false;
     }
     return true;
-  })).map(function(r) {
-    var rowCls = r.sitAH==='Atrasado'?'atras':r.cliente==='⚠ Cliente critico'?'crit':'';
-    var sitC = sitColor[r.sitAH]||'#374151';
-    return '<tr class="desc-rel-row '+rowCls+'">' +
-      '<td style="white-space:nowrap;color:'+sitC+';font-weight:'+(r.sitAH?'700':'400')+'">'+(r.dtPrev||'—')+'</td>' +
-      '<td style="white-space:nowrap">'+(r.dataMax||'—')+'</td>' +
-      '<td><span style="font-size:10px;color:'+( critBadge[r.cliente]||'#64748b')+'">'+( r.cliente||'Fluxo')+'</span></td>' +
-      '<td style="white-space:nowrap">'+(r.origem||'—')+'</td>' +
-      '<td style="white-space:nowrap;font-weight:700">'+(r.destino||'—')+'</td>' +
-      '<td style="font-family:monospace;font-size:10px;white-space:nowrap">'+(r.ctrc||'—')+'</td>' +
-      '<td style="font-family:monospace;font-size:10px;white-space:nowrap">'+(r.nota||'—')+'</td>' +
-      '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.remetente||'').replace(/"/g,'&quot;')+'">'+(r.remetente||'—')+'</td>' +
-      '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.destinatario||'').replace(/"/g,'&quot;')+'">'+(r.destinatario||'—')+'</td>' +
-      '<td>'+(r.modal||'—')+'</td>' +
-      '<td style="font-family:monospace">'+(r.mac||'—')+'</td>' +
-      '<td style="text-align:right">'+(r.vols||'—')+'</td>' +
-      '<td style="text-align:right;white-space:nowrap">'+(r.peso?r.peso.toLocaleString('pt-BR',{maximumFractionDigits:1}):'—')+'</td>' +
-      '<td style="text-align:right;white-space:nowrap">'+(r.valor?'R$ '+r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—')+'</td>' +
-    '</tr>';
-  }).join('');
+  })).map(_descLinhaHTML).join('');
 
   var tbody = document.getElementById('desc-rel-tbody');
   if (tbody) tbody.innerHTML = html || '<tr><td colspan="14" style="padding:20px;text-align:center;color:#94a3b8">Nenhum resultado</td></tr>';
@@ -11228,7 +11389,8 @@ function descargaSelectMac(mac) {
 
   var title = document.getElementById('desc-rel-title');
   var count = document.getElementById('desc-rel-count');
-  if (title) title.textContent = 'MAC: ' + mac + ' — ' + (_descRows[0] && _descRows[0].macDest ? _descRows[0].macDest : '');
+  var _ehColeta = (_descColetaRanking || []).some(function(c){ return c.mac === mac; });
+  if (title) title.textContent = (_ehColeta ? 'MEC: ' : 'MAC: ') + mac + ' — ' + (_descRows[0] && _descRows[0].macDest ? _descRows[0].macDest : '');
   if (count) count.textContent = _descRows.length + ' registros';
 
   // Clear filters
@@ -11491,6 +11653,30 @@ function _descAcompMarcarSalvandoLocal() {
   clearTimeout(_descAcompSalvandoLocalTimer);
   _descAcompSalvandoLocalTimer = setTimeout(function(){ _descAcompSalvandoLocal = false; }, 4000);
 }
+
+// Mesma proteção de foco usada no Acompanhamento OUT: enquanto houver um campo
+// em foco nesta aba, a tabela não é reconstruída (o cursor sairia do campo).
+var _descAcompRenderPendente = false;
+
+function _descAcompFocoNaTabela() {
+  var ae = document.activeElement;
+  if (!ae) return false;
+  var tag = (ae.tagName || '').toUpperCase();
+  if (tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') return false;
+  var tab = document.getElementById('tab-descargaAcomp-content');
+  return !!(tab && tab.contains(ae));
+}
+
+document.addEventListener('focusout', function(e) {
+  var tab = document.getElementById('tab-descargaAcomp-content');
+  if (!tab || !tab.contains(e.target)) return;
+  setTimeout(function() {
+    if (_descAcompRenderPendente && !_descAcompFocoNaTabela()) {
+      _descAcompRenderPendente = false;
+      if (typeof descargaAcompRenderizar === 'function') descargaAcompRenderizar();
+    }
+  }, 150);
+}, true);
 
 function _descAcompSalvar() {
   try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(ex) {}
@@ -11811,6 +11997,8 @@ function descargaAcompOrdenar(coluna) {
 function descargaAcompRenderizar() {
   var tbody = document.getElementById('descarga-acomp-tbody');
   if (!tbody) return;
+  // Usuário digitando: adia o redesenho para não tirar o cursor do campo
+  if (_descAcompFocoNaTabela()) { _descAcompRenderPendente = true; return; }
 
   // Exibe a data/hora do último relatório TMS importado
   var ultimoImportEl = document.getElementById('descAcomp-ultimo-import');
@@ -12193,7 +12381,7 @@ function descargaImprimir() {
   // Bloco de cabeçário completo (aparece só na 1ª página e, repetido, no rodapé da última — sem logo)
   var cabecalho =
     '<div style="display:flex;justify-content:space-between;gap:24px;border:1.5px solid #111827;border-radius:6px;padding:10px 14px">' +
-      '<div style="display:flex;flex-direction:column;gap:4px;font-size:10px">' +
+      '<div style="display:flex;flex-direction:column;gap:4px;font-size:13px">' +
         '<div><strong>NR MAC:</strong> ' + _descMacSel + '</div>' +
         '<div><strong>FILIAL DE ORIGEM:</strong> ' + filialOrigem + '</div>' +
         '<div><strong>DATA DE CHEGADA:</strong> ' + chegadaStr + '</div>' +
@@ -12202,7 +12390,7 @@ function descargaImprimir() {
         '<div><strong>TOTAL DE VOLUMES:</strong> ' + totalVolumes.toLocaleString('pt-BR') + '</div>' +
         '<div><strong>TOTAL PESO OPL:</strong> ' + totalPesoOpl.toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' kg</div>' +
       '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:7px;font-size:10px;min-width:280px">' +
+      '<div style="display:flex;flex-direction:column;gap:9px;font-size:13px;min-width:300px">' +
         '<div>TURNO DE DESCARREGAMENTO: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:170px">&nbsp;</span></div>' +
         '<div>INÍCIO DO DESCARREGAMENTO: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:160px">&nbsp;</span></div>' +
         '<div>FIM DO DESCARREGAMENTO: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:170px">&nbsp;</span></div>' +
@@ -12216,7 +12404,7 @@ function descargaImprimir() {
   var todasLinhas = Array.prototype.slice.call(table.querySelectorAll('tbody tr'))
     .filter(function(tr){ return tr.style.display !== 'none'; });
   var theadLabels = table.querySelector('thead tr'); // só a 1ª linha do thead (nomes das colunas, sem a linha de busca)
-  var ROWS_POR_PAGINA = 18;
+  var ROWS_POR_PAGINA = 13;
   var totalPaginas = Math.max(1, Math.ceil(todasLinhas.length / ROWS_POR_PAGINA));
 
   var paginasHTML = '';
@@ -12227,12 +12415,12 @@ function descargaImprimir() {
     var topoPagina =
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
         '<img src="' + LOGO_B64 + '" style="height:34px;width:auto">' +
-        '<span style="font-size:11px;font-weight:700;color:#111827">MAC ' + _descMacSel + ' — Página ' + (p+1) + '/' + totalPaginas + '</span>' +
+        '<span style="font-size:14px;font-weight:700;color:#111827">MAC ' + _descMacSel + ' — Página ' + (p+1) + '/' + totalPaginas + '</span>' +
       '</div>' +
       (p === 0 ? ('<div style="margin-bottom:8px">' + cabecalho + '</div>') : '') +
       '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
-        '<strong style="font-size:13px">'+(title?title.textContent:'')+'</strong>' +
-        '<span style="color:#64748b">'+(count?count.textContent:'')+'</span>' +
+        '<strong style="font-size:15px">'+(title?title.textContent:'')+'</strong>' +
+        '<span style="color:#64748b;font-size:13px">'+(count?count.textContent:'')+'</span>' +
       '</div>';
 
     var tabelaPagina =
@@ -12246,9 +12434,9 @@ function descargaImprimir() {
   }
 
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Descarga '+_descMacSel+'</title>' +
-    '<style>body{font-family:Arial,sans-serif;font-size:10px;margin:12px}table{border-collapse:collapse;width:100%}' +
-    'th{background:#111827!important;color:#fff!important;padding:6px 8px;text-align:left;font-size:9px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-    'td{padding:5px 8px;border-bottom:1px solid #f1f5f9;font-size:9px}.atras{background:#fef2f2}.crit{background:#fff7ed}' +
+    '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:12px}table{border-collapse:collapse;width:100%}' +
+    'th{background:#111827!important;color:#fff!important;padding:7px 8px;text-align:left;font-size:12px!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    'td{padding:7px 8px;border-bottom:1px solid #f1f5f9;font-size:12px!important}td *{font-size:12px!important}.atras{background:#fef2f2}.crit{background:#fff7ed}' +
     '@page{size:landscape;margin:10mm}@media print{button{display:none}}</style></head><body>' +
     '<button onclick="window.print()" style="margin-bottom:8px;padding:4px 12px;background:#333333;color:#fff;border:none;border-radius:4px;cursor:pointer">Imprimir</button>' +
     paginasHTML + '</body></html>';
@@ -12258,6 +12446,140 @@ function descargaImprimir() {
 
   // Registra +1 impressão no Acompanhamento de Produção
   if (typeof descargaAcompRegistrarImpressao === 'function') descargaAcompRegistrarImpressao(_descMacSel);
+}
+
+// Imprime o relatório de TODOS os MACs da fila numa única janela.
+// Cada MAC gera seu próprio bloco (cabeçalho + paginação própria) e sempre
+// começa em uma folha nova — os CTRCs de um MAC nunca aparecem na folha de outro.
+function descargaImprimirTodos() {
+  var temFila = (_descColetaRanking && _descColetaRanking.length) || (_descMacRanking && _descMacRanking.length);
+  if (!temFila) {
+    if (typeof showToast==='function') showToast('Importe o TMS primeiro','error');
+    return;
+  }
+  var blocos = [];
+  // Mesma ordem da fila na tela: Coletas primeiro, depois Transferências
+  (_descColetaRanking || []).forEach(function(c) {
+    var mac = c.mac;
+    if (!mac) return;
+    var rows = (_relData||[]).filter(function(r){ return String(r.mac||'').trim() === String(mac).trim(); });
+    if (rows.length) blocos.push({ mac: mac, rows: rows, ehColeta: true });
+  });
+  (_descMacRanking || []).forEach(function(m) {
+    var mac = m.mac;
+    if (!mac) return;
+    var rows = (_relData||[]).filter(function(r){ return String(r.mac||'').trim() === String(mac).trim(); });
+    if (rows.length) blocos.push({ mac: mac, rows: rows, ehColeta: false });
+  });
+  if (!blocos.length) {
+    if (typeof showToast==='function') showToast('Nenhum CTRC encontrado para os MACs da fila','error');
+    return;
+  }
+
+  var tabelaTela = document.getElementById('desc-rel-table');
+  var theadLabels = tabelaTela ? tabelaTela.querySelector('thead tr') : null;
+  if (!theadLabels) return;
+
+  var horarioImpressao = new Date().toLocaleString('pt-BR');
+  var ROWS_POR_PAGINA = 13;
+
+  var totalPaginasGeral = 0;
+  blocos.forEach(function(b){ totalPaginasGeral += Math.max(1, Math.ceil(b.rows.length / ROWS_POR_PAGINA)); });
+
+  var paginaGlobal = 0;
+  var paginasHTML = '';
+
+  blocos.forEach(function(bloco, bIdx) {
+    var mac = bloco.mac;
+    var rows = bloco.rows;
+    var rotulo = bloco.ehColeta ? 'MEC' : 'MAC';
+
+    var filialOrigem = (rows[0] && rows[0].origem) ? rows[0].origem : '—';
+    var chegadaStr = '—', menorDt = null;
+    rows.forEach(function(r){
+      if (r.dtUlt && r.dtUlt !== '—') {
+        var pts = r.dtUlt.split('/');
+        if (pts.length >= 3) {
+          var dt = new Date(pts[2].substring(0,4), pts[1]-1, pts[0]);
+          if (!menorDt || dt < menorDt) { menorDt = dt; chegadaStr = r.dtUlt; }
+        }
+      }
+    });
+
+    var totalCtrcs = rows.length;
+    var totalVolumes = 0, totalPesoOpl = 0;
+    rows.forEach(function(r){
+      totalVolumes += parseFloat(String(r.vols||'0').replace(',','.')) || 0;
+      totalPesoOpl += r.peso || 0;
+    });
+
+    var cabecalho =
+      '<div style="display:flex;justify-content:space-between;gap:24px;border:1.5px solid #111827;border-radius:6px;padding:10px 14px">' +
+        '<div style="display:flex;flex-direction:column;gap:4px;font-size:13px">' +
+          '<div><strong>NR ' + rotulo + ':</strong> ' + mac + '</div>' +
+          '<div><strong>FILIAL DE ORIGEM:</strong> ' + filialOrigem + '</div>' +
+          '<div><strong>DATA DE CHEGADA:</strong> ' + chegadaStr + '</div>' +
+          '<div><strong>HORÁRIO DE IMPRESSÃO DESTE DOCUMENTO:</strong> ' + horarioImpressao + '</div>' +
+          '<div><strong>TOTAL DE CTRCS:</strong> ' + totalCtrcs + '</div>' +
+          '<div><strong>TOTAL DE VOLUMES:</strong> ' + totalVolumes.toLocaleString('pt-BR') + '</div>' +
+          '<div><strong>TOTAL PESO OPL:</strong> ' + totalPesoOpl.toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' kg</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:9px;font-size:13px;min-width:300px">' +
+          '<div>TURNO DE DESCARREGAMENTO: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:170px">&nbsp;</span></div>' +
+          '<div>INÍCIO DO DESCARREGAMENTO: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:160px">&nbsp;</span></div>' +
+          '<div>FIM DO DESCARREGAMENTO: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:170px">&nbsp;</span></div>' +
+          '<div>NOME CONFERENTE: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:200px">&nbsp;</span></div>' +
+          '<div>LÍDER RESPONSÁVEL: <span style="display:inline-block;border-bottom:1px solid #111827;min-width:200px">&nbsp;</span></div>' +
+        '</div>' +
+      '</div>';
+
+    var tituloMac = rotulo + ': ' + mac + (rows[0] && rows[0].macDest ? ' — ' + rows[0].macDest : '');
+    var totalPaginasMac = Math.max(1, Math.ceil(rows.length / ROWS_POR_PAGINA));
+    var ultimoBloco = (bIdx === blocos.length - 1);
+
+    for (var p = 0; p < totalPaginasMac; p++) {
+      paginaGlobal++;
+      var chunk = rows.slice(p * ROWS_POR_PAGINA, (p + 1) * ROWS_POR_PAGINA);
+      var ultimaFolhaDoc = ultimoBloco && (p === totalPaginasMac - 1);
+
+      var topoPagina =
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+          '<img src="' + LOGO_B64 + '" style="height:34px;width:auto">' +
+          '<span style="font-size:14px;font-weight:700;color:#111827">' + rotulo + ' ' + mac + ' — ' + (p+1) + '/' + totalPaginasMac +
+            ' (Página ' + paginaGlobal + '/' + totalPaginasGeral + ')</span>' +
+        '</div>' +
+        (p === 0 ? ('<div style="margin-bottom:8px">' + cabecalho + '</div>') : '') +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
+          '<strong style="font-size:15px">' + tituloMac + '</strong>' +
+          '<span style="color:#64748b;font-size:13px">' + rows.length + ' registros</span>' +
+        '</div>';
+
+      var tabelaPagina =
+        '<table><thead>' + theadLabels.outerHTML + '</thead><tbody>' +
+        chunk.map(_descLinhaHTML).join('') +
+        '</tbody></table>';
+
+      paginasHTML += '<div class="folha-descarga"' + (ultimaFolhaDoc ? '' : ' style="page-break-after:always"') + '>' +
+        topoPagina + tabelaPagina +
+        '</div>';
+    }
+  });
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Descarga — Todos os MACs</title>' +
+    '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:12px}table{border-collapse:collapse;width:100%}' +
+    'th{background:#111827!important;color:#fff!important;padding:7px 8px;text-align:left;font-size:12px!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    'td{padding:7px 8px;border-bottom:1px solid #f1f5f9;font-size:12px!important}td *{font-size:12px!important}.atras{background:#fef2f2}.crit{background:#fff7ed}' +
+    '@page{size:landscape;margin:10mm}@media print{button{display:none}}</style></head><body>' +
+    '<button onclick="window.print()" style="margin-bottom:8px;padding:4px 12px;background:#333333;color:#fff;border:none;border-radius:4px;cursor:pointer">Imprimir</button>' +
+    paginasHTML + '</body></html>';
+
+  var w = window.open('','_blank','width=1200,height=800');
+  w.document.write(html); w.document.close();
+
+  if (typeof descargaAcompRegistrarImpressao === 'function') {
+    blocos.forEach(function(b){ descargaAcompRegistrarImpressao(b.mac); });
+  }
+  if (typeof showToast==='function') showToast('Gerados ' + blocos.length + ' relatórios de MAC', 'info');
 }
 
 // Hook showTab
@@ -12336,6 +12658,75 @@ function _acompOutGet(id) {
   }
   return _acompOutData[id];
 }
+
+// ── Ordenação da tabela (linhas já preenchidas sempre no topo) ──────────────
+var _acompOutSortCol = '';
+var _acompOutSortDir = 1;
+var _ACOMP_OUT_COLS = ['gerado','destino','regiao','composicao','frota','status','pesoOpl','conferente','qtdConf','qtdAjud','horaInicio','horaFim'];
+
+function _acompOutPreenchido(rec) {
+  if (!rec) return false;
+  return !!(String(rec.pesoOpl||'').trim() || String(rec.conferente||'').trim() ||
+            String(rec.qtdConf||'').trim() || String(rec.qtdAjud||'').trim() ||
+            String(rec.horaInicio||'').trim() || String(rec.horaFim||'').trim());
+}
+
+function _acompOutSortVal(r, col) {
+  var rec = _acompOutGet(r._id);
+  if (col === 'gerado') return String(r.gerado||'');
+  if (col === 'destino') return String(r.destino||'');
+  if (col === 'regiao') return String(r.regiao||'');
+  if (col === 'composicao') return String(r.composicao||'');
+  if (col === 'frota') return String(r.frota||'');
+  if (col === 'status') return _acompOutStatusRank(r._id);
+  if (col === 'pesoOpl') return _parsePesoBR(rec.pesoOpl);
+  if (col === 'conferente') return String(rec.conferente||'');
+  if (col === 'qtdConf') return parseFloat(rec.qtdConf) || 0;
+  if (col === 'qtdAjud') return parseFloat(rec.qtdAjud) || 0;
+  if (col === 'horaInicio') return String(rec.horaInicio||'');
+  if (col === 'horaFim') return String(rec.horaFim||'');
+  return '';
+}
+
+function acompOutOrdenar(col) {
+  if (_acompOutSortCol === col) _acompOutSortDir = -_acompOutSortDir;
+  else { _acompOutSortCol = col; _acompOutSortDir = 1; }
+  acompOutRenderizar();
+}
+
+function _acompOutAtualizarSetas() {
+  _ACOMP_OUT_COLS.forEach(function(c) {
+    var el = document.getElementById('acompOut-arw-' + c);
+    if (el) el.textContent = (_acompOutSortCol === c) ? (_acompOutSortDir > 0 ? ' ↑' : ' ↓') : '';
+  });
+}
+
+// ── Proteção contra re-render enquanto o usuário digita ─────────────────────
+// Enquanto houver um campo em foco nesta aba, a tabela não é reconstruída: o
+// innerHTML seria substituído e o cursor sairia do campo. A renderização fica
+// pendente e ocorre assim que o foco sai. Dados remotos continuam sendo
+// recebidos e aplicados normalmente — só o desenho da tela é adiado.
+var _acompOutRenderPendente = false;
+
+function _acompOutFocoNaTabela() {
+  var ae = document.activeElement;
+  if (!ae) return false;
+  var tag = (ae.tagName || '').toUpperCase();
+  if (tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') return false;
+  var tab = document.getElementById('tab-acompOut-content');
+  return !!(tab && tab.contains(ae));
+}
+
+document.addEventListener('focusout', function(e) {
+  var tab = document.getElementById('tab-acompOut-content');
+  if (!tab || !tab.contains(e.target)) return;
+  setTimeout(function() {
+    if (_acompOutRenderPendente && !_acompOutFocoNaTabela()) {
+      _acompOutRenderPendente = false;
+      if (typeof acompOutRenderizar === 'function') acompOutRenderizar();
+    }
+  }, 150);
+}, true);
 
 function acompOutCampoAlterado(id, campo, valor) {
   var rec = _acompOutGet(id);
@@ -12460,6 +12851,8 @@ function acompOutRenderizar() {
   var tbody = document.getElementById('acompOut-tbody');
   if (!tbody) return;
   if (typeof progData === 'undefined') return;
+  // Usuário digitando: adia o redesenho para não tirar o cursor do campo
+  if (_acompOutFocoNaTabela()) { _acompOutRenderPendente = true; return; }
 
   var busca = ((document.getElementById('acompOut-busca')||{}).value || '').trim().toLowerCase();
   var filterDe = ((document.getElementById('acompOut-de')||{}).value || '').trim();
@@ -12482,6 +12875,19 @@ function acompOutRenderizar() {
     }
     return true;
   });
+
+  data.sort(function(a, b) {
+    // Linhas já preenchidas sempre acima das vazias
+    var pa = _acompOutPreenchido(_acompOutGet(a._id)) ? 0 : 1;
+    var pb = _acompOutPreenchido(_acompOutGet(b._id)) ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    if (!_acompOutSortCol) return 0;
+    var va = _acompOutSortVal(a, _acompOutSortCol);
+    var vb = _acompOutSortVal(b, _acompOutSortCol);
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * _acompOutSortDir;
+    return String(va).localeCompare(String(vb)) * _acompOutSortDir;
+  });
+  _acompOutAtualizarSetas();
 
   _acompOutUltimaLista = data;
 
@@ -13893,7 +14299,7 @@ function frotasProgramadasRenderizar() {
   // ── Velocímetros por turno: % de atuação do turno (rotas executadas ÷ total de rotas do turno) ──
   var gaugesDiv = document.getElementById('fp-gauges');
   if (gaugesDiv) {
-    var coresGauge = { '1º Turno': '#3fb950', '2º Turno': '#f0b429', '3º Turno': '#6b8cff' };
+    var coresGauge = { '1º Turno': '#3fb950', '2º Turno': '#3fb950', '3º Turno': '#3fb950' };
     var gaugesHtml = d.ordem.slice(0, 3).map(function(t) {
       var g = d.porTurnoExec[t] || { total: 0, executados: 0 };
       var pct = g.total ? Math.round(g.executados / g.total * 100) : 0;
@@ -14491,6 +14897,9 @@ function gestaoVistaRenderizar() {
     // Plano OUT = tudo disponível no relatório do TMS (Fila Inicial + Entrou Depois do dia)
     if (fluxoOut && fluxoOut.temTms) pesoTotalHoje = fluxoOut.plano;
     else pesoTotalHoje = pesoExecutado + pesoProgramado + pesoNaoIniciado;
+    // Programado no OUT = peso registrado hoje no Histórico de Relatório OUT
+    // (mesma fonte do card "Programado", para barra e card exibirem o mesmo número)
+    if (typeof _histRelOutPesoHoje === 'function') pesoProgramado = _histRelOutPesoHoje();
   } else {
     // IN: reaproveita os valores já calculados em _gvColetarDadosIN (deduplicados via Histórico de Relatório)
     pesoTotalHoje = dados.pesoPlano || 0;
@@ -14510,6 +14919,46 @@ function gestaoVistaRenderizar() {
   }
 
   var barraDiv = document.getElementById('gv-barra-estagios');
+
+  // ── KPIs de peso do dia — visões Descarga (IN) e Carregamento (OUT) ──
+  // Reaproveita os valores já calculados acima (mesma fonte da barra de estágios):
+  // Plano = fila do dia | Programado = Em andamento | Executado = Finalizado (Acompanhamento)
+  var inKpisDiv = document.getElementById('gv-kpis-peso');
+  if (inKpisDiv) {
+    if (_gvVisaoAtual !== 'in' && _gvVisaoAtual !== 'out') {
+      inKpisDiv.style.display = 'none';
+      inKpisDiv.innerHTML = '';
+    } else {
+      inKpisDiv.style.display = 'grid';
+      var ehOut = (_gvVisaoAtual === 'out');
+      var subPlano = ehOut ? 'Peso total a carregar' : 'Peso total a descarregar';
+      var subExec = ehOut ? 'Peso total já Carregado' : 'Peso total já Descarregado';
+      // Programado: no OUT já vem do Histórico de Relatório OUT (mesma fonte da barra acima)
+      var pctEficiencia = pesoPlano ? Math.round((pesoExecutado / pesoPlano) * 100) : 0;
+      if (pctEficiencia > 100) pctEficiencia = 100;
+      var corEfic = pctEficiencia >= 80 ? '#3fb950' : (pctEficiencia >= 50 ? '#f0b429' : '#ef4444');
+      inKpisDiv.innerHTML =
+        _fpKpiCard('Plano do dia', Math.round(pesoPlano), '#ffffff', ' kg', subPlano) +
+        _fpKpiCard('Programado', Math.round(pesoProgramado), '#f0b429', ' kg', 'Peso total Programado') +
+        _fpKpiCard('Executado', Math.round(pesoExecutado), '#3fb950', ' kg', subExec) +
+        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box;display:flex;flex-direction:column">' +
+          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">% Eficiência</div>' +
+          '<div style="flex:1;display:flex;align-items:center;justify-content:center">' +
+            '<div style="position:relative;width:104px;height:104px">' +
+              '<svg viewBox="0 0 36 36" style="width:104px;height:104px;transform:rotate(-90deg)">' +
+                '<circle cx="18" cy="18" r="15.9" fill="none" stroke="#2b2b2b" stroke-width="3.6"/>' +
+                '<circle cx="18" cy="18" r="15.9" fill="none" stroke="' + corEfic + '" stroke-width="3.6" stroke-dasharray="' + pctEficiencia + ' ' + (100 - pctEficiencia) + '" stroke-linecap="round"/>' +
+              '</svg>' +
+              '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column">' +
+                '<span style="font-size:22px;font-weight:800;color:' + corEfic + '">' + pctEficiencia + '%</span>' +
+                '<span style="font-size:9px;color:#6b6b6b">executado</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }
+  }
+
   if (barraDiv) {
     // ── Barra de progressão única (estilo pílula): o esqueleto é construído apenas uma vez;
     // nas renderizações seguintes só as larguras/textos são atualizados, e a transição CSS
@@ -14591,7 +15040,7 @@ function gestaoVistaRenderizar() {
       return '<div style="flex:1;text-align:center;cursor:pointer;border-radius:8px;padding:4px;'+(selecionado?'background:rgba(255,255,255,.06)':'')+'" ' +
         'onclick="gestaoVistaFiltrarTurno(\''+t+'\')" ' +
         'onmousemove="_gvTooltipMostrar(event, \''+tooltipHtml.replace(/'/g,"\\'")+'\')" onmouseout="_gvTooltipEsconder()">' +
-        _gvGaugeSvg(pct, corVisao, t, pct + '%') +
+        _gvGaugeSvg(pct, '#3fb950', t, pct + '%') +
         '<div style="font-size:10px;color:#9a9a9a;margin-top:2px">' + Math.round(feitoPeso) + ' de ' + Math.round(pesoPlanoTotal) + ' kg</div>' +
       '</div>';
     }).join('');
@@ -14866,13 +15315,95 @@ function gestaoVistaRenderizar() {
   // ── Em Trânsito: peso vindo da aba Trânsito, com destino GRU ──
   var transitoDiv = document.getElementById('gv-card-transito');
   if (transitoDiv) {
-    var pesoTransito = (_gvVisaoAtual === 'in') ? (dados.pesoTransito || 0) : 0;
-    transitoDiv.innerHTML =
-      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
-        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Em Trânsito (chegando para GRU)</div>' +
-        '<div style="font-size:26px;font-weight:800;color:#fff">' + Math.round(pesoTransito).toLocaleString('pt-BR') + ' kg</div>' +
-        '<div style="font-size:11px;color:#9a9a9a;margin-top:4px">Fonte: aba Trânsito' + (_gvVisaoAtual==='out' ? ' (mostrado somente na visão IN por enquanto)' : '') + '</div>' +
-      '</div>';
+    if (_gvVisaoAtual === 'in') {
+      // ── CTRCs por Criticidade de Entrega, por DESTINO dos MACs da fila de Descarga (TOP 7) ──
+      // A fila (_descMacRanking) só é montada em descargaRenderizar(); se o usuário abriu o
+      // painel sem passar pela aba Descarga, ela está vazia — então populamos aqui.
+      if ((typeof _descMacRanking === 'undefined' || !_descMacRanking.length) &&
+          typeof _relData !== 'undefined' && _relData.length &&
+          typeof descargaRenderizar === 'function') {
+        try { descargaRenderizar(); } catch (e) {}
+      }
+      var filaMacs = (typeof _descMacRanking !== 'undefined' && _descMacRanking) ? _descMacRanking : [];
+
+      // MAC -> rótulo de destino (mesma regra da lista de MACs da tela de Descarga)
+      var macDestino = {};
+      filaMacs.forEach(function(m) {
+        var usaRem = (m._isAN && m.remetente) || ((m.dest||'').toUpperCase() === 'EXA' && m.remetente);
+        macDestino[m.mac] = String((usaRem ? m.remetente : m.dest) || '—').trim() || '—';
+      });
+
+      // Classificação por CTRC único (prioridade: Cliente crítico > Agendamento > Fluxo),
+      // lida do campo "cliente" do TMS — o mesmo da coluna CRITICIDADE DE ENTREGA.
+      var relD = (typeof _relData !== 'undefined' && _relData) ? _relData : [];
+      var vistos = {}, porDestino = {};
+      relD.forEach(function(r) {
+        var mac = String(r.mac || '').trim();
+        if (!mac || macDestino[mac] === undefined) return;
+        var chave = mac + '|' + (r.ctrc || ('N' + (r.nota||'') + (r.remetente||'')));
+        var cli = String(r.cliente || '');
+        var nivel = cli.indexOf('Cliente critico') !== -1 ? 2 : (cli.indexOf('Agendamento') !== -1 ? 1 : 0);
+        if (vistos[chave] !== undefined) {
+          if (nivel > vistos[chave].nivel) vistos[chave].nivel = nivel;
+          return;
+        }
+        vistos[chave] = { dest: macDestino[mac], nivel: nivel };
+      });
+      Object.keys(vistos).forEach(function(k) {
+        var v = vistos[k];
+        if (!porDestino[v.dest]) porDestino[v.dest] = { dest: v.dest, ctrcs: 0, critico: 0, agend: 0 };
+        porDestino[v.dest].ctrcs++;
+        if (v.nivel === 2) porDestino[v.dest].critico++;
+        else if (v.nivel === 1) porDestino[v.dest].agend++;
+      });
+
+      var topDestinos = Object.keys(porDestino).map(function(k){ return porDestino[k]; })
+        .filter(function(d){ return (d.critico + d.agend) > 0; })
+        .sort(function(a, b){ return (b.critico + b.agend) - (a.critico + a.agend); })
+        .slice(0, 7);
+
+      var linhasHtml = topDestinos.map(function(d) {
+        var pctC = d.ctrcs ? Math.round((d.critico / d.ctrcs) * 100) : 0;
+        var pctA = d.ctrcs ? Math.round((d.agend  / d.ctrcs) * 100) : 0;
+        if (pctC + pctA > 100) pctA = Math.max(0, 100 - pctC); // trava de arredondamento
+        var titulo = d.dest + ': ' + d.critico + ' cliente(s) crítico(s) e ' + d.agend + ' com agendamento, de ' + d.ctrcs + ' CTRCs';
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px" title="' + titulo.split('"').join('&quot;') + '">' +
+          '<span style="width:58px;flex:none;font-size:12px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + d.dest + '</span>' +
+          '<div style="flex:1;height:18px;background:#262626;border-radius:4px;overflow:hidden;display:flex">' +
+            '<div style="width:' + pctC + '%;height:100%;background:#ef4444;transition:width .9s cubic-bezier(.4,0,.2,1)"></div>' +
+            '<div style="width:' + pctA + '%;height:100%;background:#f87171;transition:width .9s cubic-bezier(.4,0,.2,1)"></div>' +
+          '</div>' +
+          '<span style="width:44px;flex:none;font-size:13px;font-weight:800;color:#ef4444;text-align:right">' + (pctC + pctA) + '%</span>' +
+        '</div>';
+      }).join('');
+
+      if (!linhasHtml) {
+        linhasHtml = '<div style="font-size:12px;color:#6b6b6b;padding:12px 0">' +
+          (filaMacs.length ? 'Nenhum CTRC com criticidade na fila.' : 'Importe o relatório do TMS na aba Descarga.') + '</div>';
+      }
+
+      transitoDiv.innerHTML =
+        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box;display:flex;flex-direction:column">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px">' +
+            '<span style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em">Criticidade de Entrega por Destino — Top 7</span>' +
+            '<span style="font-size:10px;color:#9a9a9a">' +
+              '<span style="color:#ef4444">&#9632;</span> Cliente Crítico &nbsp;<span style="color:#f87171">&#9632;</span> Agendamento' +
+            '</span>' +
+          '</div>' +
+          linhasHtml +
+          '<div style="margin-top:auto;padding-top:10px;border-top:1px solid #262626;font-size:11px;color:#9a9a9a">' +
+            '% sobre os CTRCs de cada destino na fila de Descarga' +
+          '</div>' +
+        '</div>';
+    } else {
+      var pesoTransito = 0;
+      transitoDiv.innerHTML =
+        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
+          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Em Trânsito (chegando para GRU)</div>' +
+          '<div style="font-size:26px;font-weight:800;color:#fff">' + Math.round(pesoTransito).toLocaleString('pt-BR') + ' kg</div>' +
+          '<div style="font-size:11px;color:#9a9a9a;margin-top:4px">Fonte: aba Trânsito (mostrado somente na visão IN por enquanto)</div>' +
+        '</div>';
+    }
   }
 
   // ── Replay das animações a cada visita à aba ──
