@@ -3936,7 +3936,30 @@ function relExecutarExport() {
 }
 
 // ── IMPRESSÃO ──
+// Padrão fixo de colunas da impressão do Planejamento OUT (ordem definida pela operação).
+// A janela de seleção manual deixou de ser usada — o botão Imprimir vai direto para o relatório.
+var REL_PRINT_COLS_PADRAO = [
+  'dtPrev',       // 1  PREV. EMBARQUE
+  'cliente',      // 2  CRITICIDADE DE ENTREGA
+  'equip',        // 3  EQUIPAMENTO
+  'dataMax',      // 4  DT. ENTREGA MÁX.
+  'dtUlt',        // 5  DT. ÚLT. POSIÇÃO
+  'ctrc',         // 6  CTRC
+  'origem',       // 7  ORIGEM
+  'destino',      // 8  DESTINO
+  'remetente',    // 9  REMETENTE
+  'destinatario', // 10 DESTINATÁRIO
+  'posicao',      // 11 POSIÇÃO
+  'peso',         // 12 PESO (KG)
+  'vols',         // 13 VOLS.
+  'valor'         // 14 VALOR (R$)
+];
+
 function relAbrirImpressao() {
+  if (!_relFilt.length) { showToast('Sem dados para imprimir','error'); return; }
+  relExecutarImpressao();
+}
+function relAbrirImpressaoSelecaoColunas() {
   if (!_relFilt.length) { showToast('Sem dados para imprimir','error'); return; }
   document.getElementById('rel-print-count').textContent = _relFilt.length.toLocaleString('pt-BR');
   var saved = JSON.parse(localStorage.getItem('rel_print_cols') || 'null');
@@ -3953,10 +3976,9 @@ function relPrintSelAll()  { document.querySelectorAll('#rel-print-cols input').
 function relPrintSelNone() { document.querySelectorAll('#rel-print-cols input').forEach(function(c){c.checked=false;}); }
 
 function relExecutarImpressao() {
-  var selCols = [];
-  document.querySelectorAll('#rel-print-cols input:checked').forEach(function(c){ selCols.push(c.getAttribute('data-key')); });
-  if (!selCols.length) { showToast('Selecione ao menos uma coluna','error'); return; }
-  try { localStorage.setItem('rel_print_cols', JSON.stringify(selCols)); } catch(e){}
+  // Padrão fixo de colunas — não depende mais da seleção manual
+  var selCols = REL_PRINT_COLS_PADRAO.slice();
+  if (!_relFilt.length) { showToast('Sem dados para imprimir','error'); return; }
   relFecharImpressao();
 
   var colMap = {};
@@ -3996,8 +4018,7 @@ function relExecutarImpressao() {
   });
   ordemDestinos.sort();
 
-  // 2) Para cada destino: totais, Frota (vinda de Recurso Programado / progData) e paginação
-  var ROWS_POR_PAGINA = 13;
+  // 2) Para cada destino: totais e Frota (vinda de Recurso Programado / progData)
   var folhas = [];
 
   ordemDestinos.forEach(function(dest) {
@@ -4050,29 +4071,21 @@ function relExecutarImpressao() {
         '</div>' +
       '</div>';
 
-    for (var i = 0; i < rows.length; i += ROWS_POR_PAGINA) {
-      var chunk = rows.slice(i, i + ROWS_POR_PAGINA);
-      folhas.push({
-        destino: dest, frota: frotaStr, cabecalho: cabecalho, rows: chunk,
-        primeiraDoGrupo: (i === 0),
-        ultimaDoGrupo: (i + ROWS_POR_PAGINA >= rows.length)
-      });
-    }
+    // Um bloco por destino; a tabela flui e o navegador quebra ao encher a folha
+    folhas.push({ destino: dest, frota: frotaStr, cabecalho: cabecalho, rows: rows });
   });
 
-  var totalPaginasGeral = folhas.length || 1;
   var agora = new Date();
   var dataStr = agora.toLocaleDateString('pt-BR');
   var horaStr = agora.toLocaleTimeString('pt-BR');
 
   var paginasHTML = folhas.map(function(folha, idx) {
-    var pageNum = idx + 1;
     var topo =
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
         '<img src="' + LOGO_B64 + '" style="height:34px;width:auto">' +
-        '<span style="font-size:14px;font-weight:700;color:#111827">' + dataStr + ' – ' + horaStr + ' – Página ' + pageNum + '/' + totalPaginasGeral + '</span>' +
+        '<span style="font-size:14px;font-weight:700;color:#111827">' + dataStr + ' – ' + horaStr + ' – ' + folha.destino + '</span>' +
       '</div>' +
-      (folha.primeiraDoGrupo ? '<div style="margin-bottom:8px">' + folha.cabecalho + '</div>' : '');
+      '<div style="margin-bottom:8px">' + folha.cabecalho + '</div>';
 
     var tbodyFolha = folha.rows.map(function(r) {
       return '<tr>' + selCols.map(function(k){ return celulaHTML(r, k); }).join('') + '</tr>';
@@ -4080,7 +4093,8 @@ function relExecutarImpressao() {
 
     var tabela = '<table><thead>' + theadRow + '</thead><tbody>' + tbodyFolha + '</tbody></table>';
 
-    return '<div class="folha-relatorio"' + (pageNum < totalPaginasGeral ? ' style="page-break-after:always"' : '') + '>' +
+    // Cada destino começa em folha nova; dentro dele a tabela preenche a página inteira
+    return '<div class="folha-relatorio"' + (idx > 0 ? ' style="page-break-before:always"' : '') + '>' +
       topo + tabela +
       '</div>';
   }).join('');
@@ -4090,10 +4104,11 @@ function relExecutarImpressao() {
   }
 
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Carregamento de Produção</title>' +
-    '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:12px} table{border-collapse:collapse;width:100%} ' +
+    '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:0} table{border-collapse:collapse;width:100%} ' +
     'th{-webkit-print-color-adjust:exact;print-color-adjust:exact} ' +
     'td *{font-size:12px!important} ' +
-    '@page{size:landscape;margin:10mm} @media print{button{display:none}}</style></head><body>' +
+    'thead{display:table-header-group} tr{page-break-inside:avoid;break-inside:avoid} ' +
+    '@page{size:landscape;margin:8mm} @media print{button{display:none}}</style></head><body>' +
     '<button onclick="window.print()" style="margin-bottom:10px;padding:5px 14px;background:#333333;color:#fff;border:none;border-radius:5px;cursor:pointer">Imprimir</button>' +
     paginasHTML + '</body></html>';
 
@@ -11322,6 +11337,14 @@ function _descSortRows(rows) {
     return asc ? va.localeCompare(vb) : vb.localeCompare(va);
   });
 }
+// Larguras das 14 colunas do relatório impresso de Descarga (soma 100%), para a
+// tabela caber na largura da folha sem o navegador encolher ou cortar o conteúdo.
+var _DESC_COLGROUP = '<colgroup>' +
+  '<col class="c-data"><col class="c-data"><col class="c-crit"><col class="c-sig"><col class="c-sig">' +
+  '<col class="c-doc"><col class="c-doc"><col class="c-nome"><col class="c-nome">' +
+  '<col class="c-mac"><col class="c-vol"><col class="c-peso"><col class="c-valor">' +
+'</colgroup>';
+
 // Monta o <tr> de um CTRC no relatório de Descarga. Extraído de descFiltrar() para
 // que a impressão em lote (todos os MACs) gere exatamente as mesmas linhas.
 function _descLinhaHTML(r) {
@@ -12399,45 +12422,41 @@ function descargaImprimir() {
       '</div>' +
     '</div>';
 
-  // ── Paginação feita em JS (não depende do navegador cortar a tabela) ──
-  // Pega só as linhas visíveis (respeitando os filtros já aplicados na tela)
+  // ── Tabela contínua: o navegador quebra a página quando a folha enche ──
+  // Evita sobra de papel: com número fixo de linhas por folha, qualquer mudança de
+  // fonte/margem/impressora deixava metade da página em branco.
   var todasLinhas = Array.prototype.slice.call(table.querySelectorAll('tbody tr'))
     .filter(function(tr){ return tr.style.display !== 'none'; });
   var theadLabels = table.querySelector('thead tr'); // só a 1ª linha do thead (nomes das colunas, sem a linha de busca)
-  var ROWS_POR_PAGINA = 13;
-  var totalPaginas = Math.max(1, Math.ceil(todasLinhas.length / ROWS_POR_PAGINA));
 
-  var paginasHTML = '';
-  for (var p = 0; p < totalPaginas; p++) {
-    var linhasPagina = todasLinhas.slice(p * ROWS_POR_PAGINA, (p + 1) * ROWS_POR_PAGINA);
-    var ultimaPagina = (p === totalPaginas - 1);
+  var topoDocumento =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+      '<img src="' + LOGO_B64 + '" style="height:34px;width:auto">' +
+      '<span style="font-size:14px;font-weight:700;color:#111827">MAC ' + _descMacSel + '</span>' +
+    '</div>' +
+    '<div style="margin-bottom:8px">' + cabecalho + '</div>' +
+    '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
+      '<strong style="font-size:15px">'+(title?title.textContent:'')+'</strong>' +
+      '<span style="color:#64748b;font-size:13px">'+(count?count.textContent:'')+'</span>' +
+    '</div>';
 
-    var topoPagina =
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-        '<img src="' + LOGO_B64 + '" style="height:34px;width:auto">' +
-        '<span style="font-size:14px;font-weight:700;color:#111827">MAC ' + _descMacSel + ' — Página ' + (p+1) + '/' + totalPaginas + '</span>' +
-      '</div>' +
-      (p === 0 ? ('<div style="margin-bottom:8px">' + cabecalho + '</div>') : '') +
-      '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
-        '<strong style="font-size:15px">'+(title?title.textContent:'')+'</strong>' +
-        '<span style="color:#64748b;font-size:13px">'+(count?count.textContent:'')+'</span>' +
-      '</div>';
-
-    var tabelaPagina =
-      '<table><thead>' + theadLabels.outerHTML + '</thead><tbody>' +
-      linhasPagina.map(function(tr){ return tr.outerHTML; }).join('') +
-      '</tbody></table>';
-
-    paginasHTML += '<div class="folha-descarga"' + (ultimaPagina ? '' : ' style="page-break-after:always"') + '>' +
-      topoPagina + tabelaPagina +
-      '</div>';
-  }
+  var paginasHTML = '<div class="folha-descarga">' + topoDocumento +
+    '<table>' + _DESC_COLGROUP + '<thead>' + theadLabels.outerHTML + '</thead><tbody>' +
+    todasLinhas.map(function(tr){ return tr.outerHTML; }).join('') +
+    '</tbody></table></div>';
 
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Descarga '+_descMacSel+'</title>' +
-    '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:12px}table{border-collapse:collapse;width:100%}' +
-    'th{background:#111827!important;color:#fff!important;padding:7px 8px;text-align:left;font-size:12px!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-    'td{padding:7px 8px;border-bottom:1px solid #f1f5f9;font-size:12px!important}td *{font-size:12px!important}.atras{background:#fef2f2}.crit{background:#fff7ed}' +
-    '@page{size:landscape;margin:10mm}@media print{button{display:none}}</style></head><body>' +
+    '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:0}' +
+    'table{border-collapse:collapse;width:100%;table-layout:fixed}' +
+    'th{background:#111827!important;color:#fff!important;padding:4px 5px;text-align:left;font-size:11px!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    'td{padding:4px 5px;border-bottom:1px solid #f1f5f9;font-size:11px!important}td *{font-size:11px!important}.atras{background:#fef2f2}.crit{background:#fff7ed}' +
+    'td{white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;max-width:none!important}' +
+    'th{white-space:normal!important;overflow:visible;text-overflow:clip;max-width:none!important;line-height:1.15}' +
+    'th:nth-child(10),td:nth-child(10){display:none}' +
+    'col.c-data{width:7%}col.c-crit{width:10%}col.c-sig{width:6%}col.c-doc{width:8%}col.c-nome{width:16%}' +
+    'col.c-mac{width:8%}col.c-vol{width:4%}col.c-peso{width:6%}col.c-valor{width:8%}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
+    '@page{size:landscape;margin:8mm}@media print{button{display:none}}</style></head><body>' +
     '<button onclick="window.print()" style="margin-bottom:8px;padding:4px 12px;background:#333333;color:#fff;border:none;border-radius:4px;cursor:pointer">Imprimir</button>' +
     paginasHTML + '</body></html>';
 
@@ -12481,12 +12500,7 @@ function descargaImprimirTodos() {
   if (!theadLabels) return;
 
   var horarioImpressao = new Date().toLocaleString('pt-BR');
-  var ROWS_POR_PAGINA = 13;
 
-  var totalPaginasGeral = 0;
-  blocos.forEach(function(b){ totalPaginasGeral += Math.max(1, Math.ceil(b.rows.length / ROWS_POR_PAGINA)); });
-
-  var paginaGlobal = 0;
   var paginasHTML = '';
 
   blocos.forEach(function(bloco, bIdx) {
@@ -12534,42 +12548,40 @@ function descargaImprimirTodos() {
       '</div>';
 
     var tituloMac = rotulo + ': ' + mac + (rows[0] && rows[0].macDest ? ' — ' + rows[0].macDest : '');
-    var totalPaginasMac = Math.max(1, Math.ceil(rows.length / ROWS_POR_PAGINA));
-    var ultimoBloco = (bIdx === blocos.length - 1);
+    var primeiroBloco = (bIdx === 0);
 
-    for (var p = 0; p < totalPaginasMac; p++) {
-      paginaGlobal++;
-      var chunk = rows.slice(p * ROWS_POR_PAGINA, (p + 1) * ROWS_POR_PAGINA);
-      var ultimaFolhaDoc = ultimoBloco && (p === totalPaginasMac - 1);
+    var topoBloco =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<img src="' + LOGO_B64 + '" style="height:34px;width:auto">' +
+        '<span style="font-size:14px;font-weight:700;color:#111827">' + rotulo + ' ' + mac + '</span>' +
+      '</div>' +
+      '<div style="margin-bottom:8px">' + cabecalho + '</div>' +
+      '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
+        '<strong style="font-size:15px">' + tituloMac + '</strong>' +
+        '<span style="color:#64748b;font-size:13px">' + rows.length + ' registros</span>' +
+      '</div>';
 
-      var topoPagina =
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-          '<img src="' + LOGO_B64 + '" style="height:34px;width:auto">' +
-          '<span style="font-size:14px;font-weight:700;color:#111827">' + rotulo + ' ' + mac + ' — ' + (p+1) + '/' + totalPaginasMac +
-            ' (Página ' + paginaGlobal + '/' + totalPaginasGeral + ')</span>' +
-        '</div>' +
-        (p === 0 ? ('<div style="margin-bottom:8px">' + cabecalho + '</div>') : '') +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
-          '<strong style="font-size:15px">' + tituloMac + '</strong>' +
-          '<span style="color:#64748b;font-size:13px">' + rows.length + ' registros</span>' +
-        '</div>';
-
-      var tabelaPagina =
-        '<table><thead>' + theadLabels.outerHTML + '</thead><tbody>' +
-        chunk.map(_descLinhaHTML).join('') +
-        '</tbody></table>';
-
-      paginasHTML += '<div class="folha-descarga"' + (ultimaFolhaDoc ? '' : ' style="page-break-after:always"') + '>' +
-        topoPagina + tabelaPagina +
-        '</div>';
-    }
+    // Cada MAC/MEC começa em folha nova; dentro do bloco a tabela flui e enche a página
+    paginasHTML += '<div class="folha-descarga"' + (primeiroBloco ? '' : ' style="page-break-before:always"') + '>' +
+      topoBloco +
+      '<table>' + _DESC_COLGROUP + '<thead>' + theadLabels.outerHTML + '</thead><tbody>' +
+      rows.map(_descLinhaHTML).join('') +
+      '</tbody></table>' +
+      '</div>';
   });
 
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Descarga — Todos os MACs</title>' +
-    '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:12px}table{border-collapse:collapse;width:100%}' +
-    'th{background:#111827!important;color:#fff!important;padding:7px 8px;text-align:left;font-size:12px!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-    'td{padding:7px 8px;border-bottom:1px solid #f1f5f9;font-size:12px!important}td *{font-size:12px!important}.atras{background:#fef2f2}.crit{background:#fff7ed}' +
-    '@page{size:landscape;margin:10mm}@media print{button{display:none}}</style></head><body>' +
+    '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:0}' +
+    'table{border-collapse:collapse;width:100%;table-layout:fixed}' +
+    'th{background:#111827!important;color:#fff!important;padding:4px 5px;text-align:left;font-size:11px!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    'td{padding:4px 5px;border-bottom:1px solid #f1f5f9;font-size:11px!important}td *{font-size:11px!important}.atras{background:#fef2f2}.crit{background:#fff7ed}' +
+    'td{white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;max-width:none!important}' +
+    'th{white-space:normal!important;overflow:visible;text-overflow:clip;max-width:none!important;line-height:1.15}' +
+    'th:nth-child(10),td:nth-child(10){display:none}' +
+    'col.c-data{width:7%}col.c-crit{width:10%}col.c-sig{width:6%}col.c-doc{width:8%}col.c-nome{width:16%}' +
+    'col.c-mac{width:8%}col.c-vol{width:4%}col.c-peso{width:6%}col.c-valor{width:8%}' +
+    'thead{display:table-header-group}tr{page-break-inside:avoid;break-inside:avoid}' +
+    '@page{size:landscape;margin:8mm}@media print{button{display:none}}</style></head><body>' +
     '<button onclick="window.print()" style="margin-bottom:8px;padding:4px 12px;background:#333333;color:#fff;border:none;border-radius:4px;cursor:pointer">Imprimir</button>' +
     paginasHTML + '</body></html>';
 
