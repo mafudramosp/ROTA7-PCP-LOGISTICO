@@ -487,6 +487,15 @@
   .dot-fora { background: var(--fora); }
   
   .row-pos { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text3); }
+
+  /* Tela Programar: colunas 2 (Status Carregamento) e 13 (Prev. Fechamento) ocultas apenas
+     visualmente. Os inputs continuam no DOM e com os mesmos ids (ocup_, status_, prev_),
+     porque autoSalvarLinha() os lê para decidir o que salvar — removê-los do HTML faria
+     um registro que só tem ocupação ou previsão ser apagado automaticamente. */
+  #table-prog thead th:nth-child(2),
+  #table-prog tbody td:nth-child(2),
+  #table-prog thead th:nth-child(13),
+  #table-prog tbody td:nth-child(13) { display: none; }
   
   .search-box { position: relative; }
   .search-box input { padding-left: 28px; width: 200px; }
@@ -1996,15 +2005,21 @@ function _gradeAtualizarComMalha(rows) {
     if (!pernas.length) continue; // sem horário de saída definido, não gera linha de grade
 
     for (var d = 0; d < diasCols.length; d++) {
-      var ativo = r[diasCols[d]] && String(r[diasCols[d]]).trim() !== '';
-      if (!ativo) continue;
-      for (var p = 0; p < pernas.length; p++) {
+      // A célula do dia (H..N) traz a QUANTIDADE de viagens daquele dia da semana.
+      // Antes o código gerava uma linha por horário de saída preenchido, ignorando esse
+      // número — o que inflava a contagem do dia (ex.: célula "1" com 4 saídas virava 4).
+      var celDia = r[diasCols[d]];
+      var txtDia = String(celDia == null ? '' : celDia).trim();
+      if (!txtDia) continue; // dia sem marcação: a rota não roda
+      var qtdDia = parseInt(txtDia.replace(',', '.'), 10);
+      if (!isFinite(qtdDia) || qtdDia <= 0) qtdDia = 1; // marcação não numérica (X, SIM) = 1 viagem
+      for (var v = 0; v < qtdDia; v++) {
         novo.push({
           origem: origem,
           destino: destino,
           regiao: regiao,
           composicao: composicao,
-          saida: pernas[p],
+          saida: pernas[v % pernas.length],
           dia: DIAS_SEMANA_MALHA[d],
           freq: 1
         });
@@ -2055,6 +2070,7 @@ function _gradeAtualizarComMalha(rows) {
       <button id="gv-btn-in" onclick="gestaoVistaTrocarVisao('in')" style="padding:7px 18px;border-radius:4px;border:1px solid #e8e8e8;background:#e8e8e8;color:#111;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Descarga (IN)</button>
       <button id="gv-btn-out" onclick="gestaoVistaTrocarVisao('out')" style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Carregamento (OUT)</button>
       <button id="gv-btn-fp" onclick="gestaoVistaTrocarVisao('fp')" style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Frotas Programadas</button>
+      <button id="gv-btn-ext" onclick="gestaoVistaTrocarVisao('extrato')" style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Extrato do Dia</button>
 
       <div id="gv-filtro-ativo" style="margin-left:8px"></div>
     </div>
@@ -2089,7 +2105,7 @@ function _gradeAtualizarComMalha(rows) {
     <!-- Container para visão Frotas Programadas -->
     <div id="gv-fp-container" style="display:none">
       <!-- KPIs grandes em linguagem simples -->
-      <div id="fp-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px"></div>
+      <div id="fp-kpis" style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:16px"></div>
 
       <!-- Barra de progresso: Executado / Em Carregamento / Aguardando (das rotas já programadas) -->
       <div id="fp-barra" style="margin-bottom:20px"></div>
@@ -2105,6 +2121,14 @@ function _gradeAtualizarComMalha(rows) {
         <div id="fp-pendentes"></div>
         <div id="fp-criticos"></div>
       </div>
+    </div>
+
+    <!-- Container para visão Extrato do Dia (consolidado IN + OUT + Frotas) -->
+    <div id="gv-extrato-container" style="display:none">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:14px" id="ext-nav-dia"></div>
+      <div id="ext-cards-topo" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px"></div>
+      <div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Resumo Consolidado por Processo</div>
+      <div id="ext-processos"></div>
     </div>
 
     <!-- Tooltip flutuante (popup ao passar o mouse) -->
@@ -2130,6 +2154,7 @@ function _gradeAtualizarComMalha(rows) {
     <button id="btn-hist-periodo-hoje" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('hoje')" style="font-size:11px" title="Ver registros de hoje">Hoje</button>
     <button id="btn-hist-periodo-24h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('24h')" style="font-size:11px" title="Ver registros das últimas 24 horas">24h</button>
     <button id="btn-hist-periodo-48h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('48h')" style="font-size:11px" title="Ver registros das últimas 48 horas">48h</button>
+    <button id="btn-hist-periodo-72h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('72h')" style="font-size:11px" title="Ver registros das últimas 72 horas (janela completa de retenção)">72h</button>
     <div style="margin-left:auto;display:flex;gap:8px">
       <button id="btn-excluir-sel" class="btn btn-danger btn-sm" onclick="excluirSelecionados()" disabled style="opacity:0.4;cursor:not-allowed" title="Excluir os registros selecionados">Excluir selecionados</button>
       <button class="btn btn-ghost btn-sm" onclick="exportCSV('hist')" title="Exportar os registros para Excel">Exportar Excel</button>
@@ -3597,6 +3622,7 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function(){ sbCarregarRelatorio(true); }, 1500);
   // Carregar Histórico de Relatório do Supabase (compartilhado entre usuários)
   if (typeof _relatorioHistoricoCarregarSupabase === 'function') setTimeout(_relatorioHistoricoCarregarSupabase, 1300);
+  if (typeof _histRelOutCarregarSupabase === 'function') setTimeout(_histRelOutCarregarSupabase, 1500);
   // Carregar Acompanhamento de Produção do Supabase (horas/conferente/impressões + fila/"Finalizado Anteriormente")
   if (typeof _descAcompCarregarSupabase === 'function') setTimeout(_descAcompCarregarSupabase, 1400);
   if (typeof _descAcompListaCarregarSupabase === 'function') setTimeout(_descAcompListaCarregarSupabase, 1450);
@@ -4410,6 +4436,76 @@ var etiqBadge={'Coleta':'rel-badge-colet','Reembarque':'rel-badge-remb'};
 var _histRelOut = [];
 try { _histRelOut = JSON.parse(localStorage.getItem('hist_rel_out_v1') || '[]'); } catch(ex) { _histRelOut = []; }
 
+// ── Histórico de Relatório OUT compartilhado (Supabase) ──
+// Antes o histórico vivia só no localStorage: o que um usuário gerava, os outros não viam.
+// Agora é gravado na tabela "configuracoes", como já acontece com o histórico do IN.
+var HIST_REL_OUT_CHAVE = 'hist_rel_out';
+var HIST_REL_OUT_RETENCAO_H = 48; // registros com mais de 48h são descartados
+
+// Remove os snapshots que passaram da janela de retenção
+function _histRelOutPodar(lista) {
+  var agora = Date.now();
+  var limiteMs = HIST_REL_OUT_RETENCAO_H * 60 * 60 * 1000;
+  return (lista || []).filter(function(s) {
+    if (!s || !s.ts) return false;
+    var t = new Date(s.ts).getTime();
+    if (isNaN(t)) return false;
+    return (agora - t) <= limiteMs;
+  });
+}
+
+function _histRelOutPersistir() {
+  _histRelOut = _histRelOutPodar(_histRelOut);
+  try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+  _histRelOutSalvarSupabase();
+}
+
+function _histRelOutSalvarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ chave: HIST_REL_OUT_CHAVE, valor: JSON.stringify(_histRelOut) })
+    }).catch(function(){});
+  } catch(e) {}
+}
+
+// Carrega do Supabase e mescla com o que existe localmente (nada se perde entre usuários)
+function _histRelOutCarregarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.' + HIST_REL_OUT_CHAVE + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      var remoto = [];
+      if (data && data.length && data[0].valor) {
+        try { remoto = JSON.parse(data[0].valor) || []; } catch(e) { remoto = []; }
+      }
+      var antes = _histRelOut.length;
+      var vistos = {};
+      var uniao = [];
+      remoto.concat(_histRelOut).forEach(function(s) {
+        if (!s || !s.ts) return;
+        var ch = s.ts + '|' + (s.destinoImpresso || '');
+        if (vistos[ch]) return;
+        vistos[ch] = true;
+        uniao.push(s);
+      });
+      uniao.sort(function(a, b) { return new Date(b.ts) - new Date(a.ts); });
+      var podado = _histRelOutPodar(uniao);
+      _histRelOut = podado.slice(0, 100);
+      try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+      // Se a poda tirou algo ou havia registro só local, devolve a lista limpa ao banco
+      if (podado.length !== uniao.length || antes !== _histRelOut.length) _histRelOutSalvarSupabase();
+      if (typeof histRelOutRenderizar === 'function') histRelOutRenderizar();
+      if (typeof gestaoVistaRenderizar === 'function' &&
+          document.getElementById('tab-gestaoVista-content') &&
+          document.getElementById('tab-gestaoVista-content').classList.contains('active')) {
+        gestaoVistaRenderizar();
+      }
+    }).catch(function(){});
+  } catch(e) {}
+}
+
 function relGerarPlanejamento(destinoImpresso) {
   if (!_relFilt || !_relFilt.length) {
     showToast('Nenhum registro filtrado para gerar planejamento', 'error');
@@ -4439,10 +4535,10 @@ function relGerarPlanejamento(destinoImpresso) {
     ctrcsAfetados: _relFilt.length
   };
 
-  // Salva no histórico local (mais recente primeiro, limite 100)
+  // Salva no histórico (mais recente primeiro, limite 100)
   _histRelOut.unshift(snapshot);
   if (_histRelOut.length > 100) _histRelOut = _histRelOut.slice(0, 100);
-  try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+  _histRelOutPersistir(); // localStorage + Supabase (compartilha com os demais usuários)
 
   // Envia para Google Sheets (fire-and-forget, não bloqueia)
   if (typeof sheetsPost === 'function' && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
@@ -5304,6 +5400,9 @@ function sbInicializarRealtime() {
           // polling que já existe (90s), garantindo merge correto e
           // consistente com a lógica original, mas agora de forma instantânea.
           if (typeof cgDispararSincBaseline === 'function') cgDispararSincBaseline();
+        } else if (chave === HIST_REL_OUT_CHAVE) {
+          // Histórico de Relatório OUT mudou em outra máquina — recarrega e mescla
+          if (typeof _histRelOutCarregarSupabase === 'function') _histRelOutCarregarSupabase();
         } else if (chave === 'descarga_historico_relatorio') {
           // Histórico de Relatório mudou em outra máquina (nova importação ou exclusão) — recarrega
           if (typeof _relatorioHistoricoCarregarSupabase === 'function') _relatorioHistoricoCarregarSupabase();
@@ -5685,14 +5784,39 @@ function loadData() {
 // a limpeza rodava em loop apagando dados do mesmo dia. Agora só apaga registros cujo dia
 // civil já passou, rodando apenas UMA vez por sessão.
 var _progLimpezaJaRodou = false;
+// Quantos dias de registros ficam guardados no banco compartilhado (Supabase).
+// Antes a regra era "só o dia corrente", por isso os dados sumiam na virada do dia.
+var PROG_RETENCAO_DIAS = 3;
+
+// Converte "dd/MM/yyyy HH:mm" (campo gerado) em Date. Retorna null se não der para ler.
+function _progDataGerado(gerado) {
+  var s = String(gerado || '').trim();
+  if (s.length < 10) return null;
+  var d = s.substring(0, 10).split('/');
+  if (d.length < 3) return null;
+  var dia = parseInt(d[0], 10), mes = parseInt(d[1], 10), ano = parseInt(d[2], 10);
+  if (!dia || !mes || !ano) return null;
+  var dt = new Date(ano, mes - 1, dia);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+// True quando o registro é mais antigo que a janela de retenção
+function _progExpirado(gerado) {
+  var dt = _progDataGerado(gerado);
+  if (!dt) return false; // sem data legível: nunca apaga, por segurança
+  var hoje = new Date();
+  var limite = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  limite.setDate(limite.getDate() - (PROG_RETENCAO_DIAS - 1)); // hoje + os 2 dias anteriores
+  return dt < limite;
+}
+
 function progLimparAntigos() {
-  // Registros salvos hoje NUNCA são apagados — mesmo em sessões que passam da meia-noite
+  // Registros dentro da janela de retenção NUNCA são apagados
   if (_progLimpezaJaRodou) return; // uma execução por sessão
-  var hojeCivil = getDataHoje(); // "dd/MM/yyyy"
 
   var antigos = progData.filter(function(r) {
     if (!r.gerado) return false;
-    return r.gerado.substring(0, 10) !== hojeCivil;
+    return _progExpirado(r.gerado);
   });
   if (!antigos.length) { _progLimpezaJaRodou = true; return; }
 
@@ -5703,13 +5827,13 @@ function progLimparAntigos() {
 
   progData = progData.filter(function(r) {
     if (!r.gerado) return true;
-    return r.gerado.substring(0, 10) === hojeCivil;
+    return !_progExpirado(r.gerado);
   });
 
   _progLimpezaJaRodou = true;
   saveLocal();
   renderProg(); renderHist();
-  console.log('[limpeza] ' + antigos.length + ' registro(s) de dias anteriores removido(s) do banco compartilhado');
+  console.log('[limpeza] ' + antigos.length + ' registro(s) com mais de ' + PROG_RETENCAO_DIAS + ' dia(s) removido(s) do banco compartilhado');
 }
 
 // Polling automático a cada 15 segundos
@@ -7704,7 +7828,7 @@ function limparFiltroCardGrade() {
 var _histFiltroPeriodo = 'hoje';
 function histFiltrarPeriodo(modo) {
   _histFiltroPeriodo = modo;
-  ['hoje','24h','48h'].forEach(function(m) {
+  ['hoje','24h','48h','72h'].forEach(function(m) {
     var b = document.getElementById('btn-hist-periodo-' + m);
     if (!b) return;
     var ativo = (m === modo);
@@ -7823,7 +7947,7 @@ function renderHist() {
   // Only show user-saved records (have frota OR ocup > 0)
 
   var agora = new Date();
-  var cutoffHoras = _histFiltroPeriodo === '48h' ? 48 : (_histFiltroPeriodo === '24h' ? 24 : null);
+  var cutoffHoras = _histFiltroPeriodo === '72h' ? 72 : (_histFiltroPeriodo === '48h' ? 48 : (_histFiltroPeriodo === '24h' ? 24 : null));
   var cutoffData = cutoffHoras ? new Date(agora.getTime() - cutoffHoras * 60 * 60 * 1000) : null;
   var hojeStr = getDataHoje();
 
@@ -7900,7 +8024,7 @@ function renderHist() {
     <td>${ocupBarAcompOut(r.ocup, r._id)}</td>
     <td style="white-space:nowrap;text-align:center">
       <button class="btn btn-ghost btn-sm" onclick="editProgramado(${r._id})" title="Editar"
-        style="color:var(--accent);border-color:rgba(0,178,0,0.3)">Editar</button>
+        style="display:none;color:var(--accent);border-color:rgba(0,178,0,0.3)">Editar</button>
       <button class="btn btn-ghost btn-sm" onclick="deleteProg(${r._id})" title="Excluir"
         style="color:var(--red);border-color:rgba(220,38,38,0.3);margin-left:6px">Excluir</button>
     </td>
@@ -13662,11 +13786,22 @@ function resumoMalhaRenderizar() {
     return;
   }
 
+  // Considera apenas as malhas do DIA ATUAL e da filial de origem selecionada na tela Grade.
+  // Antes o resumo varria gradeData inteiro (todos os dias e todas as origens), o que
+  // apresentava o total geral da semana em vez do total do dia.
+  var diaHoje = (typeof getDiaHoje === 'function') ? getDiaHoje() : '';
+  var filialOrigem = (typeof getFilialOrigemSel === 'function') ? getFilialOrigemSel() : '';
+  var doDia = gradeData.filter(function(r) {
+    if (diaHoje && r.dia !== diaHoje) return false;
+    if (filialOrigem && r.origem !== filialOrigem) return false;
+    return true;
+  });
+
   // Deduplica por (destino + saída) — a mesma malha aparece uma vez por dia da semana na Grade,
   // mas aqui queremos só a lista única de horários que precisam ser cumpridos
   var vistos = {};
   var unicos = [];
-  gradeData.forEach(function(r) {
+  doDia.forEach(function(r) {
     if (!r.destino || !r.saida) return;
     var chave = r.destino + '|' + r.saida;
     if (vistos[chave]) return;
@@ -13834,14 +13969,183 @@ function gestaoVistaTrocarVisao(visao) {
   var btnIn = document.getElementById('gv-btn-in');
   var btnOut = document.getElementById('gv-btn-out');
   var btnFp = document.getElementById('gv-btn-fp');
+  var btnExt = document.getElementById('gv-btn-ext');
   if (btnIn && btnOut && btnFp) {
-    [btnIn, btnOut, btnFp].forEach(function(b) {
+    [btnIn, btnOut, btnFp, btnExt].forEach(function(b) {
+      if (!b) return;
       b.style.background = '#1a1a1a'; b.style.color = '#9a9a9a'; b.style.borderColor = '#2f2f2f';
     });
-    var sel = (visao === 'in') ? btnIn : (visao === 'out') ? btnOut : btnFp;
-    sel.style.background = '#e8e8e8'; sel.style.color = '#111'; sel.style.borderColor = '#e8e8e8';
+    var sel = (visao === 'in') ? btnIn : (visao === 'out') ? btnOut : (visao === 'extrato') ? btnExt : btnFp;
+    if (sel) { sel.style.background = '#e8e8e8'; sel.style.color = '#111'; sel.style.borderColor = '#e8e8e8'; }
   }
   gestaoVistaRenderizar();
+}
+
+// ═══════════ EXTRATO DO DIA — consolidado IN + OUT + Frotas ═══════════
+// Fonte única: as tabelas "Extrato do Dia" que já existem em cada dashboard.
+//   IN  -> _gvFluxoFilaIN()            (Total de Carga / Executado / Pendente)
+//   OUT -> _gvFluxoFilaOUT()           (Plano / Programado / Executado / Pendente)
+//   FP  -> _fpResumoVeiculosPorTurno() (Total Planejado / Executado)
+// Os valores usados são sempre a linha "Total" dessas tabelas, ou seja, a soma dos 3 turnos.
+var _gvExtratoDia = 'hoje';           // 'hoje' | 'ontem'
+var GV_EXTRATO_HIST_KEY = 'gv_extrato_hist';
+
+function _gvExtratoDataISO(offsetDias) {
+  var d = new Date();
+  d.setDate(d.getDate() - (offsetDias || 0));
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function _gvExtratoColeta() {
+  // ── Descarga (IN) — tabela Extrato do Dia — Peso OPL (kg) ──
+  var fIn = (typeof _gvFluxoFilaIN === 'function') ? _gvFluxoFilaIN() : null;
+  var tIn = (fIn && fIn.total) ? fIn.total : { filaInicial: 0, entrouDepois: 0, executado: 0, filaFinal: 0 };
+  var planoIn = (tIn.filaInicial || 0) + (tIn.entrouDepois || 0);  // coluna "Total de Carga"
+  var execIn  = tIn.executado || 0;                                 // coluna "Executado"
+  var saldoIn = tIn.filaFinal || 0;                                 // coluna "Pendente"
+  // A tabela do IN não tem coluna Programado; usa-se o mesmo valor do card "Programado" da visão IN
+  var din = (typeof _gvColetarDadosIN === 'function') ? _gvColetarDadosIN() : {};
+  var progIn = din.pesoProgramado || 0;
+
+  // ── Carregamento (OUT) — tabela Extrato do Dia — Peso Disponível TMS (kg) ──
+  var fOut = (typeof _gvFluxoFilaOUT === 'function') ? _gvFluxoFilaOUT() : null;
+  var tOut = (fOut && fOut.total) ? fOut.total : { filaInicial: 0, entrouDepois: 0, executado: 0, filaFinal: 0 };
+  var planoOut = (fOut && fOut.temTms) ? (fOut.plano || 0) : ((tOut.filaInicial || 0) + (tOut.entrouDepois || 0));
+  var execOut  = tOut.executado || 0;
+  var saldoOut = tOut.filaFinal || 0;
+  var progOut  = (fOut && fOut.programado) ? fOut.programado : 0;
+
+  // ── Programação de Frotas — tabela Extrato do Dia — Veículos Planejados ──
+  var rv = (typeof _fpResumoVeiculosPorTurno === 'function') ? _fpResumoVeiculosPorTurno() : null;
+  var tFp = (rv && rv.total) ? rv.total : { totalPlanejado: 0, executado: 0 };
+  var planoFp = tFp.totalPlanejado || 0;
+  var execFp  = tFp.executado || 0;
+  var saldoFp = Math.max(0, planoFp - execFp);
+  // A tabela de veículos não tem coluna Programado; usa-se "frota definida" da visão Frotas Programadas
+  var dfp = (typeof _fpColeta === 'function') ? _fpColeta() : {};
+  var progFp = dfp.programadosCount || 0;
+
+  return {
+    data: _gvExtratoDataISO(0),
+    in:  { plano: planoIn,  programado: progIn,  executado: execIn,  saldo: saldoIn  },
+    out: { plano: planoOut, programado: progOut, executado: execOut, saldo: saldoOut },
+    fp:  { plano: planoFp,  programado: progFp,  executado: execFp,  saldo: saldoFp  },
+    movimentado: execIn + execOut,
+    planoTotal: planoIn + planoOut
+  };
+}
+
+// ── Histórico diário: guarda um snapshot por dia para consulta posterior ──
+function _gvExtratoHistLer() {
+  try { return JSON.parse(localStorage.getItem(GV_EXTRATO_HIST_KEY) || '{}') || {}; }
+  catch (e) { return {}; }
+}
+
+function _gvExtratoHistSalvar(dados) {
+  if (!dados || !dados.data) return;
+  try {
+    var h = _gvExtratoHistLer();
+    h[dados.data] = dados;
+    // mantém os últimos 60 dias
+    var chaves = Object.keys(h).sort();
+    while (chaves.length > 60) { delete h[chaves.shift()]; }
+    localStorage.setItem(GV_EXTRATO_HIST_KEY, JSON.stringify(h));
+  } catch (e) {}
+}
+
+function gvExtratoTrocarDia(dia) {
+  _gvExtratoDia = dia;
+  gvExtratoRenderizar();
+}
+
+// ── Componentes visuais ──
+function _gvExtratoBarra(pctVerde, pctAmbar) {
+  var a = Math.max(0, Math.round(pctVerde));
+  var b = Math.max(0, Math.round(pctAmbar));
+  if (a > 100) a = 100;
+  if (a + b > 100) b = 100 - a;
+  var c = 100 - a - b;
+  function seg(pct, cor, corTexto) {
+    if (pct <= 0) return '';
+    return '<div style="width:' + pct + '%;background:' + cor + ';display:flex;align-items:center;justify-content:center;' +
+      'font-size:11px;font-weight:800;color:' + corTexto + '">' + pct + '%</div>';
+  }
+  return '<div style="display:flex;height:26px;border-radius:13px;overflow:hidden;background:#d9d9d9;margin-top:14px">' +
+    seg(a, '#3fb950', '#ffffff') + seg(b, '#f0a91e', '#3a2b00') + seg(c, '#d9d9d9', '#4a4a4a') +
+  '</div>';
+}
+
+function _gvExtratoMetrica(rotulo, valor, cor) {
+  return '<div style="flex:1;padding:0 18px;border-left:1px solid #2b2b2b">' +
+    '<div style="font-size:11px;color:#9a9a9a;margin-bottom:4px">' + rotulo + '</div>' +
+    '<div style="font-size:17px;font-weight:700;color:' + (cor || '#ffffff') + '">' + valor + '</div>' +
+  '</div>';
+}
+
+function _gvExtratoProcesso(titulo, bloco, formatar) {
+  var pctExec = bloco.plano ? Math.round(bloco.executado / bloco.plano * 100) : 0;
+  var pctProg = bloco.plano ? Math.round(bloco.programado / bloco.plano * 100) : 0;
+  var metricas =
+    _gvExtratoMetrica('Plano', formatar(bloco.plano)) +
+    _gvExtratoMetrica('Programado', formatar(bloco.programado), '#f0b429') +
+    _gvExtratoMetrica('Executado', formatar(bloco.executado), '#3fb950') +
+    _gvExtratoMetrica('Saldo', formatar(bloco.saldo)) +
+    _gvExtratoMetrica('Atingimento', pctExec + '%', '#3fb950');
+  return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:8px;padding:18px 20px;margin-bottom:16px">' +
+    '<div style="display:flex;align-items:center">' +
+      '<div style="min-width:210px"><span style="font-size:15px;font-weight:700;color:#fff">' + titulo + '</span></div>' +
+      '<div style="flex:1;display:flex">' + metricas + '</div>' +
+    '</div>' +
+    _gvExtratoBarra(pctExec, pctProg) +
+  '</div>';
+}
+
+function gvExtratoRenderizar() {
+  var topo = document.getElementById('ext-cards-topo');
+  var proc = document.getElementById('ext-processos');
+  var navDiv = document.getElementById('ext-nav-dia');
+  if (!topo || !proc) return;
+
+  // Sempre coleta e arquiva o dia corrente, mesmo quando a tela está exibindo "Ontem"
+  var hojeDados = _gvExtratoColeta();
+  _gvExtratoHistSalvar(hojeDados);
+
+  var e = hojeDados;
+  var aviso = '';
+  if (_gvExtratoDia === 'ontem') {
+    var ontem = _gvExtratoHistLer()[_gvExtratoDataISO(1)];
+    if (ontem) {
+      e = ontem;
+    } else {
+      aviso = 'Sem histórico salvo para ontem — exibindo os dados de hoje.';
+    }
+  }
+
+  if (navDiv) {
+    var btn = function(id, rotulo, ativo) {
+      return '<button id="' + id + '" onclick="gvExtratoTrocarDia(\'' + (id === 'ext-btn-hoje' ? 'hoje' : 'ontem') + '\')" ' +
+        'style="padding:7px 18px;border-radius:4px;border:1px solid ' + (ativo ? '#e8e8e8' : '#2f2f2f') + ';' +
+        'background:' + (ativo ? '#e8e8e8' : '#1a1a1a') + ';color:' + (ativo ? '#111' : '#9a9a9a') + ';' +
+        'font-size:12px;font-weight:700;cursor:pointer;font-family:\'Poppins\',sans-serif">' + rotulo + '</button>';
+    };
+    navDiv.innerHTML = btn('ext-btn-hoje', 'Hoje', _gvExtratoDia === 'hoje') +
+                       btn('ext-btn-ontem', 'Ontem', _gvExtratoDia === 'ontem');
+  }
+
+  var kg = function(v) { return Math.round(v || 0).toLocaleString('pt-BR') + ' kg'; };
+  var qtd = function(v) { return Math.round(v || 0).toLocaleString('pt-BR'); };
+  var pctDia = e.planoTotal ? Math.round(e.movimentado / e.planoTotal * 100) : 0;
+
+  topo.innerHTML =
+    _fpKpiCard('Peso Movimentado', Math.round(e.movimentado), '#3fb950', ' kg', 'Descarregado + carregado') +
+    _fpKpiCard('Plano de Movimentação', Math.round(e.planoTotal), '#ffffff', ' kg', 'Plano IN + OUT') +
+    _gvDonutEficienciaCard(pctDia, 'executado', 'Atingimento do Dia', '#3fb950');
+
+  proc.innerHTML =
+    (aviso ? '<div style="font-size:11px;color:#f0b429;margin-bottom:10px">' + aviso + '</div>' : '') +
+    _gvExtratoProcesso('Descarga (IN)', e.in, kg) +
+    _gvExtratoProcesso('Carregamento (OUT)', e.out, kg) +
+    _gvExtratoProcesso('Programação de Frotas', e.fp, qtd);
 }
 
 function gestaoVistaFiltrarTurno(turno) {
@@ -14123,6 +14427,30 @@ function _fpColeta() {
   };
 }
 
+// Card de donut "% Eficiência" — usado pelos três dashboards do Painel Executivo
+// (Descarga IN, Carregamento OUT e Frotas Programadas) para manter o mesmo padrão visual.
+function _gvDonutEficienciaCard(pct, legenda, titulo, corFixa) {
+  var p = Math.round(pct) || 0;
+  if (p < 0) p = 0;
+  if (p > 100) p = 100;
+  var cor = corFixa || (p >= 80 ? '#3fb950' : (p >= 50 ? '#f0b429' : '#ef4444'));
+  return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box;display:flex;flex-direction:column">' +
+    '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">' + (titulo || '% Eficiência') + '</div>' +
+    '<div style="flex:1;display:flex;align-items:center;justify-content:center">' +
+      '<div style="position:relative;width:104px;height:104px">' +
+        '<svg viewBox="0 0 36 36" style="width:104px;height:104px;transform:rotate(-90deg)">' +
+          '<circle cx="18" cy="18" r="15.9" fill="none" stroke="#2b2b2b" stroke-width="3.6"/>' +
+          '<circle cx="18" cy="18" r="15.9" fill="none" stroke="' + cor + '" stroke-width="3.6" stroke-dasharray="' + p + ' ' + (100 - p) + '" stroke-linecap="round"/>' +
+        '</svg>' +
+        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column">' +
+          '<span style="font-size:22px;font-weight:800;color:' + cor + '">' + p + '%</span>' +
+          '<span style="font-size:9px;color:#6b6b6b">' + (legenda || 'executado') + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 function _fpKpiCard(label, valor, cor, sufixo, sub) {
   var valorTxt = (typeof valor === 'number') ? valor.toLocaleString('pt-BR') : valor;
   return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box">' +
@@ -14263,11 +14591,16 @@ function frotasProgramadasRenderizar() {
   // ── KPIs em linguagem simples ──
   var kpisDiv = document.getElementById('fp-kpis');
   if (kpisDiv) {
+    // % Eficiência = veículos já programados sobre o total de rotas do dia.
+    // Mesmo padrão dos dashboards IN e OUT (executado ÷ plano).
+    // totalRotas = programadosCount + faltandoCount (partições exclusivas em _fpResumoVeiculosPorTurno)
+    var pctProgramados = d.totalRotas ? (d.programadosCount / d.totalRotas * 100) : 0;
     kpisDiv.innerHTML =
       _fpKpiCard('Veículos Programados', d.programadosCount, '#3fb950', '', 'Já têm frota carreta e motorista/cavalo definidos') +
       _fpKpiCard('Faltam Programar', d.faltandoCount, '#ef4444', '', 'Falta frota carreta, motorista/cavalo ou os dois') +
       _fpKpiCard('Peso em Carregamento', Math.round(d.pesoAndamento), '#f0b429', ' kg', 'Carregando agora, nos veículos já programados') +
-      _fpKpiCard('Críticos', d.criticosCount, '#ef4444', '', 'Destinos programados atrasados ou vencendo hoje');
+      _fpKpiCard('Críticos', d.criticosCount, '#ef4444', '', 'Destinos programados atrasados ou vencendo hoje') +
+      _gvDonutEficienciaCard(pctProgramados, 'programado');
   }
 
   // ── Barra de progressão: Plano (tudo) → Programado (tem motorista+frota) → Executado (já carregado) ──
@@ -14332,7 +14665,7 @@ function frotasProgramadasRenderizar() {
   if (tabTurnoDiv) {
     var resumoVeiculos = _fpResumoVeiculosPorTurno();
     var fmtQtdO = function(v){ return Math.round(v || 0).toLocaleString('pt-BR'); };
-    var thNumO = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;white-space:nowrap';
+    var thNumO = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
     var tdNumO = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#e5e5e5;white-space:nowrap';
 
     var linhasO = resumoVeiculos.linhas.map(function(l, i) {
@@ -14374,10 +14707,10 @@ function frotasProgramadasRenderizar() {
             '<table style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif">' +
               '<thead>' +
                 '<tr>' +
-                  '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#1a1a1a;vertical-align:bottom">Turno / Hoje</th>' +
-                  '<th colspan="5" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#1a1a1a;border-bottom:1px solid #2b2b2b">Extrato do Dia — Veículos Planejados</th>' +
+                  '<th rowspan="2" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;border-right:1px solid #232323;background:#000;vertical-align:bottom">Turno / Hoje</th>' +
+                  '<th colspan="5" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Extrato do Dia — Veículos Planejados</th>' +
                 '</tr>' +
-                '<tr style="background:#151515">' +
+                '<tr style="background:#000">' +
                   '<th style="'+thNumO+'">Malha Inicial</th>' +
                   '<th style="'+thNumO+'">Rota Extra</th>' +
                   '<th style="'+thNumO+'">Total Planejado</th>' +
@@ -14818,6 +15151,16 @@ function gestaoVistaRenderizar() {
 
   var containerInout = document.getElementById('gv-inout-container');
   var containerFp = document.getElementById('gv-fp-container');
+  var containerExt = document.getElementById('gv-extrato-container');
+
+  if (_gvVisaoAtual === 'extrato') {
+    if (containerInout) containerInout.style.display = 'none';
+    if (containerFp) containerFp.style.display = 'none';
+    if (containerExt) containerExt.style.display = 'block';
+    gvExtratoRenderizar();
+    return;
+  }
+  if (containerExt) containerExt.style.display = 'none';
 
   if (_gvVisaoAtual === 'fp') {
     if (containerInout) containerInout.style.display = 'none';
@@ -14947,27 +15290,11 @@ function gestaoVistaRenderizar() {
       var subExec = ehOut ? 'Peso total já Carregado' : 'Peso total já Descarregado';
       // Programado: no OUT já vem do Histórico de Relatório OUT (mesma fonte da barra acima)
       var pctEficiencia = pesoPlano ? Math.round((pesoExecutado / pesoPlano) * 100) : 0;
-      if (pctEficiencia > 100) pctEficiencia = 100;
-      var corEfic = pctEficiencia >= 80 ? '#3fb950' : (pctEficiencia >= 50 ? '#f0b429' : '#ef4444');
       inKpisDiv.innerHTML =
         _fpKpiCard('Plano do dia', Math.round(pesoPlano), '#ffffff', ' kg', subPlano) +
         _fpKpiCard('Programado', Math.round(pesoProgramado), '#f0b429', ' kg', 'Peso total Programado') +
         _fpKpiCard('Executado', Math.round(pesoExecutado), '#3fb950', ' kg', subExec) +
-        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;box-sizing:border-box;display:flex;flex-direction:column">' +
-          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">% Eficiência</div>' +
-          '<div style="flex:1;display:flex;align-items:center;justify-content:center">' +
-            '<div style="position:relative;width:104px;height:104px">' +
-              '<svg viewBox="0 0 36 36" style="width:104px;height:104px;transform:rotate(-90deg)">' +
-                '<circle cx="18" cy="18" r="15.9" fill="none" stroke="#2b2b2b" stroke-width="3.6"/>' +
-                '<circle cx="18" cy="18" r="15.9" fill="none" stroke="' + corEfic + '" stroke-width="3.6" stroke-dasharray="' + pctEficiencia + ' ' + (100 - pctEficiencia) + '" stroke-linecap="round"/>' +
-              '</svg>' +
-              '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column">' +
-                '<span style="font-size:22px;font-weight:800;color:' + corEfic + '">' + pctEficiencia + '%</span>' +
-                '<span style="font-size:9px;color:#6b6b6b">executado</span>' +
-              '</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
+        _gvDonutEficienciaCard(pctEficiencia, 'executado');
     }
   }
 
@@ -15549,8 +15876,8 @@ function histRelOutExcluirSelecionados() {
     }
   });
 
-  // Salvar no localStorage
-  try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+  // Salvar localmente e propagar a exclusão para os demais usuários
+  _histRelOutPersistir();
 
   // Re-renderizar a tabela
   histRelOutRenderizar();
