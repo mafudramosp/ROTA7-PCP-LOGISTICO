@@ -3627,6 +3627,7 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function(){ sbCarregarRelatorio(true); }, 1500);
   // Carregar Histórico de Relatório do Supabase (compartilhado entre usuários)
   if (typeof _relatorioHistoricoCarregarSupabase === 'function') setTimeout(_relatorioHistoricoCarregarSupabase, 1300);
+  if (typeof _histRelOutCarregarSupabase === 'function') setTimeout(_histRelOutCarregarSupabase, 1320);
   // Carregar histórico diário do Extrato do Dia (snapshots por dia, compartilhado entre usuários)
   if (typeof _gvExtratoHistoricoCarregarSupabase === 'function') setTimeout(_gvExtratoHistoricoCarregarSupabase, 1350);
   // Carregar Acompanhamento de Produção do Supabase (horas/conferente/impressões + fila/"Finalizado Anteriormente")
@@ -4442,6 +4443,46 @@ var etiqBadge={'Coleta':'rel-badge-colet','Reembarque':'rel-badge-remb'};
 var _histRelOut = [];
 try { _histRelOut = JSON.parse(localStorage.getItem('hist_rel_out_v1') || '[]'); } catch(ex) { _histRelOut = []; }
 
+// Salva o Histórico de Relatório OUT no Supabase (tabela "configuracoes", compartilhado entre todos os usuários)
+function _histRelOutSalvarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ chave: 'hist_rel_out', valor: JSON.stringify(_histRelOut) })
+    }).catch(function(){});
+  } catch(e) {}
+}
+
+// Carrega o Histórico de Relatório OUT do Supabase (chamado no início do app e via realtime)
+function _histRelOutCarregarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.hist_rel_out&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      if (data && data.length && data[0].valor) {
+        _histRelOut = JSON.parse(data[0].valor);
+
+        // Limpeza automática: registros com mais de 7 dias
+        var agora = new Date();
+        var seteDias = 7 * 24 * 60 * 60 * 1000;
+        var inicialLen = _histRelOut.length;
+        _histRelOut = _histRelOut.filter(function(s) {
+          var dt = new Date(s.ts);
+          return (agora - dt) <= seteDias;
+        });
+        if (_histRelOut.length !== inicialLen) {
+          _histRelOutSalvarSupabase();
+        }
+
+        try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(e){}
+        var tab = document.getElementById('tab-histRelOut-content');
+        if (tab && tab.classList.contains('active') && typeof histRelOutRenderizar === 'function') histRelOutRenderizar();
+      }
+    }).catch(function(){});
+  } catch(e) {}
+}
+
 function relGerarPlanejamento(destinoImpresso) {
   if (!_relFilt || !_relFilt.length) {
     showToast('Nenhum registro filtrado para gerar planejamento', 'error');
@@ -4475,6 +4516,7 @@ function relGerarPlanejamento(destinoImpresso) {
   _histRelOut.unshift(snapshot);
   if (_histRelOut.length > 100) _histRelOut = _histRelOut.slice(0, 100);
   try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+  _histRelOutSalvarSupabase(); // compartilha com todos os usuários em tempo real
 
   // Envia para Google Sheets (fire-and-forget, não bloqueia)
   if (typeof sheetsPost === 'function' && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
@@ -5339,6 +5381,9 @@ function sbInicializarRealtime() {
         } else if (chave === 'descarga_historico_relatorio') {
           // Histórico de Relatório mudou em outra máquina (nova importação ou exclusão) — recarrega
           if (typeof _relatorioHistoricoCarregarSupabase === 'function') _relatorioHistoricoCarregarSupabase();
+        } else if (chave === 'hist_rel_out') {
+          // Histórico de Relatório OUT mudou em outra máquina (novo planejamento gerado ou exclusão) — recarrega
+          if (typeof _histRelOutCarregarSupabase === 'function') _histRelOutCarregarSupabase();
         } else if (chave === 'extrato_dia_historico') {
           // Histórico diário do Extrato do Dia mudou em outra máquina — recarrega
           if (typeof _gvExtratoHistoricoCarregarSupabase === 'function') _gvExtratoHistoricoCarregarSupabase();
@@ -15876,6 +15921,7 @@ function histRelOutExcluirSelecionados() {
 
   // Salvar no localStorage
   try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+  _histRelOutSalvarSupabase(); // compartilha a exclusão com todos os usuários em tempo real
 
   // Re-renderizar a tabela
   histRelOutRenderizar();
