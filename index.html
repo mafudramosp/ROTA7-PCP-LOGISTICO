@@ -2125,13 +2125,7 @@ function _gradeAtualizarComMalha(rows) {
 
     <!-- Container para visão Extrato do Dia (consolidado IN + OUT + Frotas) -->
     <div id="gv-extrato-container" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div style="font-size:11px;color:#9a9a9a" id="ext-atualizado">—</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <button id="ext-btn-hoje" onclick="gvExtratoTrocarDia('hoje')" style="padding:6px 16px;border-radius:16px;border:1.5px solid #2f2f2f;font-size:10px;font-weight:700;cursor:pointer;background:#e8e8e8;color:#111;font-family:'Poppins',sans-serif">Hoje</button>
-          <button id="ext-btn-ontem" onclick="gvExtratoTrocarDia('ontem')" style="padding:6px 16px;border-radius:16px;border:1.5px solid #2f2f2f;font-size:10px;font-weight:700;cursor:pointer;background:#1a1a1a;color:#9a9a9a;font-family:'Poppins',sans-serif">Ontem</button>
-        </div>
-      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:14px" id="ext-nav-dia"></div>
       <div id="ext-cards-topo" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px"></div>
       <div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Resumo Consolidado por Processo</div>
       <div id="ext-processos"></div>
@@ -2160,6 +2154,7 @@ function _gradeAtualizarComMalha(rows) {
     <button id="btn-hist-periodo-hoje" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('hoje')" style="font-size:11px" title="Ver registros de hoje">Hoje</button>
     <button id="btn-hist-periodo-24h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('24h')" style="font-size:11px" title="Ver registros das últimas 24 horas">24h</button>
     <button id="btn-hist-periodo-48h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('48h')" style="font-size:11px" title="Ver registros das últimas 48 horas">48h</button>
+    <button id="btn-hist-periodo-72h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('72h')" style="font-size:11px" title="Ver registros das últimas 72 horas (janela completa de retenção)">72h</button>
     <div style="margin-left:auto;display:flex;gap:8px">
       <button id="btn-excluir-sel" class="btn btn-danger btn-sm" onclick="excluirSelecionados()" disabled style="opacity:0.4;cursor:not-allowed" title="Excluir os registros selecionados">Excluir selecionados</button>
       <button class="btn btn-ghost btn-sm" onclick="exportCSV('hist')" title="Exportar os registros para Excel">Exportar Excel</button>
@@ -2208,6 +2203,7 @@ function _gradeAtualizarComMalha(rows) {
               <div class="col-filter-wrap"><span class="col-label">Status Carregamento <span id="sh-ocup">↕</span></span>
               <button class="cf-btn" id="cfb-ocup" onclick="event.stopPropagation();cfOpen('ocup',this)">▼</button></div>
             </th>
+            <th style="text-align:center">Prev. Fechamento</th>
             <th style="text-align:center">Ações</th>
           </tr>
         </thead>
@@ -3627,9 +3623,12 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function(){ sbCarregarRelatorio(true); }, 1500);
   // Carregar Histórico de Relatório do Supabase (compartilhado entre usuários)
   if (typeof _relatorioHistoricoCarregarSupabase === 'function') setTimeout(_relatorioHistoricoCarregarSupabase, 1300);
-  if (typeof _histRelOutCarregarSupabase === 'function') setTimeout(_histRelOutCarregarSupabase, 1320);
-  // Carregar histórico diário do Extrato do Dia (snapshots por dia, compartilhado entre usuários)
-  if (typeof _gvExtratoHistoricoCarregarSupabase === 'function') setTimeout(_gvExtratoHistoricoCarregarSupabase, 1350);
+  if (typeof _histRelOutCarregarSupabase === 'function') setTimeout(_histRelOutCarregarSupabase, 1500);
+  // Assinatura em tempo real dedicada — ver comentário na definição da função
+  if (typeof _histRelOutIniciarRealtime === 'function') setTimeout(_histRelOutIniciarRealtime, 1600);
+  // Reforço a cada 2 minutos — se o realtime falhar por instabilidade de rede,
+  // o histórico compartilhado do Carregamento OUT ainda converge sozinho.
+  if (typeof _histRelOutCarregarSupabase === 'function') setInterval(_histRelOutCarregarSupabase, 120000);
   // Carregar Acompanhamento de Produção do Supabase (horas/conferente/impressões + fila/"Finalizado Anteriormente")
   if (typeof _descAcompCarregarSupabase === 'function') setTimeout(_descAcompCarregarSupabase, 1400);
   if (typeof _descAcompListaCarregarSupabase === 'function') setTimeout(_descAcompListaCarregarSupabase, 1450);
@@ -4443,44 +4442,151 @@ var etiqBadge={'Coleta':'rel-badge-colet','Reembarque':'rel-badge-remb'};
 var _histRelOut = [];
 try { _histRelOut = JSON.parse(localStorage.getItem('hist_rel_out_v1') || '[]'); } catch(ex) { _histRelOut = []; }
 
-// Salva o Histórico de Relatório OUT no Supabase (tabela "configuracoes", compartilhado entre todos os usuários)
+// ── Histórico de Relatório OUT compartilhado (Supabase) ──
+// Antes o histórico vivia só no localStorage: o que um usuário gerava, os outros não viam.
+// Agora é gravado na tabela "configuracoes", como já acontece com o histórico do IN.
+var HIST_REL_OUT_CHAVE = 'hist_rel_out';
+var HIST_REL_OUT_RETENCAO_H = 48; // registros com mais de 48h são descartados
+
+// Remove os snapshots que passaram da janela de retenção
+function _histRelOutPodar(lista) {
+  var agora = Date.now();
+  var limiteMs = HIST_REL_OUT_RETENCAO_H * 60 * 60 * 1000;
+  return (lista || []).filter(function(s) {
+    if (!s || !s.ts) return false;
+    var t = new Date(s.ts).getTime();
+    if (isNaN(t)) return false;
+    return (agora - t) <= limiteMs;
+  });
+}
+
+function _histRelOutPersistir() {
+  _histRelOut = _histRelOutPodar(_histRelOut);
+  try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+  _histRelOutSalvarSupabase();
+}
+
+// Busca o estado mais recente do Supabase e mescla com o que esta aba tem antes
+// de gravar. Sem isso, um usuário cuja aba ficou aberta um tempo (e perdeu algum
+// evento realtime) sobrescrevia o registro compartilhado com sua própria lista
+// desatualizada ao imprimir ou excluir, apagando o que outros colegas haviam
+// salvo enquanto isso — essa é a causa de "eu imprimi e o colega não vê".
+// excluirChaves (opcional): lista de {ts, destinoImpresso} a remover mesmo que
+// ainda existam na cópia remota (usado pela exclusão de registros).
+function _histRelOutSincronizarEEscrever(excluirChaves) {
+  excluirChaves = excluirChaves || [];
+  return new Promise(function(resolve) {
+    fetch(SB_URL + '/configuracoes?chave=eq.' + HIST_REL_OUT_CHAVE + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      var remoto = [];
+      if (data && data.length && data[0].valor) {
+        try { remoto = JSON.parse(data[0].valor) || []; } catch(e) { remoto = []; }
+      }
+      var excluidos = {};
+      excluirChaves.forEach(function(c){ excluidos[c.ts + '|' + (c.destinoImpresso||'')] = true; });
+      var vistos = {};
+      var uniao = [];
+      remoto.concat(_histRelOut).forEach(function(s) {
+        if (!s || !s.ts) return;
+        var ch = s.ts + '|' + (s.destinoImpresso || '');
+        if (vistos[ch] || excluidos[ch]) return;
+        vistos[ch] = true;
+        uniao.push(s);
+      });
+      uniao.sort(function(a, b) { return new Date(b.ts) - new Date(a.ts); });
+      _histRelOut = _histRelOutPodar(uniao).slice(0, 100);
+      try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+      if (typeof histRelOutRenderizar === 'function') histRelOutRenderizar();
+      // Só resolve depois que a gravação de fato terminou — sem isso, quem
+      // chamasse esta função em sequência (ex.: dois prints seguidos) podia
+      // disparar a próxima leitura antes desta escrita ter chegado ao banco.
+      _histRelOutSalvarSupabase().then(resolve);
+    }).catch(function() {
+      // Sem rede: grava o melhor que temos localmente (comportamento anterior)
+      _histRelOutPersistir();
+      resolve();
+    });
+  });
+}
+
 function _histRelOutSalvarSupabase() {
   try {
-    fetch(SB_URL + '/configuracoes', {
+    return fetch(SB_URL + '/configuracoes', {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: 'hist_rel_out', valor: JSON.stringify(_histRelOut) })
+      body: JSON.stringify({ chave: HIST_REL_OUT_CHAVE, valor: JSON.stringify(_histRelOut) })
+    }).catch(function(){});
+  } catch(e) { return Promise.resolve(); }
+}
+
+// Carrega do Supabase e mescla com o que existe localmente (nada se perde entre usuários)
+function _histRelOutCarregarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.' + HIST_REL_OUT_CHAVE + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      var remoto = [];
+      if (data && data.length && data[0].valor) {
+        try { remoto = JSON.parse(data[0].valor) || []; } catch(e) { remoto = []; }
+      }
+      var antes = _histRelOut.length;
+      var vistos = {};
+      var uniao = [];
+      remoto.concat(_histRelOut).forEach(function(s) {
+        if (!s || !s.ts) return;
+        var ch = s.ts + '|' + (s.destinoImpresso || '');
+        if (vistos[ch]) return;
+        vistos[ch] = true;
+        uniao.push(s);
+      });
+      uniao.sort(function(a, b) { return new Date(b.ts) - new Date(a.ts); });
+      var podado = _histRelOutPodar(uniao);
+      _histRelOut = podado.slice(0, 100);
+      try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
+      // Se a poda tirou algo ou havia registro só local, devolve a lista limpa ao banco
+      if (podado.length !== uniao.length || antes !== _histRelOut.length) _histRelOutSalvarSupabase();
+      if (typeof histRelOutRenderizar === 'function') histRelOutRenderizar();
+      if (typeof gestaoVistaRenderizar === 'function' &&
+          document.getElementById('tab-gestaoVista-content') &&
+          document.getElementById('tab-gestaoVista-content').classList.contains('active')) {
+        gestaoVistaRenderizar();
+      }
     }).catch(function(){});
   } catch(e) {}
 }
 
-// Carrega o Histórico de Relatório OUT do Supabase (chamado no início do app e via realtime)
-function _histRelOutCarregarSupabase() {
+// ── Tempo real dedicado ao Histórico de Relatório OUT ──
+// Existe no código um canal genérico para a tabela "configuracoes"
+// (sbInicializarRealtime/'cfg-realtime'), mas essa função nunca é chamada em
+// nenhum lugar do app — nada estava de fato escutando mudanças nessa tabela,
+// por isso as impressões só apareciam para os outros usuários no próximo
+// carregamento de página ou no reforço de 2 minutos. Esta assinatura roda por
+// conta própria, restrita apenas à chave 'hist_rel_out', sem depender daquele
+// canal morto nem alterar o comportamento de mais nada no sistema.
+var _histRelOutRealtimeClient = null;
+function _histRelOutIniciarRealtime() {
   try {
-    fetch(SB_URL + '/configuracoes?chave=eq.hist_rel_out&select=valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(data) {
-      if (data && data.length && data[0].valor) {
-        _histRelOut = JSON.parse(data[0].valor);
-
-        // Limpeza automática: registros com mais de 7 dias
-        var agora = new Date();
-        var seteDias = 7 * 24 * 60 * 60 * 1000;
-        var inicialLen = _histRelOut.length;
-        _histRelOut = _histRelOut.filter(function(s) {
-          var dt = new Date(s.ts);
-          return (agora - dt) <= seteDias;
-        });
-        if (_histRelOut.length !== inicialLen) {
-          _histRelOutSalvarSupabase();
-        }
-
-        try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(e){}
-        var tab = document.getElementById('tab-histRelOut-content');
-        if (tab && tab.classList.contains('active') && typeof histRelOutRenderizar === 'function') histRelOutRenderizar();
-      }
-    }).catch(function(){});
-  } catch(e) {}
+    if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
+      console.warn('[hist-rel-out] Lib supabase-js não carregada — usando apenas o reforço periódico.');
+      return;
+    }
+    var SB_BASE = SB_URL.replace('/rest/v1', '');
+    _histRelOutRealtimeClient = window.supabase.createClient(SB_BASE, SB_KEY);
+    _histRelOutRealtimeClient
+      .channel('hist-rel-out-realtime')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'configuracoes', filter: 'chave=eq.' + HIST_REL_OUT_CHAVE },
+        function() {
+          console.log('[hist-rel-out] atualização recebida em tempo real');
+          if (typeof _histRelOutCarregarSupabase === 'function') _histRelOutCarregarSupabase();
+        })
+      .subscribe(function(status) {
+        if (status === 'SUBSCRIBED') console.log('[hist-rel-out] Canal em tempo real conectado ✅');
+      });
+  } catch (e) {
+    console.warn('[hist-rel-out] Falha ao iniciar tempo real, mantendo só o reforço periódico.', e);
+  }
 }
 
 function relGerarPlanejamento(destinoImpresso) {
@@ -4512,11 +4618,11 @@ function relGerarPlanejamento(destinoImpresso) {
     ctrcsAfetados: _relFilt.length
   };
 
-  // Salva no histórico local (mais recente primeiro, limite 100)
+  // Salva no histórico (mais recente primeiro, limite 100)
   _histRelOut.unshift(snapshot);
   if (_histRelOut.length > 100) _histRelOut = _histRelOut.slice(0, 100);
-  try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
-  _histRelOutSalvarSupabase(); // compartilha com todos os usuários em tempo real
+  if (typeof histRelOutRenderizar === 'function') histRelOutRenderizar(); // mostra na hora, localmente
+  _histRelOutSincronizarEEscrever(); // localStorage + Supabase, mesclado com o que os outros já salvaram
 
   // Envia para Google Sheets (fire-and-forget, não bloqueia)
   if (typeof sheetsPost === 'function' && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
@@ -4545,6 +4651,27 @@ function _histRelOutPesoHoje() {
     if (!s || !s.ts) return;
     var d = new Date(s.ts);
     if (isNaN(d.getTime()) || d.toLocaleDateString('pt-BR') !== hojeStr) return;
+    total += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
+  });
+  return total;
+}
+
+// Peso total (kg) registrado HOJE no Histórico de Relatório OUT, só do turno informado.
+// Usa a data/hora real da impressão (s.ts) e a mesma regra de corte de turno do
+// resto do Painel Executivo (_resumoMalhaClassificarTurno: 1º 06–15h, 2º 15–23h, 3º 23–06h).
+// Sem isso, o card "Programado" ficava somando o dia inteiro e continuava mostrando
+// o que foi impresso no 1º Turno mesmo depois de o 2º Turno já ter começado.
+function _histRelOutPesoTurno(turnoAlvo) {
+  var lista = (typeof _histRelOut !== 'undefined' && _histRelOut) ? _histRelOut : [];
+  var hojeStr = new Date().toLocaleDateString('pt-BR');
+  var total = 0;
+  lista.forEach(function(s) {
+    if (!s || !s.ts) return;
+    var d = new Date(s.ts);
+    if (isNaN(d.getTime()) || d.toLocaleDateString('pt-BR') !== hojeStr) return;
+    var horaStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    var turno = (typeof _resumoMalhaClassificarTurno === 'function') ? _resumoMalhaClassificarTurno(horaStr) : null;
+    if (turno !== turnoAlvo) return;
     total += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
   });
   return total;
@@ -4913,6 +5040,7 @@ document.addEventListener('click',function(e){
           <th onclick="acompOutOrdenar('regiao')" title="Ordenar por Região" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Região<span id="acompOut-arw-regiao"></span></th>
           <th onclick="acompOutOrdenar('composicao')" title="Ordenar por Composição" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Composição<span id="acompOut-arw-composicao"></span></th>
           <th onclick="acompOutOrdenar('frota')" title="Ordenar por Frota" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Frota<span id="acompOut-arw-frota"></span></th>
+          <th onclick="acompOutOrdenar('prevFech')" title="Ordenar por Prev. Fechamento" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Prev. Fechamento<span id="acompOut-arw-prevFech"></span></th>
           <th onclick="acompOutOrdenar('status')" title="Ordenar por Status Carregamento" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;background:#111827;cursor:pointer;user-select:none">Status Carregamento<span id="acompOut-arw-status"></span></th>
           <th onclick="acompOutOrdenar('pesoOpl')" title="Ordenar por Peso OPL" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Peso OPL (kg)<span id="acompOut-arw-pesoOpl"></span></th>
           <th onclick="acompOutOrdenar('conferente')" title="Ordenar por Conferente" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Conferente<span id="acompOut-arw-conferente"></span></th>
@@ -5378,15 +5506,12 @@ function sbInicializarRealtime() {
           // polling que já existe (90s), garantindo merge correto e
           // consistente com a lógica original, mas agora de forma instantânea.
           if (typeof cgDispararSincBaseline === 'function') cgDispararSincBaseline();
+        } else if (chave === HIST_REL_OUT_CHAVE) {
+          // Histórico de Relatório OUT mudou em outra máquina — recarrega e mescla
+          if (typeof _histRelOutCarregarSupabase === 'function') _histRelOutCarregarSupabase();
         } else if (chave === 'descarga_historico_relatorio') {
           // Histórico de Relatório mudou em outra máquina (nova importação ou exclusão) — recarrega
           if (typeof _relatorioHistoricoCarregarSupabase === 'function') _relatorioHistoricoCarregarSupabase();
-        } else if (chave === 'hist_rel_out') {
-          // Histórico de Relatório OUT mudou em outra máquina (novo planejamento gerado ou exclusão) — recarrega
-          if (typeof _histRelOutCarregarSupabase === 'function') _histRelOutCarregarSupabase();
-        } else if (chave === 'extrato_dia_historico') {
-          // Histórico diário do Extrato do Dia mudou em outra máquina — recarrega
-          if (typeof _gvExtratoHistoricoCarregarSupabase === 'function') _gvExtratoHistoricoCarregarSupabase();
         } else if (chave === 'descarga_acomp_data') {
           // Dados do Acompanhamento de Produção (horas/conferente/impressões) mudaram em outra máquina.
           // Usa o valor já entregue no payload do realtime — evita um novo GET que podia ler um
@@ -5765,14 +5890,39 @@ function loadData() {
 // a limpeza rodava em loop apagando dados do mesmo dia. Agora só apaga registros cujo dia
 // civil já passou, rodando apenas UMA vez por sessão.
 var _progLimpezaJaRodou = false;
+// Quantos dias de registros ficam guardados no banco compartilhado (Supabase).
+// Antes a regra era "só o dia corrente", por isso os dados sumiam na virada do dia.
+var PROG_RETENCAO_DIAS = 3;
+
+// Converte "dd/MM/yyyy HH:mm" (campo gerado) em Date. Retorna null se não der para ler.
+function _progDataGerado(gerado) {
+  var s = String(gerado || '').trim();
+  if (s.length < 10) return null;
+  var d = s.substring(0, 10).split('/');
+  if (d.length < 3) return null;
+  var dia = parseInt(d[0], 10), mes = parseInt(d[1], 10), ano = parseInt(d[2], 10);
+  if (!dia || !mes || !ano) return null;
+  var dt = new Date(ano, mes - 1, dia);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+// True quando o registro é mais antigo que a janela de retenção
+function _progExpirado(gerado) {
+  var dt = _progDataGerado(gerado);
+  if (!dt) return false; // sem data legível: nunca apaga, por segurança
+  var hoje = new Date();
+  var limite = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  limite.setDate(limite.getDate() - (PROG_RETENCAO_DIAS - 1)); // hoje + os 2 dias anteriores
+  return dt < limite;
+}
+
 function progLimparAntigos() {
-  // Registros salvos hoje NUNCA são apagados — mesmo em sessões que passam da meia-noite
+  // Registros dentro da janela de retenção NUNCA são apagados
   if (_progLimpezaJaRodou) return; // uma execução por sessão
-  var hojeCivil = getDataHoje(); // "dd/MM/yyyy"
 
   var antigos = progData.filter(function(r) {
     if (!r.gerado) return false;
-    return r.gerado.substring(0, 10) !== hojeCivil;
+    return _progExpirado(r.gerado);
   });
   if (!antigos.length) { _progLimpezaJaRodou = true; return; }
 
@@ -5783,13 +5933,13 @@ function progLimparAntigos() {
 
   progData = progData.filter(function(r) {
     if (!r.gerado) return true;
-    return r.gerado.substring(0, 10) === hojeCivil;
+    return !_progExpirado(r.gerado);
   });
 
   _progLimpezaJaRodou = true;
   saveLocal();
   renderProg(); renderHist();
-  console.log('[limpeza] ' + antigos.length + ' registro(s) de dias anteriores removido(s) do banco compartilhado');
+  console.log('[limpeza] ' + antigos.length + ' registro(s) com mais de ' + PROG_RETENCAO_DIAS + ' dia(s) removido(s) do banco compartilhado');
 }
 
 // Polling automático a cada 15 segundos
@@ -7784,7 +7934,7 @@ function limparFiltroCardGrade() {
 var _histFiltroPeriodo = 'hoje';
 function histFiltrarPeriodo(modo) {
   _histFiltroPeriodo = modo;
-  ['hoje','24h','48h'].forEach(function(m) {
+  ['hoje','24h','48h','72h'].forEach(function(m) {
     var b = document.getElementById('btn-hist-periodo-' + m);
     if (!b) return;
     var ativo = (m === modo);
@@ -7903,7 +8053,7 @@ function renderHist() {
   // Only show user-saved records (have frota OR ocup > 0)
 
   var agora = new Date();
-  var cutoffHoras = _histFiltroPeriodo === '48h' ? 48 : (_histFiltroPeriodo === '24h' ? 24 : null);
+  var cutoffHoras = _histFiltroPeriodo === '72h' ? 72 : (_histFiltroPeriodo === '48h' ? 48 : (_histFiltroPeriodo === '24h' ? 24 : null));
   var cutoffData = cutoffHoras ? new Date(agora.getTime() - cutoffHoras * 60 * 60 * 1000) : null;
   var hojeStr = getDataHoje();
 
@@ -7960,7 +8110,7 @@ function renderHist() {
   if (_badgeHist) { _badgeHist.textContent = data.length; _badgeHist.style.display = data.length > 0 ? '' : 'none'; }
   const tbody = document.getElementById('tbody-hist');
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
     atualizarBtnExcluir();
     return;
   }
@@ -7978,6 +8128,7 @@ function renderHist() {
     <td style="font-size:11px">${r.motorista || '—'}</td>
     <td class="mono" style="font-size:11px">${r.cavalinho || '—'}</td>
     <td>${ocupBarAcompOut(r.ocup, r._id)}</td>
+    <td style="text-align:center;font-size:11px;color:var(--text2);white-space:nowrap">${((_acompOutData[r._id]||{}).prevFech) || '—'}</td>
     <td style="white-space:nowrap;text-align:center">
       <button class="btn btn-ghost btn-sm" onclick="editProgramado(${r._id})" title="Editar"
         style="display:none;color:var(--accent);border-color:rgba(0,178,0,0.3)">Editar</button>
@@ -12707,6 +12858,44 @@ function _parsePesoBR(s) {
   return parseFloat(str) || 0;
 }
 
+// ── Peso do TMS por frota — fonte única usada tanto pelo card "Peso OPL Total
+// Carregado" do Acompanhamento OUT quanto pelo card "Executado" do Painel
+// Executivo (Carregamento OUT), para que os dois números sempre batam.
+// Antes cada tela recalculava esse mapa por conta própria, e podiam divergir.
+function _tmsPesoPorFrotaMapa() {
+  var relD = (typeof _relData !== 'undefined') ? _relData : [];
+  var mapa = {};
+  relD.forEach(function(r) {
+    var fp = String(r.frotaPlan || '').trim();
+    if (fp) {
+      if (!mapa[fp]) mapa[fp] = 0;
+      mapa[fp] += r.peso || 0;
+    }
+  });
+  return mapa;
+}
+function _tmsPesoDeFrota(frota, mapa) {
+  if (!frota) return 0;
+  var fn = String(frota).toUpperCase().replace(/\s+/g, '');
+  if (mapa[frota]) return mapa[frota];
+  if (mapa[fn]) return mapa[fn];
+  var found = 0;
+  Object.keys(mapa).forEach(function(k) {
+    if (found) return;
+    var kn = k.toUpperCase().replace(/\s+/g, '');
+    if (kn === fn || fn.indexOf(kn) !== -1 || kn.indexOf(fn) !== -1) found = mapa[k];
+  });
+  return found;
+}
+// Peso "oficial" de um registro do Acompanhamento OUT: prioriza o TMS (mesma
+// regra do Painel Executivo); cai para o Peso OPL digitado manualmente só
+// quando a frota não está no TMS.
+function _acompOutPesoOficial(r, rec, mapaTms) {
+  var pesoTms = _tmsPesoDeFrota(r.frota, mapaTms);
+  var pesoManual = _parsePesoBR(rec.pesoOpl);
+  return pesoTms > 0 ? pesoTms : pesoManual;
+}
+
 var _acompOutData = {};
 try { _acompOutData = JSON.parse(localStorage.getItem('acomp_out_v1') || '{}'); } catch(ex) { _acompOutData = {}; }
 
@@ -12754,7 +12943,7 @@ function _acompOutGet(id) {
 // ── Ordenação da tabela (linhas já preenchidas sempre no topo) ──────────────
 var _acompOutSortCol = '';
 var _acompOutSortDir = 1;
-var _ACOMP_OUT_COLS = ['gerado','destino','regiao','composicao','frota','status','pesoOpl','conferente','qtdConf','qtdAjud','horaInicio','horaFim'];
+var _ACOMP_OUT_COLS = ['gerado','destino','regiao','composicao','frota','prevFech','status','pesoOpl','conferente','qtdConf','qtdAjud','horaInicio','horaFim'];
 
 function _acompOutPreenchido(rec) {
   if (!rec) return false;
@@ -12770,6 +12959,7 @@ function _acompOutSortVal(r, col) {
   if (col === 'regiao') return String(r.regiao||'');
   if (col === 'composicao') return String(r.composicao||'');
   if (col === 'frota') return String(r.frota||'');
+  if (col === 'prevFech') return String(rec.prevFech||'');
   if (col === 'status') return _acompOutStatusRank(r._id);
   if (col === 'pesoOpl') return _parsePesoBR(rec.pesoOpl);
   if (col === 'conferente') return String(rec.conferente||'');
@@ -12883,12 +13073,17 @@ function acompOutAtualizarCards() {
 
   var emCarregamento = data.length;
   var finalizado = 0, emAndamento = 0, pesoTotal = 0;
+  var mapaTms = _tmsPesoPorFrotaMapa();
 
   data.forEach(function(r) {
     var rec = _acompOutGet(r._id);
-    var peso = _parsePesoBR(rec.pesoOpl);
-    pesoTotal += peso;
-    if (rec.horaFim && String(rec.horaFim).trim() !== '') finalizado++;
+    var estaFinalizado = !!(rec.horaFim && String(rec.horaFim).trim() !== '');
+    // "Total Carregado" deve somar só o que já foi efetivamente carregado (finalizado),
+    // usando a mesma fonte de peso do Painel Executivo (prioriza TMS, cai para o manual).
+    if (estaFinalizado) {
+      pesoTotal += _acompOutPesoOficial(r, rec, mapaTms);
+      finalizado++;
+    }
     else if (rec.horaInicio && String(rec.horaInicio).trim() !== '') emAndamento++;
   });
 
@@ -12984,7 +13179,7 @@ function acompOutRenderizar() {
   _acompOutUltimaLista = data;
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:30px;color:#94a3b8">Nenhum registro encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:30px;color:#94a3b8">Nenhum registro encontrado.</td></tr>';
     acompOutAtualizarCards();
     return;
   }
@@ -12999,6 +13194,7 @@ function acompOutRenderizar() {
       '<td style="padding:8px 10px">' + regiaoBadge(r.regiao) + '</td>' +
       '<td style="padding:8px 10px;font-size:11px;font-family:monospace">' + (r.composicao || '') + '</td>' +
       '<td style="padding:8px 10px;font-family:monospace">' + (r.frota || '—') + '</td>' +
+      '<td style="padding:8px 10px;text-align:center"><input type="text" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" value="' + (rec.prevFech||'').toString().split('"').join('&quot;') + '" style="width:130px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center" onblur="acompOutCampoAlterado(' + r._id + ',\'prevFech\',this.value)"></td>' +
       '<td style="padding:8px 10px">' +
         '<select style="width:130px;padding:4px 6px;font-size:11px;border:1px solid #e2e8f0;border-radius:4px;background:#fff;color:' + st.cor + ';font-weight:700;cursor:not-allowed" disabled id="acompOut-status-select-' + r._id + '">' +
           '<option value="nao-iniciado" ' + (st.valor === 'nao-iniciado' ? 'selected' : '') + ' style="color:#9ca3af">Não iniciado</option>' +
@@ -13938,148 +14134,83 @@ function gestaoVistaTrocarVisao(visao) {
 }
 
 // ═══════════ EXTRATO DO DIA — consolidado IN + OUT + Frotas ═══════════
-// Não calcula nada novo: reaproveita exatamente as mesmas fontes das outras três
-// visões (_gvColetarDadosIN, _gvFluxoFilaOUT, _histRelOutPesoHoje e _fpColeta),
-// para que os números batam com o que cada dashboard já mostra.
-// ═══════════ EXTRATO DO DIA — histórico diário (snapshot) ═══════════
-// A cada renderização da visão "Hoje", grava um retrato dos números do dia na
-// chave do dia (dd/mm/aaaa) — assim que o dia vira, aquela chave para de ser
-// tocada e passa a valer como histórico congelado, consultável em "Ontem"
-// independente de qualquer mudança futura na base.
-var _gvExtratoHistorico = {};
-try { _gvExtratoHistorico = JSON.parse(localStorage.getItem('extrato_dia_historico_v1') || '{}'); } catch(ex) { _gvExtratoHistorico = {}; }
-var _gvExtratoVisaoDia = 'hoje'; // 'hoje' | 'ontem'
+// Fonte única: as tabelas "Extrato do Dia" que já existem em cada dashboard.
+//   IN  -> _gvFluxoFilaIN()            (Total de Carga / Executado / Pendente)
+//   OUT -> _gvFluxoFilaOUT()           (Plano / Programado / Executado / Pendente)
+//   FP  -> _fpResumoVeiculosPorTurno() (Total Planejado / Executado)
+// Os valores usados são sempre a linha "Total" dessas tabelas, ou seja, a soma dos 3 turnos.
+var _gvExtratoDia = 'hoje';           // 'hoje' | 'ontem'
+var GV_EXTRATO_HIST_KEY = 'gv_extrato_hist';
 
-function _gvExtratoHistoricoSalvarSupabase() {
-  try {
-    fetch(SB_URL + '/configuracoes', {
-      method: 'POST',
-      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: 'extrato_dia_historico', valor: JSON.stringify(_gvExtratoHistorico) })
-    }).catch(function(){});
-  } catch(e) {}
-}
-
-function _gvExtratoHistoricoCarregarSupabase() {
-  try {
-    fetch(SB_URL + '/configuracoes?chave=eq.extrato_dia_historico&select=valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(data) {
-      if (data && data.length && data[0].valor) {
-        var remoto = JSON.parse(data[0].valor);
-        // Mescla com o local (o mais recente por dia prevalece; o Supabase é a fonte compartilhada)
-        _gvExtratoHistorico = Object.assign({}, _gvExtratoHistorico, remoto);
-        try { localStorage.setItem('extrato_dia_historico_v1', JSON.stringify(_gvExtratoHistorico)); } catch(e){}
-        if (_gvVisaoAtual === 'extrato' && typeof gvExtratoRenderizar === 'function') gvExtratoRenderizar();
-      }
-    }).catch(function(){});
-  } catch(e) {}
-}
-
-// Grava o snapshot de hoje (só regrava no Supabase se algo realmente mudou, pra não gerar tráfego à toa)
-function _gvExtratoSnapshotSalvar(dadosHoje) {
-  var chaveDia = getDataHoje(); // dd/mm/aaaa
-  var anterior = _gvExtratoHistorico[chaveDia];
-  var novoJson = JSON.stringify(dadosHoje);
-  if (anterior && JSON.stringify(anterior) === novoJson) return; // nada mudou
-  _gvExtratoHistorico[chaveDia] = dadosHoje;
-  // Limpeza: mantém só os últimos 30 dias registrados
-  var chaves = Object.keys(_gvExtratoHistorico);
-  if (chaves.length > 30) {
-    chaves.sort(function(a, b) {
-      var pa = a.split('/'), pb = b.split('/');
-      return new Date(pa[2], pa[1]-1, pa[0]) - new Date(pb[2], pb[1]-1, pb[0]);
-    });
-    chaves.slice(0, chaves.length - 30).forEach(function(k) { delete _gvExtratoHistorico[k]; });
-  }
-  try { localStorage.setItem('extrato_dia_historico_v1', JSON.stringify(_gvExtratoHistorico)); } catch(e){}
-  _gvExtratoHistoricoSalvarSupabase();
-}
-
-function _gvExtratoDataOntem() {
+function _gvExtratoDataISO(offsetDias) {
   var d = new Date();
-  d.setDate(d.getDate() - 1);
-  var pad = function(n) { return String(n).padStart(2,'0'); };
-  return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear();
-}
-
-function gvExtratoTrocarDia(dia) {
-  _gvExtratoVisaoDia = dia;
-  var btnHoje = document.getElementById('ext-btn-hoje');
-  var btnOntem = document.getElementById('ext-btn-ontem');
-  [btnHoje, btnOntem].forEach(function(b) {
-    if (!b) return;
-    b.style.background = '#1a1a1a'; b.style.color = '#9a9a9a'; b.style.borderColor = '#2f2f2f';
-  });
-  var sel = (dia === 'hoje') ? btnHoje : btnOntem;
-  if (sel) { sel.style.background = '#e8e8e8'; sel.style.color = '#111'; sel.style.borderColor = '#e8e8e8'; }
-  gvExtratoRenderizar();
+  d.setDate(d.getDate() - (offsetDias || 0));
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 
 function _gvExtratoColeta() {
-  // IN: Plano e Executado vêm da MESMA fonte da tabela "Extrato do Dia — Descarga"
-  // (Início de Turno + Entrou Depois / Executado), conforme pedido no MD — e não do
-  // card "Plano do Dia" antigo, que usa uma base diferente (fila de MACs do Histórico).
+  // ── Descarga (IN) — tabela Extrato do Dia — Peso OPL (kg) ──
+  var fIn = (typeof _gvFluxoFilaIN === 'function') ? _gvFluxoFilaIN() : null;
+  var tIn = (fIn && fIn.total) ? fIn.total : { filaInicial: 0, entrouDepois: 0, executado: 0, filaFinal: 0 };
+  var planoIn = (tIn.filaInicial || 0) + (tIn.entrouDepois || 0);  // coluna "Total de Carga"
+  var execIn  = tIn.executado || 0;                                 // coluna "Executado"
+  var saldoIn = tIn.filaFinal || 0;                                 // coluna "Pendente"
+  // A tabela do IN não tem coluna Programado; usa-se o mesmo valor do card "Programado" da visão IN
   var din = (typeof _gvColetarDadosIN === 'function') ? _gvColetarDadosIN() : {};
-  var fluxoIn = (typeof _gvFluxoFilaIN === 'function') ? _gvFluxoFilaIN() : null;
-  var planoIn = fluxoIn ? (fluxoIn.total.filaInicial + fluxoIn.total.entrouDepois) : (din.pesoPlano || 0);
   var progIn = din.pesoProgramado || 0;
-  var execIn = fluxoIn ? fluxoIn.total.executado : (din.pesoExecutado || 0);
 
-  // OUT: Plano vem do fluxo TMS; Programado do Histórico de Relatório OUT (mesma fonte da visão OUT)
-  var fluxoOut = (typeof _gvFluxoFilaOUT === 'function') ? _gvFluxoFilaOUT() : null;
-  var dout = (typeof _gvColetarDadosOUT === 'function') ? _gvColetarDadosOUT() : {};
-  var execOut = dout.pesoFeito || 0;
-  var planoOut = (fluxoOut && fluxoOut.temTms) ? fluxoOut.plano : (execOut + (dout.pesoFila || 0));
-  var progOut = (typeof _histRelOutPesoHoje === 'function') ? _histRelOutPesoHoje() : 0;
+  // ── Carregamento (OUT) — tabela Extrato do Dia — Peso Disponível TMS (kg) ──
+  var fOut = (typeof _gvFluxoFilaOUT === 'function') ? _gvFluxoFilaOUT() : null;
+  var tOut = (fOut && fOut.total) ? fOut.total : { filaInicial: 0, entrouDepois: 0, executado: 0, filaFinal: 0 };
+  var planoOut = (fOut && fOut.temTms) ? (fOut.plano || 0) : ((tOut.filaInicial || 0) + (tOut.entrouDepois || 0));
+  var execOut  = tOut.executado || 0;
+  var saldoOut = tOut.filaFinal || 0;
+  var progOut  = (fOut && fOut.programado) ? fOut.programado : 0;
 
-  // Críticos IN: CTRCs Atrasado/Hoje nos MACs da fila de Descarga
-  var critIn = 0;
-  var fila = (typeof _descMacRanking !== 'undefined' && _descMacRanking) ? _descMacRanking : [];
-  fila.forEach(function(m) { critIn += (m.atras || 0) + (m.hoje || 0); });
-
-  // Críticos OUT: CTRCs únicos já disponíveis para carregar com situação Atrasado/Hoje
-  var critOut = 0;
-  var relD = (typeof _relData !== 'undefined' && _relData) ? _relData : [];
-  var vistosOut = {};
-  relD.forEach(function(r) {
-    if (String(r.disp || '') !== 'Disponível') return;
-    var sit = String(r.sitAH || '');
-    if (sit !== 'Atrasado' && sit !== 'Hoje') return;
-    var ch = String(r.ctrc || '') || ('N' + (r.nota || '') + '|' + (r.remetente || ''));
-    if (vistosOut[ch]) return;
-    vistosOut[ch] = true;
-    critOut++;
-  });
-
-  // Frotas: mesma coleta da visão Frotas Programadas
+  // ── Programação de Frotas — tabela Extrato do Dia — Veículos Planejados ──
+  var rv = (typeof _fpResumoVeiculosPorTurno === 'function') ? _fpResumoVeiculosPorTurno() : null;
+  var tFp = (rv && rv.total) ? rv.total : { totalPlanejado: 0, executado: 0 };
+  var planoFp = tFp.totalPlanejado || 0;
+  var execFp  = tFp.executado || 0;
+  var saldoFp = Math.max(0, planoFp - execFp);
+  // A tabela de veículos não tem coluna Programado; usa-se "frota definida" da visão Frotas Programadas
   var dfp = (typeof _fpColeta === 'function') ? _fpColeta() : {};
-  var totalRotas = dfp.totalRotas || 0;
-  var frotaDefinida = dfp.programadosCount || 0;
-  var rotasExec = dfp.execCount || 0;
-  var faltamProg = dfp.faltandoCount || 0;
-
-  // Fora da malha: programações do dia cujo tipo não é da malha
-  var foraMalha = 0;
-  var progD = (typeof progData !== 'undefined' && progData) ? progData : [];
-  var diaHoje = (typeof getDiaHoje === 'function') ? getDiaHoje() : '';
-  progD.forEach(function(p) {
-    if (diaHoje && p.dia !== diaHoje) return;
-    var t = String(p.tipo || '');
-    if (t && t.indexOf('Malha') === -1) foraMalha++;
-  });
+  var progFp = dfp.programadosCount || 0;
 
   return {
-    planoIn: planoIn, progIn: progIn, execIn: execIn, critIn: critIn,
-    planoOut: planoOut, progOut: progOut, execOut: execOut, critOut: critOut,
-    totalRotas: totalRotas, frotaDefinida: frotaDefinida, rotasExec: rotasExec,
-    faltamProg: faltamProg, foraMalha: foraMalha,
+    data: _gvExtratoDataISO(0),
+    in:  { plano: planoIn,  programado: progIn,  executado: execIn,  saldo: saldoIn  },
+    out: { plano: planoOut, programado: progOut, executado: execOut, saldo: saldoOut },
+    fp:  { plano: planoFp,  programado: progFp,  executado: execFp,  saldo: saldoFp  },
     movimentado: execIn + execOut,
     planoTotal: planoIn + planoOut
   };
 }
 
-// Barra horizontal de 3 segmentos (Executado / Programado / Saldo)
+// ── Histórico diário: guarda um snapshot por dia para consulta posterior ──
+function _gvExtratoHistLer() {
+  try { return JSON.parse(localStorage.getItem(GV_EXTRATO_HIST_KEY) || '{}') || {}; }
+  catch (e) { return {}; }
+}
+
+function _gvExtratoHistSalvar(dados) {
+  if (!dados || !dados.data) return;
+  try {
+    var h = _gvExtratoHistLer();
+    h[dados.data] = dados;
+    // mantém os últimos 60 dias
+    var chaves = Object.keys(h).sort();
+    while (chaves.length > 60) { delete h[chaves.shift()]; }
+    localStorage.setItem(GV_EXTRATO_HIST_KEY, JSON.stringify(h));
+  } catch (e) {}
+}
+
+function gvExtratoTrocarDia(dia) {
+  _gvExtratoDia = dia;
+  gvExtratoRenderizar();
+}
+
+// ── Componentes visuais ──
 function _gvExtratoBarra(pctVerde, pctAmbar) {
   var a = Math.max(0, Math.round(pctVerde));
   var b = Math.max(0, Math.round(pctAmbar));
@@ -14103,83 +14234,70 @@ function _gvExtratoMetrica(rotulo, valor, cor) {
   '</div>';
 }
 
-function _gvExtratoProcesso(titulo, badgeTexto, metricas, pctVerde, pctAmbar) {
+function _gvExtratoProcesso(titulo, bloco, formatar) {
+  var pctExec = bloco.plano ? Math.round(bloco.executado / bloco.plano * 100) : 0;
+  var pctProg = bloco.plano ? Math.round(bloco.programado / bloco.plano * 100) : 0;
+  var metricas =
+    _gvExtratoMetrica('Plano', formatar(bloco.plano)) +
+    _gvExtratoMetrica('Programado', formatar(bloco.programado), '#f0b429') +
+    _gvExtratoMetrica('Executado', formatar(bloco.executado), '#3fb950') +
+    _gvExtratoMetrica('Saldo', formatar(bloco.saldo)) +
+    _gvExtratoMetrica('Atingimento', pctExec + '%', '#3fb950');
   return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:8px;padding:18px 20px;margin-bottom:16px">' +
     '<div style="display:flex;align-items:center">' +
-      '<div style="min-width:210px;display:flex;align-items:center;gap:12px">' +
-        '<span style="font-size:15px;font-weight:700;color:#fff">' + titulo + '</span>' +
-        '<span style="font-size:10.5px;font-weight:700;color:#ff8f8f;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);border-radius:4px;padding:3px 9px;white-space:nowrap">' + badgeTexto + '</span>' +
-      '</div>' +
+      '<div style="min-width:210px"><span style="font-size:15px;font-weight:700;color:#fff">' + titulo + '</span></div>' +
       '<div style="flex:1;display:flex">' + metricas + '</div>' +
     '</div>' +
-    _gvExtratoBarra(pctVerde, pctAmbar) +
+    _gvExtratoBarra(pctExec, pctProg) +
   '</div>';
 }
 
 function gvExtratoRenderizar() {
   var topo = document.getElementById('ext-cards-topo');
   var proc = document.getElementById('ext-processos');
+  var navDiv = document.getElementById('ext-nav-dia');
   if (!topo || !proc) return;
 
-  var atualizadoEl = document.getElementById('ext-atualizado');
-  var e;
-  if (_gvExtratoVisaoDia === 'ontem') {
-    var chaveOntem = _gvExtratoDataOntem();
-    e = _gvExtratoHistorico[chaveOntem];
-    if (atualizadoEl) atualizadoEl.textContent = e ? ('Registro de ' + chaveOntem) : ('Sem registro salvo para ' + chaveOntem);
-    if (!e) {
-      topo.innerHTML = '';
-      proc.innerHTML = '<div style="padding:30px;text-align:center;color:#9a9a9a;font-size:12px;background:#141414;border:1px solid #2b2b2b;border-radius:8px">Nenhum snapshot de ontem foi registrado ainda. O histórico começa a ser salvo automaticamente a partir de hoje.</div>';
-      return;
-    }
-  } else {
-    e = _gvExtratoColeta();
-    if (atualizadoEl) atualizadoEl.textContent = 'Ao vivo — ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
-    _gvExtratoSnapshotSalvar(e); // grava/atualiza o retrato de hoje a cada visita a esta tela
-  }
-  var kg = function(v) { return Math.round(v || 0).toLocaleString('pt-BR') + ' kg'; };
-  var pctDe = function(parte, todo) { return todo ? Math.round(parte / todo * 100) : 0; };
+  // Sempre coleta e arquiva o dia corrente, mesmo quando a tela está exibindo "Ontem"
+  var hojeDados = _gvExtratoColeta();
+  _gvExtratoHistSalvar(hojeDados);
 
-  var pctDia = pctDe(e.movimentado, e.planoTotal);
+  var e = hojeDados;
+  var aviso = '';
+  if (_gvExtratoDia === 'ontem') {
+    var ontem = _gvExtratoHistLer()[_gvExtratoDataISO(1)];
+    if (ontem) {
+      e = ontem;
+    } else {
+      aviso = 'Sem histórico salvo para ontem — exibindo os dados de hoje.';
+    }
+  }
+
+  if (navDiv) {
+    var btn = function(id, rotulo, ativo) {
+      return '<button id="' + id + '" onclick="gvExtratoTrocarDia(\'' + (id === 'ext-btn-hoje' ? 'hoje' : 'ontem') + '\')" ' +
+        'style="padding:7px 18px;border-radius:4px;border:1px solid ' + (ativo ? '#e8e8e8' : '#2f2f2f') + ';' +
+        'background:' + (ativo ? '#e8e8e8' : '#1a1a1a') + ';color:' + (ativo ? '#111' : '#9a9a9a') + ';' +
+        'font-size:12px;font-weight:700;cursor:pointer;font-family:\'Poppins\',sans-serif">' + rotulo + '</button>';
+    };
+    navDiv.innerHTML = btn('ext-btn-hoje', 'Hoje', _gvExtratoDia === 'hoje') +
+                       btn('ext-btn-ontem', 'Ontem', _gvExtratoDia === 'ontem');
+  }
+
+  var kg = function(v) { return Math.round(v || 0).toLocaleString('pt-BR') + ' kg'; };
+  var qtd = function(v) { return Math.round(v || 0).toLocaleString('pt-BR'); };
+  var pctDia = e.planoTotal ? Math.round(e.movimentado / e.planoTotal * 100) : 0;
 
   topo.innerHTML =
     _fpKpiCard('Peso Movimentado', Math.round(e.movimentado), '#3fb950', ' kg', 'Descarregado + carregado') +
     _fpKpiCard('Plano de Movimentação', Math.round(e.planoTotal), '#ffffff', ' kg', 'Plano IN + OUT') +
     _gvDonutEficienciaCard(pctDia, 'executado', 'Atingimento do Dia', '#3fb950');
 
-  // ── Descarga (IN) ──
-  var saldoIn = e.planoIn - e.execIn;
-  var mIn =
-    _gvExtratoMetrica('Plano', kg(e.planoIn)) +
-    _gvExtratoMetrica('Programado', kg(e.progIn), '#f0b429') +
-    _gvExtratoMetrica('Executado', kg(e.execIn), '#3fb950') +
-    _gvExtratoMetrica('Saldo', kg(saldoIn)) +
-    _gvExtratoMetrica('Atingimento', pctDe(e.execIn, e.planoIn) + '%', '#3fb950');
-
-  // ── Carregamento (OUT) ──
-  var saldoOut = e.planoOut - e.execOut;
-  var mOut =
-    _gvExtratoMetrica('Plano', kg(e.planoOut)) +
-    _gvExtratoMetrica('Programado', kg(e.progOut), '#f0b429') +
-    _gvExtratoMetrica('Executado', kg(e.execOut), '#3fb950') +
-    _gvExtratoMetrica('Saldo', kg(saldoOut)) +
-    _gvExtratoMetrica('Atingimento', pctDe(e.execOut, e.planoOut) + '%', '#3fb950');
-
-  // ── Programação de Frotas ──
-  var mFp =
-    _gvExtratoMetrica('Malha do dia', e.totalRotas.toLocaleString('pt-BR')) +
-    _gvExtratoMetrica('Frota definida', e.frotaDefinida.toLocaleString('pt-BR'), '#f0b429') +
-    _gvExtratoMetrica('Rotas executadas', e.rotasExec.toLocaleString('pt-BR'), '#3fb950') +
-    _gvExtratoMetrica('Faltam programar', e.faltamProg.toLocaleString('pt-BR')) +
-    _gvExtratoMetrica('Atingimento', pctDe(e.rotasExec, e.totalRotas) + '%', '#3fb950');
-
   proc.innerHTML =
-    _gvExtratoProcesso('Descarga (IN)', 'Críticos: ' + e.critIn, mIn,
-      pctDe(e.execIn, e.planoIn), pctDe(e.progIn, e.planoIn)) +
-    _gvExtratoProcesso('Carregamento (OUT)', 'Críticos: ' + e.critOut, mOut,
-      pctDe(e.execOut, e.planoOut), pctDe(e.progOut, e.planoOut)) +
-    _gvExtratoProcesso('Programação de Frotas', 'Fora da malha: ' + e.foraMalha, mFp,
-      pctDe(e.rotasExec, e.totalRotas), pctDe(e.frotaDefinida, e.totalRotas));
+    (aviso ? '<div style="font-size:11px;color:#f0b429;margin-bottom:10px">' + aviso + '</div>' : '') +
+    _gvExtratoProcesso('Descarga (IN)', e.in, kg) +
+    _gvExtratoProcesso('Carregamento (OUT)', e.out, kg) +
+    _gvExtratoProcesso('Programação de Frotas', e.fp, qtd);
 }
 
 function gestaoVistaFiltrarTurno(turno) {
@@ -14838,29 +14956,10 @@ function _gvColetarDadosOUT() {
   var acompData = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
   var relD = (typeof _relData !== 'undefined') ? _relData : [];
 
-  // Construir mapa de peso por frotaPlan do TMS (mesma lógica do planejamento)
-  var relByFrota = {};
-  relD.forEach(function(r) {
-    var fp = String(r.frotaPlan||'').trim();
-    if (fp) {
-      if (!relByFrota[fp]) relByFrota[fp] = 0;
-      relByFrota[fp] += r.peso || 0;
-    }
-  });
-
-  function pesoDoTMS(frota) {
-    if (!frota) return 0;
-    var fn = String(frota).toUpperCase().replace(/\s+/g,'');
-    if (relByFrota[frota]) return relByFrota[frota];
-    if (relByFrota[fn]) return relByFrota[fn];
-    var found = 0;
-    Object.keys(relByFrota).forEach(function(k) {
-      if (found) return;
-      var kn = k.toUpperCase().replace(/\s+/g,'');
-      if (kn === fn || fn.indexOf(kn) !== -1 || kn.indexOf(fn) !== -1) found = relByFrota[k];
-    });
-    return found;
-  }
+  // Mapa de peso por frotaPlan do TMS — fonte compartilhada com o card
+  // "Peso OPL Total Carregado" da tela Acompanhamento OUT (_tmsPesoPorFrotaMapa).
+  var relByFrota = _tmsPesoPorFrotaMapa();
+  function pesoDoTMS(frota) { return _tmsPesoDeFrota(frota, relByFrota); }
 
   var pesoFeito = 0, pesoFila = 0;
 
@@ -14990,61 +15089,97 @@ function _gvFluxoFilaOUT() {
   var plano = filaInicial + entrouDepois;
   var filaFinal = plano - execTotalGeral;
 
-  // ── Passe 2: o que é exibido como "Executado", por turno + distribuição proporcional de Fila ──
+  // ── Passe 2: Executado por turno (com base na Hora Fim real, não estimativa) ──
   var itens = itensBase;
   var ordem = ['1º Turno','2º Turno','3º Turno'];
   var execTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
-  var pesoAcompTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var execTotal = 0;
 
   itens.forEach(function(r) {
     var rec = acompData[r._id] || {};
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
-    var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
+    if (!temFim) return;
     var pesoTms2 = pesoTMSOut(r.frota);
     var peso = pesoTms2 > 0 ? pesoTms2 : (_parsePesoBR(rec.pesoOpl));
-    var t = turnoDe(temInicio ? rec.horaInicio : (rec.horaFim || agoraHora));
-    
-    pesoAcompTurno[t] += peso;
-    
-    if (temFim) {
-      execTotal += peso;
-      execTurno[t] += peso;
-    }
+    execTurno[turnoDe(rec.horaFim)] += peso;
+    execTotal += peso;
   });
 
   var pctTotalExec = plano ? Math.round(execTotal / plano * 100) : 0;
   // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
   if (pctTotalExec === 0 && execTotal > 0) pctTotalExec = 1;
-  
+
   var total = {
     turno: 'Total', filaInicial: filaInicial, entrouDepois: entrouDepois,
     executado: execTotal, filaFinal: filaFinal,
     pctExec: pctTotalExec
   };
-  
-  // Distribui filaInicial proporcionalmente por turno baseado no acompanhamento
-  var totalAcomp = execTotal + (ordem.reduce(function(sum, t) { return sum + (pesoAcompTurno[t] - execTurno[t]); }, 0));
-  
-  var linhas = ordem.map(function(t) {
-    var proporcao = totalAcomp > 0 ? pesoAcompTurno[t] / totalAcomp : 0;
-    var filaInicialT = Math.round(filaInicial * proporcao);
-    var entrouDeT = Math.round(entrouDepois * proporcao);
-    var planoT = filaInicialT + entrouDeT;
+
+  // ── Distribuição em cascata (waterfall) por turno ──
+  // Cada turno herda como "Início de Turno" o Pendente que sobrou do turno anterior,
+  // e a "Entrada" de cada turno é só o que realmente chegou por novos imports do TMS
+  // durante a janela daquele turno. Nada aqui é recalculado a partir do horário atual
+  // — por isso um turno que já passou não zera quando o relógio vira para o turno seguinte.
+  //
+  // O peso disponível no TMS CAI conforme os veículos são carregados, então a diferença
+  // bruta entre dois imports subestima o que de fato chegou — é preciso somar de volta
+  // o que saiu da fila por execução no intervalo entre os dois imports.
+  var hojeBase = new Date(); hojeBase.setHours(0, 0, 0, 0);
+  var execucoesHoje = [];
+  itens.forEach(function(r) {
+    var rec = acompData[r._id] || {};
+    if (!rec.horaFim || !String(rec.horaFim).trim()) return;
+    var partesH = String(rec.horaFim).split(':');
+    var hh = parseInt(partesH[0], 10), mm = parseInt(partesH[1], 10) || 0;
+    if (isNaN(hh)) return;
+    var pesoTms3 = pesoTMSOut(r.frota);
+    var pesoExec = pesoTms3 > 0 ? pesoTms3 : (_parsePesoBR(rec.pesoOpl));
+    execucoesHoje.push({ data: new Date(hojeBase.getTime() + hh * 3600000 + mm * 60000), peso: pesoExec });
+  });
+
+  var entradaTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var turnoDoPrimeiroImport = '1º Turno';
+  if (temTms) {
+    turnoDoPrimeiroImport = turnoDe(new Date(primeiroImport.dataHoraISO).toTimeString().substring(0,5));
+    var cronologico = snapsHoje.slice().reverse(); // snapsHoje vem do mais recente primeiro
+    for (var i = 1; i < cronologico.length; i++) {
+      var dataImpAnt = new Date(cronologico[i-1].dataHoraISO);
+      var dataImpAtual = new Date(cronologico[i].dataHoraISO);
+      var pesoAtualImp = pipelineDe(cronologico[i]);
+      var pesoAnteriorImp = pipelineDe(cronologico[i-1]);
+      var execNoIntervalo = 0;
+      execucoesHoje.forEach(function(e) {
+        if (e.data > dataImpAnt && e.data <= dataImpAtual) execNoIntervalo += e.peso;
+      });
+      var deltaImp = (pesoAtualImp - pesoAnteriorImp) + execNoIntervalo;
+      if (deltaImp > 0) {
+        var horaImp = dataImpAtual.toTimeString().substring(0,5);
+        entradaTurno[turnoDe(horaImp)] += deltaImp;
+      }
+    }
+  }
+
+  var linhas = [];
+  var pendenteAcumulado = 0;
+  ordem.forEach(function(t) {
+    var inicioT = pendenteAcumulado + (t === turnoDoPrimeiroImport ? filaInicial : 0);
+    var entradaT = Math.round(entradaTurno[t]);
+    var totalT = inicioT + entradaT;
     var execT = execTurno[t];
-    var faltaT = planoT - execT;
+    var pendenteT = Math.max(0, Math.round(totalT - execT));
     var pctT = plano ? Math.round(execT / plano * 100) : 0;
     // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
     if (pctT === 0 && execT > 0) pctT = 1;
-    
-    return { 
-      turno: t, 
-      filaInicial: filaInicialT,
-      entrouDepois: entrouDeT,
-      filaFinal: faltaT,
-      executado: execT, 
+
+    linhas.push({
+      turno: t,
+      filaInicial: Math.round(inicioT),
+      entrouDepois: entradaT,
+      filaFinal: pendenteT,
+      executado: execT,
       pctExec: pctT
-    };
+    });
+    pendenteAcumulado = pendenteT; // carrega o Pendente para o Início do próximo turno
   });
 
   var horaPrimeiro = primeiroImport ? new Date(primeiroImport.dataHoraISO).toTimeString().substring(0,5) : null;
@@ -15229,15 +15364,6 @@ function gestaoVistaRenderizar() {
   // OUT: fluxo TMS calculado uma única vez por render (pílula, card principal e tabela reutilizam)
   var fluxoOut = (_gvVisaoAtual === 'out') ? _gvFluxoFilaOUT() : null;
   if (fluxoOut && fluxoOut.temTms) dados.pesoFila = fluxoOut.total.filaFinal;
-  // IN: mesma fonte já usada na tabela "Extrato do Dia — Descarga" (fila inicial + entrou depois),
-  // pra que o card "Plano do Dia" sempre bata com o total da tabela Extrato do Dia
-  var fluxoIn = (_gvVisaoAtual === 'in') ? _gvFluxoFilaIN() : null;
-  if (fluxoIn) {
-    dados.pesoPlano = fluxoIn.total.filaInicial + fluxoIn.total.entrouDepois;
-    dados.pesoExecutado = fluxoIn.total.executado;
-    dados.pesoFeito = fluxoIn.total.executado;
-    dados.pesoFila = fluxoIn.total.filaFinal;
-  }
 
   // ── Badges de filtro ativo (turno + frota) ──
   var filtroDiv = document.getElementById('gv-filtro-ativo');
@@ -15295,9 +15421,16 @@ function gestaoVistaRenderizar() {
     // Plano OUT = tudo disponível no relatório do TMS (Fila Inicial + Entrou Depois do dia)
     if (fluxoOut && fluxoOut.temTms) pesoTotalHoje = fluxoOut.plano;
     else pesoTotalHoje = pesoExecutado + pesoProgramado + pesoNaoIniciado;
-    // Programado no OUT = peso registrado hoje no Histórico de Relatório OUT
-    // (mesma fonte do card "Programado", para barra e card exibirem o mesmo número)
-    if (typeof _histRelOutPesoHoje === 'function') pesoProgramado = _histRelOutPesoHoje();
+    // Programado no OUT = peso registrado no Histórico de Relatório OUT, só do turno vigente
+    // (mesma regra de corte usada nos medidores por turno logo abaixo) — sem isso o card
+    // continuava somando o 1º Turno mesmo depois do 2º Turno já ter começado.
+    if (typeof _histRelOutPesoTurno === 'function' && typeof _gvTurnoDoHorario === 'function') {
+      var horaAgoraProg = new Date().toTimeString().substring(0, 5);
+      var turnoAgoraProg = _gvTurnoDoHorario(horaAgoraProg);
+      pesoProgramado = _histRelOutPesoTurno(turnoAgoraProg);
+    } else if (typeof _histRelOutPesoHoje === 'function') {
+      pesoProgramado = _histRelOutPesoHoje();
+    }
   } else {
     // IN: reaproveita os valores já calculados em _gvColetarDadosIN (deduplicados via Histórico de Relatório)
     pesoTotalHoje = dados.pesoPlano || 0;
@@ -15907,9 +16040,11 @@ function histRelOutExcluirSelecionados() {
   indicesToDelete.sort(function(a, b) { return b - a; });
 
   // Remover do array _histRelOut
+  var chavesExcluidas = [];
   indicesToDelete.forEach(function(idx) {
     if (idx >= 0 && idx < _histRelOut.length) {
       var record = _histRelOut[idx];
+      chavesExcluidas.push({ ts: record.ts, destinoImpresso: record.destinoImpresso });
       _histRelOut.splice(idx, 1);
       
       // Enviar exclusão para Google Sheets (fire-and-forget)
@@ -15919,9 +16054,9 @@ function histRelOutExcluirSelecionados() {
     }
   });
 
-  // Salvar no localStorage
-  try { localStorage.setItem('hist_rel_out_v1', JSON.stringify(_histRelOut)); } catch(ex) {}
-  _histRelOutSalvarSupabase(); // compartilha a exclusão com todos os usuários em tempo real
+  // Salvar localmente e propagar a exclusão para os demais usuários — passa as
+  // chaves removidas para que sumam mesmo se a cópia remota ainda as tiver.
+  _histRelOutSincronizarEEscrever(chavesExcluidas);
 
   // Re-renderizar a tabela
   histRelOutRenderizar();
