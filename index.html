@@ -15184,6 +15184,15 @@ function gestaoVistaRenderizar() {
   // OUT: fluxo TMS calculado uma única vez por render (pílula, card principal e tabela reutilizam)
   var fluxoOut = (_gvVisaoAtual === 'out') ? _gvFluxoFilaOUT() : null;
   if (fluxoOut && fluxoOut.temTms) dados.pesoFila = fluxoOut.total.filaFinal;
+  // IN: mesma fonte já usada na tabela "Extrato do Dia — Descarga" (fila inicial + entrou depois),
+  // pra que o card "Plano do Dia" sempre bata com o total da tabela Extrato do Dia
+  var fluxoIn = (_gvVisaoAtual === 'in') ? _gvFluxoFilaIN() : null;
+  if (fluxoIn) {
+    dados.pesoPlano = fluxoIn.total.filaInicial + fluxoIn.total.entrouDepois;
+    dados.pesoExecutado = fluxoIn.total.executado;
+    dados.pesoFeito = fluxoIn.total.executado;
+    dados.pesoFila = fluxoIn.total.filaFinal;
+  }
 
   // ── Badges de filtro ativo (turno + frota) ──
   var filtroDiv = document.getElementById('gv-filtro-ativo');
