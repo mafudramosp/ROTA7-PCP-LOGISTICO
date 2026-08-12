@@ -15089,97 +15089,61 @@ function _gvFluxoFilaOUT() {
   var plano = filaInicial + entrouDepois;
   var filaFinal = plano - execTotalGeral;
 
-  // ── Passe 2: Executado por turno (com base na Hora Fim real, não estimativa) ──
+  // ── Passe 2: o que é exibido como "Executado", por turno + distribuição proporcional de Fila ──
   var itens = itensBase;
   var ordem = ['1º Turno','2º Turno','3º Turno'];
   var execTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var pesoAcompTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
   var execTotal = 0;
 
   itens.forEach(function(r) {
     var rec = acompData[r._id] || {};
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
-    if (!temFim) return;
+    var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
     var pesoTms2 = pesoTMSOut(r.frota);
     var peso = pesoTms2 > 0 ? pesoTms2 : (_parsePesoBR(rec.pesoOpl));
-    execTurno[turnoDe(rec.horaFim)] += peso;
-    execTotal += peso;
+    var t = turnoDe(temInicio ? rec.horaInicio : (rec.horaFim || agoraHora));
+    
+    pesoAcompTurno[t] += peso;
+    
+    if (temFim) {
+      execTotal += peso;
+      execTurno[t] += peso;
+    }
   });
 
   var pctTotalExec = plano ? Math.round(execTotal / plano * 100) : 0;
   // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
   if (pctTotalExec === 0 && execTotal > 0) pctTotalExec = 1;
-
+  
   var total = {
     turno: 'Total', filaInicial: filaInicial, entrouDepois: entrouDepois,
     executado: execTotal, filaFinal: filaFinal,
     pctExec: pctTotalExec
   };
-
-  // ── Distribuição em cascata (waterfall) por turno ──
-  // Cada turno herda como "Início de Turno" o Pendente que sobrou do turno anterior,
-  // e a "Entrada" de cada turno é só o que realmente chegou por novos imports do TMS
-  // durante a janela daquele turno. Nada aqui é recalculado a partir do horário atual
-  // — por isso um turno que já passou não zera quando o relógio vira para o turno seguinte.
-  //
-  // O peso disponível no TMS CAI conforme os veículos são carregados, então a diferença
-  // bruta entre dois imports subestima o que de fato chegou — é preciso somar de volta
-  // o que saiu da fila por execução no intervalo entre os dois imports.
-  var hojeBase = new Date(); hojeBase.setHours(0, 0, 0, 0);
-  var execucoesHoje = [];
-  itens.forEach(function(r) {
-    var rec = acompData[r._id] || {};
-    if (!rec.horaFim || !String(rec.horaFim).trim()) return;
-    var partesH = String(rec.horaFim).split(':');
-    var hh = parseInt(partesH[0], 10), mm = parseInt(partesH[1], 10) || 0;
-    if (isNaN(hh)) return;
-    var pesoTms3 = pesoTMSOut(r.frota);
-    var pesoExec = pesoTms3 > 0 ? pesoTms3 : (_parsePesoBR(rec.pesoOpl));
-    execucoesHoje.push({ data: new Date(hojeBase.getTime() + hh * 3600000 + mm * 60000), peso: pesoExec });
-  });
-
-  var entradaTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
-  var turnoDoPrimeiroImport = '1º Turno';
-  if (temTms) {
-    turnoDoPrimeiroImport = turnoDe(new Date(primeiroImport.dataHoraISO).toTimeString().substring(0,5));
-    var cronologico = snapsHoje.slice().reverse(); // snapsHoje vem do mais recente primeiro
-    for (var i = 1; i < cronologico.length; i++) {
-      var dataImpAnt = new Date(cronologico[i-1].dataHoraISO);
-      var dataImpAtual = new Date(cronologico[i].dataHoraISO);
-      var pesoAtualImp = pipelineDe(cronologico[i]);
-      var pesoAnteriorImp = pipelineDe(cronologico[i-1]);
-      var execNoIntervalo = 0;
-      execucoesHoje.forEach(function(e) {
-        if (e.data > dataImpAnt && e.data <= dataImpAtual) execNoIntervalo += e.peso;
-      });
-      var deltaImp = (pesoAtualImp - pesoAnteriorImp) + execNoIntervalo;
-      if (deltaImp > 0) {
-        var horaImp = dataImpAtual.toTimeString().substring(0,5);
-        entradaTurno[turnoDe(horaImp)] += deltaImp;
-      }
-    }
-  }
-
-  var linhas = [];
-  var pendenteAcumulado = 0;
-  ordem.forEach(function(t) {
-    var inicioT = pendenteAcumulado + (t === turnoDoPrimeiroImport ? filaInicial : 0);
-    var entradaT = Math.round(entradaTurno[t]);
-    var totalT = inicioT + entradaT;
+  
+  // Distribui filaInicial proporcionalmente por turno baseado no acompanhamento
+  var totalAcomp = execTotal + (ordem.reduce(function(sum, t) { return sum + (pesoAcompTurno[t] - execTurno[t]); }, 0));
+  
+  var linhas = ordem.map(function(t) {
+    var proporcao = totalAcomp > 0 ? pesoAcompTurno[t] / totalAcomp : 0;
+    var filaInicialT = Math.round(filaInicial * proporcao);
+    var entrouDeT = Math.round(entrouDepois * proporcao);
+    var planoT = filaInicialT + entrouDeT;
     var execT = execTurno[t];
-    var pendenteT = Math.max(0, Math.round(totalT - execT));
+    var faltaT = planoT - execT;
     var pctT = plano ? Math.round(execT / plano * 100) : 0;
     // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
     if (pctT === 0 && execT > 0) pctT = 1;
-
-    linhas.push({
-      turno: t,
-      filaInicial: Math.round(inicioT),
-      entrouDepois: entradaT,
-      filaFinal: pendenteT,
-      executado: execT,
+    
+    return { 
+      turno: t, 
+      filaInicial: filaInicialT,
+      entrouDepois: entrouDeT,
+      filaFinal: faltaT,
+      executado: execT, 
       pctExec: pctT
-    });
-    pendenteAcumulado = pendenteT; // carrega o Pendente para o Início do próximo turno
+    };
   });
 
   var horaPrimeiro = primeiroImport ? new Date(primeiroImport.dataHoraISO).toTimeString().substring(0,5) : null;
@@ -15407,16 +15371,32 @@ function gestaoVistaRenderizar() {
       });
       return found;
     }
-    // Executado/Programado usando peso TMS por frota (fallback: pesoOpl manual)
+    // Executado/Programado usando peso TMS por frota (fallback: pesoOpl manual).
+    // Os cards refletem SOMENTE o turno vigente: um veículo entra no Executado do
+    // turno em que sua Hora Fim foi registrada, e no Programado do turno da Hora Início.
+    // Sem esse recorte, o card continuava exibindo o que foi feito nos turnos anteriores
+    // (ex.: mostrando o 3º Turno da madrugada enquanto a equipe já está no 1º Turno).
+    var turnoVigenteGV = (typeof _gvTurnoDoHorario === 'function')
+      ? _gvTurnoDoHorario(new Date().toTimeString().substring(0, 5)) : null;
+    function turnoDeGV(horaStr) {
+      var t = (typeof _gvTurnoDoHorario === 'function') ? _gvTurnoDoHorario(horaStr) : null;
+      if (t) return t;
+      var hh = parseInt(String(horaStr||'').split(':')[0], 10); if (isNaN(hh)) hh = 0;
+      if (hh >= 6 && hh < 15) return '1º Turno';
+      if (hh >= 15 && hh < 23) return '2º Turno';
+      return '3º Turno';
+    }
     itensOut.forEach(function(r) {
       var rec = acompOut[r._id] || {};
       var pesoTms = pesoPorFrotaGV(r.frota);
       var peso = pesoTms > 0 ? pesoTms : (_parsePesoBR(rec.pesoOpl));
       var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
       var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
-      if (temFim) pesoExecutado += peso;
-      else if (temInicio) pesoProgramado += peso;
-      else pesoNaoIniciado += peso;
+      if (temFim) {
+        if (!turnoVigenteGV || turnoDeGV(rec.horaFim) === turnoVigenteGV) pesoExecutado += peso;
+      } else if (temInicio) {
+        if (!turnoVigenteGV || turnoDeGV(rec.horaInicio) === turnoVigenteGV) pesoProgramado += peso;
+      } else pesoNaoIniciado += peso;
     });
     // Plano OUT = tudo disponível no relatório do TMS (Fila Inicial + Entrou Depois do dia)
     if (fluxoOut && fluxoOut.temTms) pesoTotalHoje = fluxoOut.plano;
