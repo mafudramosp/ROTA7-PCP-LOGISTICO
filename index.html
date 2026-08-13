@@ -492,6 +492,73 @@
      das tabelas do app faria cada quadro estourar a largura da coluna. */
   #tab-listaPresenca-content table { min-width: 0 !important; }
 
+  /* ── HC Produtivo: quadros de turno em formato de card (referência: cartões de plano) ──
+     Cada turno é um card com faixa branca de identificação no topo, a capacidade lida
+     como "preço" (inteiro grande + decimais sobrescritos), as funções em linhas separadas
+     por filetes translúcidos e uma tarja branca de rodapé com o efetivo escalado.
+     A cor identifica o turno e se repete em Inbound e Outbound. */
+  .lp-grid { display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch; }
+  .lp-card {
+    flex: 1 1 250px; min-width: 240px; max-width: 340px;
+    border-radius: 14px 14px 10px 10px; overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 10px 26px rgba(15,23,42,.18);
+    font-family: 'Poppins', sans-serif;
+  }
+  .lp-card--destaque { box-shadow: 0 18px 40px rgba(15,23,42,.3); margin-top: -12px; }
+  .lp-tab { background: #fff; padding: 14px 18px 12px; text-align: center; }
+  .lp-tab-nome { font-size: 15px; font-weight: 800; color: #1e293b; letter-spacing: .1em; text-transform: uppercase; line-height: 1.1; }
+  .lp-tab-sub  { font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; margin-top: 3px; }
+  .lp-body { flex: 1; padding: 18px 18px 14px; text-align: center; }
+  .lp-preco { color: #fff; line-height: 1; display: inline-flex; align-items: flex-start; }
+  .lp-preco-int { font-size: 38px; font-weight: 800; letter-spacing: -.02em; }
+  .lp-preco-dec { font-size: 17px; font-weight: 800; margin-top: 3px; }
+  .lp-preco-cap { font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.78); margin-top: 5px; }
+  .lp-linhas { margin-top: 16px; }
+  .lp-linha {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 2px; border-top: 1px solid rgba(255,255,255,.3);
+  }
+  .lp-linha:last-child { border-bottom: 1px solid rgba(255,255,255,.3); }
+  .lp-marca {
+    width: 17px; height: 17px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; line-height: 1;
+    background: rgba(255,255,255,.32); color: #fff;
+    text-shadow: 0 1px 1px rgba(15,23,42,.18);
+  }
+  .lp-marca.off { background: rgba(255,255,255,.14); color: rgba(255,255,255,.72); }
+  .lp-fn { flex: 1; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: rgba(255,255,255,.95); }
+  .lp-cap { font-size: 12px; font-weight: 800; color: #fff; min-width: 52px; text-align: right; }
+  .lp-cap.off { color: rgba(255,255,255,.45); }
+  .lp-foot {
+    background: #fff; margin: 4px 18px 16px; border-radius: 6px;
+    padding: 9px 14px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .lp-foot-lb { font-size: 9.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #94a3b8; }
+  .lp-foot-vl { font-size: 15px; font-weight: 800; }
+  /* Campo de QTD: chip translúcido sobre o gradiente — precisa vencer o tema escuro global */
+  #tab-listaPresenca-content .lp-card input.lp-qtd,
+  body.dark #tab-listaPresenca-content .lp-card input.lp-qtd {
+    width: 48px; flex: none; text-align: center;
+    font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 700;
+    padding: 4px 5px; border-radius: 5px;
+    background: rgba(255,255,255,.24) !important;
+    border: 1px solid rgba(255,255,255,.45) !important;
+    color: #fff !important;
+    outline: none;
+  }
+  #tab-listaPresenca-content .lp-card input.lp-qtd:focus,
+  body.dark #tab-listaPresenca-content .lp-card input.lp-qtd:focus {
+    background: rgba(255,255,255,.95) !important;
+    border-color: #fff !important;
+    color: #1e293b !important;
+  }
+  @media (max-width: 640px) {
+    .lp-card { max-width: none; }
+    .lp-card--destaque { margin-top: 0; }
+  }
+
   /* Tela Programar: colunas 2 (Status Carregamento) e 13 (Prev. Fechamento) ocultas apenas
      visualmente. Os inputs continuam no DOM e com os mesmos ids (ocup_, status_, prev_),
      porque autoSalvarLinha() os lê para decidir o que salvar — removê-los do HTML faria
@@ -5069,7 +5136,10 @@ document.addEventListener('click',function(e){
       <div style="font-size:16px;font-weight:700;color:#1e293b">Acompanhamento OUT</div>
       <div style="font-size:11px;color:#94a3b8">Sub-tópico de Prior. Carreg. · acompanhamento manual de peso, horários e conferente de cada embarque</div>
     </div>
-    <button onclick="acompOutSalvarHistoricoSheets()" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Salvar</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="acompOut-btn-adiantado" onclick="acompOutVeiculoAdiantado()" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Veículo Adiantado</button>
+      <button onclick="acompOutSalvarHistoricoSheets()" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Salvar</button>
+    </div>
   </div>
 
   <!-- Cards resumo -->
@@ -5103,15 +5173,16 @@ document.addEventListener('click',function(e){
     <table>
       <thead>
         <tr>
+          <th style="padding:8px 6px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;width:34px" title="Selecionar linhas para Veículo Adiantado"><input type="checkbox" id="acompOut-chk-todos" onclick="acompOutMarcarTodos(this.checked)" style="cursor:pointer;margin:0"></th>
           <th onclick="acompOutOrdenar('gerado')" title="Ordenar por Gerado em" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Gerado em<span id="acompOut-arw-gerado"></span></th>
           <th onclick="acompOutOrdenar('destino')" title="Ordenar por Destino" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Destino<span id="acompOut-arw-destino"></span> <button class="cf-btn" id="acfb-destino" onclick="event.stopPropagation();acfOpen('destino',this)" style="color:#9ca3af">&#9660;</button></th>
           <th onclick="acompOutOrdenar('regiao')" title="Ordenar por Região" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Região<span id="acompOut-arw-regiao"></span> <button class="cf-btn" id="acfb-regiao" onclick="event.stopPropagation();acfOpen('regiao',this)" style="color:#9ca3af">&#9660;</button></th>
           <th onclick="acompOutOrdenar('composicao')" title="Ordenar por Composição" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Composição<span id="acompOut-arw-composicao"></span> <button class="cf-btn" id="acfb-composicao" onclick="event.stopPropagation();acfOpen('composicao',this)" style="color:#9ca3af">&#9660;</button></th>
           <th onclick="acompOutOrdenar('frota')" title="Ordenar por Frota" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Frota<span id="acompOut-arw-frota"></span> <button class="cf-btn" id="acfb-frota" onclick="event.stopPropagation();acfOpen('frota',this)" style="color:#9ca3af">&#9660;</button></th>
-          <th onclick="acompOutOrdenar('prevFech')" title="Ordenar por Prev. Fechamento" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Prev. Fechamento<span id="acompOut-arw-prevFech"></span></th>
-          <th onclick="acompOutOrdenar('status')" title="Ordenar por Status Carregamento" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;background:#111827;cursor:pointer;user-select:none">Status Carregamento<span id="acompOut-arw-status"></span> <button class="cf-btn" id="acfb-status" onclick="event.stopPropagation();acfOpen('status',this)" style="color:#9ca3af">&#9660;</button></th>
-          <th onclick="acompOutOrdenar('pesoOpl')" title="Ordenar por Peso OPL" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Peso OPL (kg)<span id="acompOut-arw-pesoOpl"></span></th>
           <th onclick="acompOutOrdenar('turno')" title="Ordenar por Turno" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Turno<span id="acompOut-arw-turno"></span></th>
+          <th onclick="acompOutOrdenar('status')" title="Ordenar por Status Carregamento" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;background:#111827;cursor:pointer;user-select:none">Status Carregamento<span id="acompOut-arw-status"></span> <button class="cf-btn" id="acfb-status" onclick="event.stopPropagation();acfOpen('status',this)" style="color:#9ca3af">&#9660;</button></th>
+          <th onclick="acompOutOrdenar('prevFech')" title="Ordenar por Prev. Fechamento" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Prev. Fechamento<span id="acompOut-arw-prevFech"></span></th>
+          <th onclick="acompOutOrdenar('pesoOpl')" title="Ordenar por Peso OPL" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Peso OPL (kg)<span id="acompOut-arw-pesoOpl"></span></th>
           <th onclick="acompOutOrdenar('conferente')" title="Ordenar por Conferente" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Conferente<span id="acompOut-arw-conferente"></span> <button class="cf-btn" id="acfb-conferente" onclick="event.stopPropagation();acfOpen('conferente',this)" style="color:#9ca3af">&#9660;</button></th>
           <th onclick="acompOutOrdenar('qtdConf')" title="Ordenar por Qtd. Conf." style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Qtd. Conf.<span id="acompOut-arw-qtdConf"></span></th>
           <th onclick="acompOutOrdenar('qtdAjud')" title="Ordenar por Qtd. Ajud." style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Qtd. Ajud.<span id="acompOut-arw-qtdAjud"></span></th>
@@ -7034,20 +7105,60 @@ function ocupBar(v) {
 // Status de carregamento lido do Acompanhamento OUT (fonte única: barra, filtro e ordenação)
 function _acompOutStatusDe(id) {
   var rec = (typeof _acompOutData !== 'undefined' && _acompOutData) ? (_acompOutData[id] || {}) : {};
+  // Linha original de um Veículo Adiantado: o status deixa de seguir os próprios
+  // horários e passa a seguir a cópia — 'Em andamento' enquanto a cópia não fecha,
+  // 'Adiantado' assim que a cópia tiver Início e Fim preenchidos.
+  if (rec.adiantadoPara && typeof _acompOutData !== 'undefined' && _acompOutData[rec.adiantadoPara]) {
+    var dup = _acompOutData[rec.adiantadoPara] || {};
+    var dupFechou = !!(String(dup.horaInicio || '').trim() && String(dup.horaFim || '').trim());
+    return dupFechou
+      ? { label: 'Adiantado', cor: '#7c3aed', valor: 'adiantado' }
+      : { label: 'Em andamento', cor: '#ca8a04', valor: 'em-andamento' };
+  }
   return (typeof _descAcompStatusPorHoras === 'function')
     ? _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim)
     : { label: 'Não iniciado', cor: '#9ca3af', valor: 'nao-iniciado' };
 }
-// Ordem de exibição: Finalizado (0) → Em andamento (1) → Não iniciado (2)
+// Ordem de exibição: Finalizado (0) → Adiantado (1) → Em andamento (2) → Não iniciado (3)
 function _acompOutStatusRank(id) {
   var v = _acompOutStatusDe(id).valor;
+  return v === 'finalizado' ? 0 : (v === 'adiantado' ? 1 : (v === 'em-andamento' ? 2 : 3));
+}
+
+// ── Status visto pelas telas de PROGRAMAÇÃO (Recurso Programado / modal Editar) ──
+// Na programação existe um veículo só: a cópia de Veículo Adiantado nunca entra em
+// progData, então nunca vira uma segunda linha aqui. A linha original é que reflete
+// o estado atual do veículo:
+//   cópia aberta   → 'Em andamento' (o veículo voltou a carregar)
+//   cópia fechada  → 'Finalizado'   (o carregamento adiantado terminou)
+// 'Adiantado' é rótulo do Acompanhamento OUT, onde as duas linhas coexistem; aqui
+// ele é traduzido para Finalizado, que é o que a programação precisa enxergar.
+function _acompOutStatusProg(id) {
+  var st = _acompOutStatusDe(id);
+  if (st.valor === 'adiantado') return { label: 'Finalizado', cor: '#16a34a', valor: 'finalizado' };
+  return st;
+}
+function _acompOutStatusRankProg(id) {
+  var v = _acompOutStatusProg(id).valor;
   return v === 'finalizado' ? 0 : (v === 'em-andamento' ? 1 : 2);
+}
+// Registro do Acompanhamento OUT que a programação deve enxergar: com a cópia de
+// Veículo Adiantado já fechada, quem vale é a cópia — é ela que descreve o
+// carregamento atual do veículo (previsão de fechamento, horários, peso).
+function _acompOutRecProg(id) {
+  var dados = (typeof _acompOutData !== 'undefined' && _acompOutData) ? _acompOutData : {};
+  var rec = dados[id] || {};
+  if (rec.adiantadoPara && dados[rec.adiantadoPara]) {
+    var dup = dados[rec.adiantadoPara];
+    if (String(dup.horaInicio || '').trim() && String(dup.horaFim || '').trim()) return dup;
+  }
+  return rec;
 }
 // Mesma barra do ocupBar, porém com o rótulo lido do Acompanhamento OUT (igual ao modal Editar)
 function ocupBarAcompOut(v, id) {
   var color = ocupColorLegacy(v);
   var pct = Math.round((v || 0) * 100);
-  var st = _acompOutStatusDe(id);
+  var st = _acompOutStatusProg(id);
   // Finalizado no Acompanhamento OUT: barra cheia em verde
   if (st.valor === 'finalizado') { pct = 100; color = st.cor; }
   // Em andamento: barra parcial em âmbar (nunca abaixo da metade)
@@ -7203,6 +7314,54 @@ function _lpRealizadoPorTurno(fluxo) {
   return out;
 }
 
+// Paleta dos cards de capacidade: a cor identifica o turno e se repete em
+// Inbound/Outbound. 'ac' é o tom sólido usado no texto sobre a tarja branca.
+var LP_PALETA = {
+  '1º Turno': { g1: '#8f6df2', g2: '#46b3ea', ac: '#6f5ad6' },
+  '2º Turno': { g1: '#f79a5b', g2: '#f6c85f', ac: '#dd8130' },
+  '3º Turno': { g1: '#f2748f', g2: '#d95fa8', ac: '#d5507f' },
+  'Total':    { g1: '#12a150', g2: '#5fd68a', ac: '#0f8a45' }
+};
+
+// Capacidade lida como "preço": inteiro grande + decimais sobrescritos
+function _lpPrecoHtml(valor) {
+  var partes = _lpFmt(valor, 2).split(',');
+  return '<div class="lp-preco"><span class="lp-preco-int">' + partes[0] + '</span>' +
+         '<span class="lp-preco-dec">,' + (partes[1] || '00') + '</span></div>';
+}
+
+// Uma linha de função dentro do card. `input` vem pronto (editável nos turnos,
+// somente leitura no card Total).
+function _lpLinhaCard(funcao, qtd, cap, campoQtd) {
+  var ativo = qtd > 0;
+  return '<div class="lp-linha">' +
+    '<span class="lp-marca' + (ativo ? '' : ' off') + '">' + (ativo ? '&#10003;' : '&times;') + '</span>' +
+    '<span class="lp-fn">' + funcao + '</span>' +
+    campoQtd +
+    '<span class="lp-cap' + (ativo ? '' : ' off') + '">' + (ativo ? _lpFmt(cap, 2) : '—') + '</span>' +
+  '</div>';
+}
+
+function _lpMontarCard(opts) {
+  var p = LP_PALETA[opts.paleta] || LP_PALETA['Total'];
+  return '<div class="lp-card' + (opts.destaque ? ' lp-card--destaque' : '') + '" ' +
+      'style="background:linear-gradient(180deg,' + p.g1 + ' 0%,' + p.g2 + ' 100%)">' +
+    '<div class="lp-tab">' +
+      '<div class="lp-tab-nome">' + opts.titulo + '</div>' +
+      '<div class="lp-tab-sub" style="color:' + p.ac + '">' + opts.subtitulo + '</div>' +
+    '</div>' +
+    '<div class="lp-body">' +
+      _lpPrecoHtml(opts.capacidade) +
+      '<div class="lp-preco-cap">Capacidade</div>' +
+      '<div class="lp-linhas">' + opts.linhas + '</div>' +
+    '</div>' +
+    '<div class="lp-foot">' +
+      '<span class="lp-foot-lb">Total escalado</span>' +
+      '<span class="lp-foot-vl" style="color:' + p.ac + '">' + _lpFmt(opts.efetivo, 0) + '</span>' +
+    '</div>' +
+  '</div>';
+}
+
 function _lpTabelaTurno(fluxo, turno, atuacao, realizadoTon) {
   var dia = _lpDiaAtual();
   var dados = (dia[fluxo] && dia[fluxo][turno]) ? dia[fluxo][turno] : {};
@@ -7212,33 +7371,16 @@ function _lpTabelaTurno(fluxo, turno, atuacao, realizadoTon) {
     var cap = qtd * _lpMetaDe(f) * atuacao;
     somaQtd += qtd; somaCap += cap;
     var val = String(dados[f] == null ? '' : dados[f]).split('"').join('&quot;');
-    return '<tr>' +
-      '<td style="padding:5px 8px;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + f + '</td>' +
-      '<td style="padding:5px 8px;text-align:center;border-bottom:1px solid #f1f5f9">' +
-        '<input type="text" value="' + val + '" onblur="lpQtdAlterada(\'' + fluxo + '\',\'' + turno + '\',\'' + f + '\',this.value)" ' +
-        'style="width:56px;font-size:12px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:4px;text-align:center"></td>' +
-      '<td style="padding:5px 8px;text-align:right;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + (qtd > 0 ? _lpFmt(cap, 2) : '') + '</td>' +
-    '</tr>';
+    var campo = '<input type="text" class="lp-qtd" value="' + val + '" placeholder="0" ' +
+      'aria-label="Quantidade de ' + f + ' no ' + turno + '" ' +
+      'onblur="lpQtdAlterada(\'' + fluxo + '\',\'' + turno + '\',\'' + f + '\',this.value)">';
+    return _lpLinhaCard(f, qtd, cap, campo);
   }).join('');
 
-  var comparativo = '';
-
-  return '<div style="border:1px solid #111827;border-radius:4px;padding:0;background:#fff;flex:1 1 280px;min-width:280px;max-width:420px">' +
-    '<table style="width:100%;border-collapse:collapse">' +
-      '<thead><tr>' +
-        '<th style="padding:6px 8px;text-align:left;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">' + turno + '</th>' +
-        '<th style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">QTD</th>' +
-        '<th style="padding:6px 8px;text-align:right;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">Capacidade</th>' +
-      '</tr></thead>' +
-      '<tbody>' + linhas +
-        '<tr>' +
-          '<td style="padding:6px 8px;font-size:12px;font-weight:700;color:#1e293b">Total</td>' +
-          '<td style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:#1e293b">' + (somaQtd > 0 ? _lpFmt(somaQtd, 0) : '') + '</td>' +
-          '<td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:700;color:#1e293b">' + (somaCap > 0 ? _lpFmt(somaCap, 2) : '') + '</td>' +
-        '</tr>' +
-      '</tbody>' +
-    '</table>' + comparativo +
-  '</div>';
+  return _lpMontarCard({
+    paleta: turno, titulo: turno, subtitulo: (fluxo === 'inbound' ? 'Inbound' : 'Outbound'),
+    capacidade: somaCap, efetivo: somaQtd, linhas: linhas, destaque: false
+  });
 }
 
 // Card com o somatório dos 3 turnos — mesma fórmula e fonte de dados das tabelas
@@ -7260,31 +7402,14 @@ function _lpCardTotal(fluxo, atuacao, realizadoTotal) {
   var linhas = LP_FUNCOES.map(function(f) {
     var qtd = somaQtdFuncao[f];
     var cap = qtd * _lpMetaDe(f) * atuacao;
-    return '<tr>' +
-      '<td style="padding:5px 8px;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + f + '</td>' +
-      '<td style="padding:5px 8px;text-align:center;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + (qtd > 0 ? _lpFmt(qtd, 0) : '') + '</td>' +
-      '<td style="padding:5px 8px;text-align:right;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + (qtd > 0 ? _lpFmt(cap, 2) : '') + '</td>' +
-    '</tr>';
+    var campo = '<span class="lp-cap" style="min-width:48px;text-align:center">' + (qtd > 0 ? _lpFmt(qtd, 0) : '0') + '</span>';
+    return _lpLinhaCard(f, qtd, cap, campo);
   }).join('');
 
-  var comparativo = '';
-
-  return '<div style="border:1px solid #111827;border-radius:4px;padding:0;background:#eef2f7;flex:1 1 280px;min-width:280px;max-width:420px">' +
-    '<table style="width:100%;border-collapse:collapse">' +
-      '<thead><tr>' +
-        '<th style="padding:6px 8px;text-align:left;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">Total (3 Turnos)</th>' +
-        '<th style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">QTD</th>' +
-        '<th style="padding:6px 8px;text-align:right;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">Capacidade</th>' +
-      '</tr></thead>' +
-      '<tbody>' + linhas +
-        '<tr>' +
-          '<td style="padding:6px 8px;font-size:12px;font-weight:700;color:#1e293b">Total</td>' +
-          '<td style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:#1e293b">' + (somaQtd > 0 ? _lpFmt(somaQtd, 0) : '') + '</td>' +
-          '<td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:700;color:#1e293b">' + (somaCap > 0 ? _lpFmt(somaCap, 2) : '') + '</td>' +
-        '</tr>' +
-      '</tbody>' +
-    '</table>' + comparativo +
-  '</div>';
+  return _lpMontarCard({
+    paleta: 'Total', titulo: 'Total', subtitulo: '3 Turnos',
+    capacidade: somaCap, efetivo: somaQtd, linhas: linhas, destaque: true
+  });
 }
 
 function _lpSecao(fluxo, titulo) {
@@ -7295,7 +7420,7 @@ function _lpSecao(fluxo, titulo) {
   var dataBR = partes.length === 3 ? (partes[2] + '/' + partes[1] + '/' + partes[0]) : _lpDataSel;
   return '<div style="font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:1px solid #cbd5e1;display:inline-block;padding-right:40px">' +
       titulo + ' - ' + dataBR + '</div>' +
-    '<div style="display:flex;gap:18px;flex-wrap:wrap">' +
+    '<div class="lp-grid">' +
       LP_TURNOS.map(function(t){ return _lpTabelaTurno(fluxo, t, atuacao, realizado[t]); }).join('') +
       _lpCardTotal(fluxo, atuacao, realizadoTotal) +
     '</div>';
@@ -8480,8 +8605,8 @@ function renderHist() {
     var dir = _histSortDir;
 
     // Finalizados (Acompanhamento OUT) sempre no topo
-    if (typeof _acompOutStatusRank === 'function') {
-      var ra = _acompOutStatusRank(a._id), rb = _acompOutStatusRank(b._id);
+    if (typeof _acompOutStatusRankProg === 'function') {
+      var ra = _acompOutStatusRankProg(a._id), rb = _acompOutStatusRankProg(b._id);
       if (col === 'ocup') return (ra - rb) * dir;
       if (ra !== rb) return ra - rb;
     }
@@ -8525,7 +8650,7 @@ function renderHist() {
     <td style="font-size:11px">${r.motorista || '—'}</td>
     <td class="mono" style="font-size:11px">${r.cavalinho || '—'}</td>
     <td>${ocupBarAcompOut(r.ocup, r._id)}</td>
-    <td style="text-align:center;font-size:11px;color:var(--text2);white-space:nowrap">${((_acompOutData[r._id]||{}).prevFech) || '—'}</td>
+    <td style="text-align:center;font-size:11px;color:var(--text2);white-space:nowrap">${(_acompOutRecProg(r._id).prevFech) || '—'}</td>
     <td style="white-space:nowrap;text-align:center">
       <button class="btn btn-ghost btn-sm" onclick="editProgramado(${r._id})" title="Editar"
         style="display:none;color:var(--accent);border-color:rgba(0,178,0,0.3)">Editar</button>
@@ -9246,7 +9371,7 @@ function cfVal(r, c) {
   if (c==='saida') return r.saida||'';
   if (c==='dia') return r.dia||'';
   if (c==='frota') return r.frota||'';
-  if (c==='ocup') return (typeof _acompOutStatusDe === 'function') ? _acompOutStatusDe(r._id).label : '';
+  if (c==='ocup') return (typeof _acompOutStatusProg === 'function') ? _acompOutStatusProg(r._id).label : '';
   if (c==='prev_fech') return (r.prev_fech||'').slice(0,10)||'(sem data)';
   if (c==='data_crit') return (r.data_crit||'').slice(0,10)||'(sem data)';
   if (c==='prioridade') return calcPrioridade(r)||'';
@@ -9687,8 +9812,8 @@ function editProgramado(id) {
 
   // Status de Carregamento: somente leitura, sempre lido ao vivo da aba Acompanhamento OUT (Grupo OUT)
   const acompOutRec = (typeof _acompOutData !== 'undefined') ? (_acompOutData[id] || {}) : {};
-  const statusCarreg = (typeof _descAcompStatusPorHoras === 'function')
-    ? _descAcompStatusPorHoras(acompOutRec.horaInicio, acompOutRec.horaFim)
+  const statusCarreg = (typeof _acompOutStatusProg === 'function')
+    ? _acompOutStatusProg(id)
     : { label: 'Não iniciado', cor: '#9ca3af' };
 
   modal.innerHTML =
@@ -13393,8 +13518,12 @@ function _tmsPesoDeFrota(frota, mapa) {
 // regra do Painel Executivo); cai para o Peso OPL digitado manualmente só
 // quando a frota não está no TMS.
 function _acompOutPesoOficial(r, rec, mapaTms) {
-  var pesoTms = _tmsPesoDeFrota(r.frota, mapaTms);
   var pesoManual = _parsePesoBR(rec.pesoOpl);
+  // Cópia de Veículo Adiantado: o peso do TMS daquela frota já pertence à linha
+  // original — usar o TMS de novo contaria a mesma carga duas vezes. A cópia vale
+  // exatamente o Peso OPL digitado para a nova operação.
+  if (r && r._adiantado) return pesoManual;
+  var pesoTms = _tmsPesoDeFrota(r.frota, mapaTms);
   return pesoTms > 0 ? pesoTms : pesoManual;
 }
 
@@ -13491,10 +13620,142 @@ function _acompOutTurnoCelula(id, rec) {
     'onchange="acompOutCampoAlterado(' + id + ',\'turno\',this.value)">' + opcoes + '</select>';
 }
 
-// ── Ordenação da tabela (linhas já preenchidas sempre no topo) ──────────────
+// ═══ VEÍCULO ADIANTADO ═════════════════════════════════════════════════════
+// Um veículo já finalizado que volta a ser carregado gera uma CÓPIA da linha,
+// logo abaixo da original, onde a nova operação é registrada do zero.
+// A cópia vive só em _acompOutData (não entra em progData, portanto não aparece
+// em Programar/Recurso Programado nem duplica a frota nas demais telas).
+//   Original  → 'Em andamento' enquanto a cópia não fecha; 'Adiantado' depois.
+//   Cópia     → segue a regra normal (Início/Fim → Finalizado).
+var _acompOutSelecionados = new Set();
+
+function _acompOutNovoIdAdt() {
+  var id = Date.now();
+  while (_acompOutData[id]) id++;
+  return id;
+}
+
+// Linhas virtuais (cópias) montadas a partir de _acompOutData, no mesmo formato
+// das linhas de progData que a tabela já sabe desenhar.
+function _acompOutLinhasAdiantadas() {
+  var out = [];
+  Object.keys(_acompOutData).forEach(function(id) {
+    var rec = _acompOutData[id];
+    if (!rec || !rec.adiantadoDe) return;
+    var base = rec.linha || {};
+    out.push({
+      _id: parseInt(id, 10) || id,
+      _adiantado: true,
+      _adiantadoDe: rec.adiantadoDe,
+      gerado: base.gerado || '',
+      destino: base.destino || '',
+      regiao: base.regiao || '',
+      composicao: base.composicao || '',
+      frota: base.frota || '',
+      motorista: base.motorista || '',
+      cavalinho: base.cavalinho || '',
+      ocup: base.ocup || 0,
+      dia: base.dia || ''
+    });
+  });
+  return out;
+}
+
+function acompOutMarcarLinha(id, marcado) {
+  var k = String(id);
+  if (marcado) _acompOutSelecionados.add(k); else _acompOutSelecionados.delete(k);
+  var btn = document.getElementById('acompOut-btn-adiantado');
+  if (btn) btn.style.opacity = _acompOutSelecionados.size ? '1' : '.75';
+}
+
+function acompOutMarcarTodos(marcado) {
+  document.querySelectorAll('#acompOut-tbody input.acompOut-chk').forEach(function(c) {
+    c.checked = marcado;
+    acompOutMarcarLinha(c.getAttribute('data-id'), marcado);
+  });
+}
+
+function acompOutVeiculoAdiantado() {
+  var ids = Array.from(_acompOutSelecionados);
+  if (!ids.length) {
+    if (typeof showToast === 'function') showToast('Selecione ao menos uma linha para adiantar', 'error');
+    return;
+  }
+  var lista = (typeof _acompOutUltimaLista !== 'undefined') ? _acompOutUltimaLista : [];
+  var criadas = 0, ignoradas = 0;
+
+  ids.forEach(function(idStr) {
+    var linha = lista.filter(function(x) { return String(x._id) === idStr; })[0];
+    if (!linha) return;
+    // Não se adianta uma cópia, nem se cria uma segunda cópia da mesma linha
+    if (linha._adiantado) { ignoradas++; return; }
+    var origem = _acompOutGet(linha._id);
+    if (origem.adiantadoPara && _acompOutData[origem.adiantadoPara]) { ignoradas++; return; }
+
+    var novoId = _acompOutNovoIdAdt();
+    _acompOutData[novoId] = {
+      // mesmas informações da linha original, exceto os horários — que serão
+      // preenchidos com os dados da nova operação
+      pesoOpl: origem.pesoOpl || '',
+      conferente: origem.conferente || '',
+      qtdConf: origem.qtdConf || '',
+      qtdAjud: origem.qtdAjud || '',
+      prevFech: origem.prevFech || '',
+      turno: origem.turno || '',
+      horaInicio: '',
+      horaFim: '',
+      adiantadoDe: String(linha._id),
+      linha: {
+        gerado: linha.gerado || '', destino: linha.destino || '', regiao: linha.regiao || '',
+        composicao: linha.composicao || '', frota: linha.frota || '',
+        motorista: linha.motorista || '', cavalinho: linha.cavalinho || '',
+        ocup: linha.ocup || 0, dia: linha.dia || ''
+      }
+    };
+    origem.adiantadoPara = String(novoId);
+    criadas++;
+  });
+
+  if (!criadas) {
+    if (typeof showToast === 'function') showToast('Nenhuma linha elegível (cópias e linhas já adiantadas são ignoradas)', 'error');
+    return;
+  }
+  _acompOutSelecionados.clear();
+  var chkTodos = document.getElementById('acompOut-chk-todos');
+  if (chkTodos) chkTodos.checked = false;
+  _acompOutSalvar();
+  _acompOutForcarRender();
+  if (typeof showToast === 'function') {
+    showToast(criadas + ' veículo(s) adiantado(s)' + (ignoradas ? ' · ' + ignoradas + ' ignorada(s)' : ''), 'success');
+  }
+}
+
+// A tabela adia o redesenho enquanto houver campo em foco (proteção de cursor).
+// Ao criar/remover uma cópia o foco pode estar no checkbox clicado, então ele é
+// liberado antes para que a nova linha apareça na hora.
+function _acompOutForcarRender() {
+  try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (e) {}
+  _acompOutRenderPendente = false;
+  acompOutRenderizar();
+}
+
+// Desfaz a cópia (linha criada por engano) e devolve o status da original
+function acompOutRemoverAdiantado(id) {
+  var rec = _acompOutData[id];
+  if (!rec || !rec.adiantadoDe) return;
+  if (!confirm('Remover esta linha de veículo adiantado? O status da linha original volta ao normal.')) return;
+  var orig = _acompOutData[rec.adiantadoDe];
+  if (orig && String(orig.adiantadoPara) === String(id)) delete orig.adiantadoPara;
+  delete _acompOutData[id];
+  _acompOutSelecionados.delete(String(id));
+  _acompOutSalvar();
+  _acompOutForcarRender();
+}
+
+// ── Ordenação da tabela (linhas já preenchidas sempre no topo) ───────────────
 var _acompOutSortCol = '';
 var _acompOutSortDir = 1;
-var _ACOMP_OUT_COLS = ['gerado','destino','regiao','composicao','frota','prevFech','status','pesoOpl','turno','conferente','qtdConf','qtdAjud','horaInicio','horaFim'];
+var _ACOMP_OUT_COLS = ['gerado','destino','regiao','composicao','frota','turno','status','prevFech','pesoOpl','conferente','qtdConf','qtdAjud','horaInicio','horaFim'];
 
 function _acompOutPreenchido(rec) {
   if (!rec) return false;
@@ -13568,9 +13829,16 @@ function acompOutCampoAlterado(id, campo, valor) {
   _acompOutSalvar();
   // Atualizar select de status automaticamente (mesmo padrão da Descarga)
   if (campo === 'horaInicio' || campo === 'horaFim') {
-    var st = _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim);
+    var st = _acompOutStatusDe(id);
     var selectEl = document.getElementById('acompOut-status-select-' + id);
     if (selectEl) { selectEl.value = st.valor; selectEl.style.color = st.cor; }
+    // Veículo Adiantado: fechar a cópia vira o status da linha original para
+    // 'Adiantado' (e reabri-la devolve para 'Em andamento').
+    if (rec.adiantadoDe) {
+      var stPai = _acompOutStatusDe(rec.adiantadoDe);
+      var selPai = document.getElementById('acompOut-status-select-' + rec.adiantadoDe);
+      if (selPai) { selPai.value = stPai.valor; selPai.style.color = stPai.cor; }
+    }
   }
   // Coluna Turno: recalcula o rótulo "Auto — Xº Turno" quando os horários mudam
   // e realça em escuro quando o turno passa a ser escolhido manualmente.
@@ -13711,8 +13979,8 @@ function _acompOutBaseFiltrada() {
   var dAte = _acompOutParseBRDate(filterAte);
   if (dAte) dAte.setHours(23,59,59);
 
-  return progData.filter(function(r) {
-    if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
+  return progData.concat(_acompOutLinhasAdiantadas()).filter(function(r) {
+    if (!r._adiantado && !r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
     if (filtroTurno && _acompOutTurnoEfetivo(_acompOutGet(r._id), 'fim') !== filtroTurno) return false;
     if (busca) {
       var s = (String(r.destino||'') + String(r.frota||'') + String(r.composicao||'') + String(r.dia||'')).toLowerCase();
@@ -13757,35 +14025,66 @@ function acompOutRenderizar() {
   });
   _acompOutAtualizarSetas();
 
+  // Cada cópia de Veículo Adiantado é reposicionada logo abaixo da sua linha
+  // original, independentemente da ordenação escolhida (cópias órfãs — quando a
+  // original saiu pelo filtro — permanecem na posição natural da ordenação).
+  var idxPorId = {};
+  data.forEach(function(x, i) { idxPorId[String(x._id)] = i; });
+  var temAdiantado = data.some(function(x) { return x._adiantado; });
+  if (temAdiantado) {
+    var filhosPorPai = {};
+    var soltas = [];
+    data.forEach(function(x) {
+      if (x._adiantado && idxPorId.hasOwnProperty(String(x._adiantadoDe))) {
+        (filhosPorPai[String(x._adiantadoDe)] = filhosPorPai[String(x._adiantadoDe)] || []).push(x);
+      } else {
+        soltas.push(x);
+      }
+    });
+    var ordenado = [];
+    soltas.forEach(function(x) {
+      ordenado.push(x);
+      var fs = filhosPorPai[String(x._id)];
+      if (fs) fs.forEach(function(f) { ordenado.push(f); });
+    });
+    data = ordenado;
+  }
+
   _acompOutUltimaLista = data;
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;padding:30px;color:#94a3b8">Nenhum registro encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:30px;color:#94a3b8">Nenhum registro encontrado.</td></tr>';
     acompOutAtualizarCards();
     return;
   }
 
   tbody.innerHTML = data.map(function(r) {
     var rec = _acompOutGet(r._id);
-    var st = _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim);
+    var st = _acompOutStatusDe(r._id);
     var pesoOplNum = _parsePesoBR(rec.pesoOpl);
-    return '<tr style="border-bottom:1px solid #f1f5f9">' +
-      '<td style="padding:8px 10px;font-size:11px;color:#94a3b8">' + (r.gerado || '—') + '</td>' +
+    var marcado = _acompOutSelecionados.has(String(r._id)) ? 'checked' : '';
+    var celSel = r._adiantado
+      ? '<button title="Remover esta linha de veículo adiantado" onclick="acompOutRemoverAdiantado(' + r._id + ')" style="background:none;border:none;color:#94a3b8;font-size:13px;font-weight:700;cursor:pointer;padding:0;line-height:1">&times;</button>'
+      : '<input type="checkbox" class="acompOut-chk" data-id="' + r._id + '" ' + marcado + ' onclick="acompOutMarcarLinha(' + r._id + ',this.checked)" style="cursor:pointer;margin:0">';
+    return '<tr style="border-bottom:1px solid #f1f5f9' + (r._adiantado ? ';background:#faf5ff' : '') + '">' +
+      '<td style="padding:8px 6px;text-align:center' + (r._adiantado ? ';border-left:3px solid #7c3aed' : '') + '">' + celSel + '</td>' +
+      '<td style="padding:8px 10px;font-size:11px;color:#94a3b8">' + (r.gerado || '—') + (r._adiantado ? ' <span style="color:#7c3aed;font-weight:700">↳ adiantado</span>' : '') + '</td>' +
       '<td style="padding:8px 10px;font-weight:700;color:#1e293b">' + (r.destino || '') + '</td>' +
       '<td style="padding:8px 10px">' + regiaoBadge(r.regiao) + '</td>' +
       '<td style="padding:8px 10px;font-size:11px;font-family:monospace">' + (r.composicao || '') + '</td>' +
       '<td style="padding:8px 10px;font-family:monospace">' + (r.frota || '—') + '</td>' +
-      '<td style="padding:8px 10px;text-align:center"><input type="text" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" value="' + (rec.prevFech||'').toString().split('"').join('&quot;') + '" style="width:130px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center" onblur="acompOutCampoAlterado(' + r._id + ',\'prevFech\',this.value)"></td>' +
+      '<td style="padding:8px 10px;text-align:center">' + _acompOutTurnoCelula(r._id, rec) + '</td>' +
       '<td style="padding:8px 10px">' +
         '<select style="width:130px;padding:4px 6px;font-size:11px;border:1px solid #e2e8f0;border-radius:4px;background:#fff;color:' + st.cor + ';font-weight:700;cursor:not-allowed" disabled id="acompOut-status-select-' + r._id + '">' +
           '<option value="nao-iniciado" ' + (st.valor === 'nao-iniciado' ? 'selected' : '') + ' style="color:#9ca3af">Não iniciado</option>' +
           '<option value="em-andamento" ' + (st.valor === 'em-andamento' ? 'selected' : '') + ' style="color:#ca8a04">Em andamento</option>' +
           '<option value="finalizado" ' + (st.valor === 'finalizado' ? 'selected' : '') + ' style="color:#16a34a">Finalizado</option>' +
+          '<option value="adiantado" ' + (st.valor === 'adiantado' ? 'selected' : '') + ' style="color:#7c3aed">Adiantado</option>' +
         '</select>' +
         '<div style="font-size:9px;color:#94a3b8;margin-top:2px;text-align:center">Automático</div>' +
       '</td>' +
+      '<td style="padding:8px 10px;text-align:center"><input type="text" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" value="' + (rec.prevFech||'').toString().split('"').join('&quot;') + '" style="width:130px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center" onblur="acompOutCampoAlterado(' + r._id + ',\'prevFech\',this.value)"></td>' +
       '<td style="padding:8px 10px;text-align:center"><input type="text" value="' + (rec.pesoOpl||'').toString().replace(/"/g,'&quot;') + '" placeholder="0" style="width:80px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center" onblur="acompOutCampoAlterado(' + r._id + ',\'pesoOpl\',this.value)"></td>' +
-      '<td style="padding:8px 10px;text-align:center">' + _acompOutTurnoCelula(r._id, rec) + '</td>' +
       '<td style="padding:8px 10px"><input type="text" value="' + (rec.conferente||'').replace(/"/g,'&quot;') + '" placeholder="Nome" style="width:110px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px" onblur="acompOutCampoAlterado(' + r._id + ',\'conferente\',this.value)"></td>' +
       '<td style="padding:8px 10px;text-align:center"><input type="number" min="0" value="' + (rec.qtdConf||'') + '" placeholder="0" style="width:56px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center" onblur="acompOutCampoAlterado(' + r._id + ',\'qtdConf\',this.value)"></td>' +
       '<td style="padding:8px 10px;text-align:center"><input type="number" min="0" value="' + (rec.qtdAjud||'') + '" placeholder="0" style="width:56px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center" onblur="acompOutCampoAlterado(' + r._id + ',\'qtdAjud\',this.value)"></td>' +
@@ -15586,8 +15885,12 @@ function frotasProgramadasRenderizar() {
 function _gvItensOutHoje() {
   if (typeof progData === 'undefined' || !progData.length) return [];
   var hojeStr = (typeof getDataHoje === 'function') ? getDataHoje() : new Date().toLocaleDateString('pt-BR');
-  return progData.filter(function(r) {
-    if (!(r.frota || r.ocup || r.motorista || r.cavalinho)) return false;
+  var base = progData;
+  // Cópias de Veículo Adiantado: não existem em progData, mas representam carga
+  // real executada e precisam entrar nas somas do painel (peso sempre manual).
+  if (typeof _acompOutLinhasAdiantadas === 'function') base = base.concat(_acompOutLinhasAdiantadas());
+  return base.filter(function(r) {
+    if (!(r._adiantado || r.frota || r.ocup || r.motorista || r.cavalinho)) return false;
     var gerado = String(r.gerado || '').substring(0, 10);
     return !gerado || gerado === hojeStr; // sem data legível: mantém (não descarta por segurança)
   });
@@ -15618,10 +15921,9 @@ function _gvColetarDadosOUT() {
     var rec = acompData[r._id] || {};
     var finalizado = !!(rec.horaFim && String(rec.horaFim).trim());
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
-    // Peso: prioriza TMS por frota; fallback para pesoOpl manual
-    var pesoTms = pesoDoTMS(r.frota);
-    var pesoManual = _parsePesoBR(rec.pesoOpl);
-    var peso = pesoTms > 0 ? pesoTms : pesoManual;
+    // Peso: prioriza TMS por frota; fallback para pesoOpl manual (cópias de
+    // Veículo Adiantado usam sempre o manual — ver _acompOutPesoOficial)
+    var peso = _acompOutPesoOficial(r, rec, relByFrota);
 
     if (finalizado) pesoFeito += peso;
     else pesoFila += peso;
@@ -15720,8 +16022,7 @@ function _gvFluxoFilaOUT() {
     var rec = acompData[r._id] || {};
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
-    var pesoTms = pesoTMSOut(r.frota);
-    var peso = pesoTms > 0 ? pesoTms : (_parsePesoBR(rec.pesoOpl));
+    var peso = _acompOutPesoOficial(r, rec, relByFrotaOut);
     if (temFim) execTotalGeral += peso;
     else if (temInicio) progTotalGeral += peso;
     else naoIniciadoGeral += peso;
@@ -15744,8 +16045,7 @@ function _gvFluxoFilaOUT() {
     var rec = acompData[r._id] || {};
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
-    var pesoTms2 = pesoTMSOut(r.frota);
-    var peso = pesoTms2 > 0 ? pesoTms2 : (_parsePesoBR(rec.pesoOpl));
+    var peso = _acompOutPesoOficial(r, rec, relByFrotaOut);
     // Turno da carga (para ratear a fila): coluna Turno do Acompanhamento OUT; sem
     // ela, pela Hora Início — mantém o comportamento anterior.
     var t = (typeof _acompOutTurnoEfetivo === 'function')
@@ -16053,8 +16353,7 @@ function gestaoVistaRenderizar() {
     }
     itensOut.forEach(function(r) {
       var rec = acompOut[r._id] || {};
-      var pesoTms = pesoPorFrotaGV(r.frota);
-      var peso = pesoTms > 0 ? pesoTms : (_parsePesoBR(rec.pesoOpl));
+      var peso = _acompOutPesoOficial(r, rec, relByFrotaGV);
       var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
       var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
       if (temFim) {
