@@ -488,6 +488,10 @@
   
   .row-pos { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text3); }
 
+  /* Lista de Presença: tabelas pequenas lado a lado — o min-width global de 900px
+     das tabelas do app faria cada quadro estourar a largura da coluna. */
+  #tab-listaPresenca-content table { min-width: 0 !important; }
+
   /* Tela Programar: colunas 2 (Status Carregamento) e 13 (Prev. Fechamento) ocultas apenas
      visualmente. Os inputs continuam no DOM e com os mesmos ids (ocup_, status_, prev_),
      porque autoSalvarLinha() os lê para decidir o que salvar — removê-los do HTML faria
@@ -1637,6 +1641,17 @@
     </div>
   </div>
 
+  <!-- Grupo: Lista de Presença -->
+  <div class="sb-group" id="grp-listapresenca">
+    <div class="sb-group-header" onclick="toggleSbGroup('listapresenca')">
+      <span class="sb-group-title">Lista de Presença</span>
+      <span class="sb-group-arrow" id="arrow-listapresenca">›</span>
+    </div>
+    <div class="sb-group-items" id="items-listapresenca">
+      <button class="sb-item" id="tab-listaPresenca" onclick="showTab('listaPresenca')" data-tip="HC - Produtivo Peso Mov."><span class="sb-text">HC - Produtivo Peso Mov.</span></button>
+    </div>
+  </div>
+
   <!-- Grupo: Terminal | Filial (antigo "Estoque") -->
   <div class="sb-group" id="grp-estoque">
     <div class="sb-group-header" onclick="toggleSbGroup('estoque')">
@@ -1816,7 +1831,6 @@
           <label class="form-label">Tipo <span>*</span></label>
           <select id="f-tipo">
             <option value="">Selecione...</option>
-            <option>Carro da Malha</option>
             <option>Carro Extra</option>
             <option>Fora da Malha</option>
           </select>
@@ -1833,10 +1847,10 @@
           <label class="form-label">Nº Cavalinho</label>
           <input type="text" id="f-cavalinho" placeholder="Ex: ABC1D23">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="display:none">
           <label class="form-label">Ocupação Visual <span>*</span></label>
           <div style="position:relative;display:flex;align-items:center">
-            <input type="number" id="f-ocup" min="0" max="100" step="1"
+            <input type="number" id="f-ocup" min="0" max="100" step="1" value="0"
               placeholder="0"
               oninput="updateFormOcup()"
               style="padding-right:32px;width:100%">
@@ -1846,14 +1860,14 @@
             <div id="f-ocup-bar-fill" style="height:100%;width:0%;border-radius:3px;background:#9ca3af;transition:width 0.25s,background 0.25s"></div>
           </div>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="display:none">
           <label class="form-label">Previsão de Fechamento</label>
           <input type="datetime-local" id="f-prev_fech">
         </div>
       </div>
     </div>
 
-    <div class="form-card">
+    <div class="form-card" style="display:none">
       <div class="form-section-title">📝 Informações Adicionais</div>
       <div class="form-grid">
         <div class="form-group" style="grid-column: span 2">
@@ -2126,7 +2140,7 @@ function _gradeAtualizarComMalha(rows) {
     <!-- Container para visão Extrato do Dia (consolidado IN + OUT + Frotas) -->
     <div id="gv-extrato-container" style="display:none">
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:14px" id="ext-nav-dia"></div>
-      <div id="ext-cards-topo" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px"></div>
+      <div id="ext-cards-topo" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px"></div>
       <div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Resumo Consolidado por Processo</div>
       <div id="ext-processos"></div>
     </div>
@@ -2426,6 +2440,7 @@ function _gradeAtualizarComMalha(rows) {
 
 <!-- ===================== TAB: PLATAFORMA ===================== -->
 <div class="cf-dropdown" id="cf-dropdown" style="display:none"><div class="cf-search"><input type="text" id="cf-search-input" placeholder="Buscar..." oninput="cfSearchFilter()"></div><div class="cf-actions"><button onclick="cfSelectAll()">Marcar todos</button><button onclick="cfClearAll()">Desmarcar todos</button></div><div class="cf-list" id="cf-list"></div><div class="cf-footer"><button class="cf-cancel" onclick="cfClose()">Cancelar</button><button class="cf-ok" onclick="cfApply()">OK</button></div></div>
+<div class="cf-dropdown" id="acf-dropdown" style="display:none"><div class="cf-search"><input type="text" id="acf-search-input" placeholder="Buscar..." oninput="acfSearchFilter()"></div><div class="cf-actions"><button onclick="acfSelectAll()">Marcar todos</button><button onclick="acfClearAll()">Desmarcar todos</button></div><div class="cf-list" id="acf-list"></div><div class="cf-footer"><button class="cf-cancel" onclick="acfClose()">Cancelar</button><button class="cf-ok" onclick="acfApply()">OK</button></div></div>
 
 <div id="tab-plataforma-content" class="tab-content" style="background:#f3f4f6;min-height:calc(100vh - 104px)">
   <div class="plat-wrap">
@@ -3624,6 +3639,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Carregar Histórico de Relatório do Supabase (compartilhado entre usuários)
   if (typeof _relatorioHistoricoCarregarSupabase === 'function') setTimeout(_relatorioHistoricoCarregarSupabase, 1300);
   if (typeof _histRelOutCarregarSupabase === 'function') setTimeout(_histRelOutCarregarSupabase, 1500);
+  if (typeof lpCarregarSupabase === 'function') setTimeout(lpCarregarSupabase, 1700);
   // Assinatura em tempo real dedicada — ver comentário na definição da função
   if (typeof _histRelOutIniciarRealtime === 'function') setTimeout(_histRelOutIniciarRealtime, 1600);
   // Reforço a cada 2 minutos — se o realtime falhar por instabilidade de rede,
@@ -3873,7 +3889,7 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 <div id="rel-cf-dropdown" style="display:none">
-  <div class="rel-cf-search"><input type="text" id="rel-cf-search-input" placeholder="Buscar..." oninput="rcfSearchFilter()"></div>
+  <div class="rel-cf-search"><input type="text" id="rel-cf-search-input" placeholder="Buscar... (ex: FOR SSA RIO)" title="Digite vários valores separados por espaço ou vírgula para vê-los juntos na lista" oninput="rcfSearchFilter()"></div>
   <div class="rel-cf-actions"><button onclick="rcfSelectAll()">Marcar todos</button><button onclick="rcfClearAll()">Desmarcar todos</button></div>
   <div class="rel-cf-list" id="rel-cf-list"></div>
   <div class="rel-cf-footer"><button class="rel-cf-cancel" onclick="rcfClose()">Cancelar</button><button class="rel-cf-ok" onclick="rcfApply()">OK</button></div>
@@ -4656,6 +4672,41 @@ function _histRelOutPesoHoje() {
   return total;
 }
 
+// ── Classificador de turno dedicado ao Painel Executivo — Carregamento (OUT) ──
+// Horários de corte informados pela operação para este dashboard especificamente:
+// 1º Turno 07:00–14:48 · 2º Turno 14:48–22:15 · 3º Turno 22:15–06:00 (vira o dia).
+// É DIFERENTE do corte padrão usado no resto do sistema (_resumoMalhaClassificarTurno,
+// 06–15/15–23/23–06) — por pedido explícito, só para os cards Plano do dia/Programado
+// deste dashboard. Nenhuma outra tela ou cálculo usa esta função.
+function _gvTurnoCustomOut(horaStr) {
+  var partes = String(horaStr || '').split(':');
+  var h = parseInt(partes[0], 10), m = parseInt(partes[1], 10);
+  if (isNaN(h)) return null;
+  if (isNaN(m)) m = 0;
+  var minutos = h * 60 + m;
+  if (minutos >= 420 && minutos < 888) return '1º Turno';   // 07:00–14:48
+  if (minutos >= 888 && minutos < 1335) return '2º Turno';  // 14:48–22:15
+  return '3º Turno';                                        // 22:15–06:00
+}
+
+// Peso total (kg) registrado HOJE no Histórico de Relatório OUT, só do turno informado,
+// usando o corte de horário customizado acima (_gvTurnoCustomOut) em vez do padrão do
+// resto do sistema. Usada exclusivamente pelo card "Programado" do Painel Executivo (OUT).
+function _histRelOutPesoTurnoCustom(turnoAlvo) {
+  var lista = (typeof _histRelOut !== 'undefined' && _histRelOut) ? _histRelOut : [];
+  var hojeStr = new Date().toLocaleDateString('pt-BR');
+  var total = 0;
+  lista.forEach(function(s) {
+    if (!s || !s.ts) return;
+    var d = new Date(s.ts);
+    if (isNaN(d.getTime()) || d.toLocaleDateString('pt-BR') !== hojeStr) return;
+    var horaStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    if (_gvTurnoCustomOut(horaStr) !== turnoAlvo) return;
+    total += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
+  });
+  return total;
+}
+
 // Peso total (kg) registrado HOJE no Histórico de Relatório OUT, só do turno informado.
 // Usa a data/hora real da impressão (s.ts) e a mesma regra de corte de turno do
 // resto do Painel Executivo (_resumoMalhaClassificarTurno: 1º 06–15h, 2º 15–23h, 3º 23–06h).
@@ -4972,12 +5023,20 @@ function rcfOpen(campo,btn){
   dd.style.display='flex';
 }
 function rcfDraw(vals,sel){
-  var s=(document.getElementById('rel-cf-search-input').value||'').toLowerCase();
-  var f=s?vals.filter(function(v){return v.toLowerCase().indexOf(s)!==-1;}):vals;
+  var s=(document.getElementById('rel-cf-search-input').value||'').toLowerCase().trim();
+  // Vários termos de uma vez: "FOR SSA RIO" mostra FOR, SSA e RIO juntos (lógica OU).
+  // Aceita espaço, vírgula ou ponto-e-vírgula como separador. Com um termo só,
+  // o comportamento é exatamente o de antes (busca por trecho contido no valor).
+  var termos = s ? s.split(/[\s,;]+/).filter(function(t){return t.length>0;}) : [];
+  var f = termos.length ? vals.filter(function(v){
+    var vl = v.toLowerCase();
+    for (var i=0;i<termos.length;i++){ if (vl.indexOf(termos[i]) !== -1) return true; }
+    return false;
+  }) : vals;
   document.getElementById('rel-cf-list').innerHTML=f.map(function(v){
     var chk=sel&&sel.has?sel.has(v):true;
-    return '<label class="rel-cf-item"><input type="checkbox" value="'+v.replace(/"/g,'&quot;')+'" '+(chk?'checked':'')+'><span>'+(v||'(vazio)')+'</span></label>';
-  }).join('');
+    return '<label class="rel-cf-item"><input type="checkbox" value="'+v.split('"').join('&quot;')+'" '+(chk?'checked':'')+'><span>'+(v||'(vazio)')+'</span></label>';
+  }).join('') || '<div style="padding:10px;font-size:11px;color:#94a3b8;text-align:center">Nenhum valor encontrado</div>';
 }
 function rcfSearchFilter(){ if(!_rcfCol)return; rcfDraw(_rcfVals[_rcfCol]||[],_rcfF[_rcfCol]||new Set(_rcfVals[_rcfCol]||[])); }
 function rcfSelectAll(){ document.querySelectorAll('#rel-cf-list input').forEach(function(c){c.checked=true;}); }
@@ -5036,14 +5095,14 @@ document.addEventListener('click',function(e){
       <thead>
         <tr>
           <th onclick="acompOutOrdenar('gerado')" title="Ordenar por Gerado em" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Gerado em<span id="acompOut-arw-gerado"></span></th>
-          <th onclick="acompOutOrdenar('destino')" title="Ordenar por Destino" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Destino<span id="acompOut-arw-destino"></span></th>
-          <th onclick="acompOutOrdenar('regiao')" title="Ordenar por Região" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Região<span id="acompOut-arw-regiao"></span></th>
-          <th onclick="acompOutOrdenar('composicao')" title="Ordenar por Composição" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Composição<span id="acompOut-arw-composicao"></span></th>
-          <th onclick="acompOutOrdenar('frota')" title="Ordenar por Frota" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Frota<span id="acompOut-arw-frota"></span></th>
+          <th onclick="acompOutOrdenar('destino')" title="Ordenar por Destino" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Destino<span id="acompOut-arw-destino"></span> <button class="cf-btn" id="acfb-destino" onclick="event.stopPropagation();acfOpen('destino',this)" style="color:#9ca3af">&#9660;</button></th>
+          <th onclick="acompOutOrdenar('regiao')" title="Ordenar por Região" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Região<span id="acompOut-arw-regiao"></span> <button class="cf-btn" id="acfb-regiao" onclick="event.stopPropagation();acfOpen('regiao',this)" style="color:#9ca3af">&#9660;</button></th>
+          <th onclick="acompOutOrdenar('composicao')" title="Ordenar por Composição" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Composição<span id="acompOut-arw-composicao"></span> <button class="cf-btn" id="acfb-composicao" onclick="event.stopPropagation();acfOpen('composicao',this)" style="color:#9ca3af">&#9660;</button></th>
+          <th onclick="acompOutOrdenar('frota')" title="Ordenar por Frota" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Frota<span id="acompOut-arw-frota"></span> <button class="cf-btn" id="acfb-frota" onclick="event.stopPropagation();acfOpen('frota',this)" style="color:#9ca3af">&#9660;</button></th>
           <th onclick="acompOutOrdenar('prevFech')" title="Ordenar por Prev. Fechamento" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Prev. Fechamento<span id="acompOut-arw-prevFech"></span></th>
-          <th onclick="acompOutOrdenar('status')" title="Ordenar por Status Carregamento" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;background:#111827;cursor:pointer;user-select:none">Status Carregamento<span id="acompOut-arw-status"></span></th>
+          <th onclick="acompOutOrdenar('status')" title="Ordenar por Status Carregamento" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;background:#111827;cursor:pointer;user-select:none">Status Carregamento<span id="acompOut-arw-status"></span> <button class="cf-btn" id="acfb-status" onclick="event.stopPropagation();acfOpen('status',this)" style="color:#9ca3af">&#9660;</button></th>
           <th onclick="acompOutOrdenar('pesoOpl')" title="Ordenar por Peso OPL" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Peso OPL (kg)<span id="acompOut-arw-pesoOpl"></span></th>
-          <th onclick="acompOutOrdenar('conferente')" title="Ordenar por Conferente" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Conferente<span id="acompOut-arw-conferente"></span></th>
+          <th onclick="acompOutOrdenar('conferente')" title="Ordenar por Conferente" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Conferente<span id="acompOut-arw-conferente"></span> <button class="cf-btn" id="acfb-conferente" onclick="event.stopPropagation();acfOpen('conferente',this)" style="color:#9ca3af">&#9660;</button></th>
           <th onclick="acompOutOrdenar('qtdConf')" title="Ordenar por Qtd. Conf." style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Qtd. Conf.<span id="acompOut-arw-qtdConf"></span></th>
           <th onclick="acompOutOrdenar('qtdAjud')" title="Ordenar por Qtd. Ajud." style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Qtd. Ajud.<span id="acompOut-arw-qtdAjud"></span></th>
           <th onclick="acompOutOrdenar('horaInicio')" title="Ordenar por Início" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Início<span id="acompOut-arw-horaInicio"></span></th>
@@ -5219,6 +5278,64 @@ document.addEventListener('click',function(e){
 </div>
 
 <!-- ── TAB HISTÓRICO DE RELATÓRIO OUT ── -->
+<div id="tab-listaPresenca-content" class="tab-content" style="background:#f1f5f9;min-height:calc(100vh - 64px);padding:20px 24px;box-sizing:border-box">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:16px;font-weight:700;color:#1e293b">HC - Produtivo Peso Mov.</div>
+      <div style="font-size:11px;color:#94a3b8">Lista de Presen&ccedil;a &middot; capacidade do headcount produtivo por turno</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <label style="font-size:11px;color:#64748b">Data:</label>
+      <input type="date" id="lp-data" onchange="lpTrocarData()" style="font-size:12px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px">
+    </div>
+  </div>
+
+  <!-- Bloco META + Cards de Capacidade Total -->
+  <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:stretch;margin-bottom:18px">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;display:inline-block">
+      <div style="font-size:11px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Meta</div>
+      <div style="display:flex;gap:26px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:#000;font-weight:700;min-width:78px">Ajudante</span>
+          <input type="text" id="lp-meta-ajudante" onblur="lpMetaAlterada()" style="width:64px;font-size:12px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:#000;font-weight:700;min-width:78px">Conferente</span>
+          <input type="text" id="lp-meta-conferente" onblur="lpMetaAlterada()" style="width:64px;font-size:12px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:#000;font-weight:700;min-width:98px">Atua&ccedil;&atilde;o Turno</span>
+          <input type="text" id="lp-meta-atuacao" onblur="lpMetaAlterada()" title="Horas de atua&ccedil;&atilde;o no turno &mdash; multiplica a capacidade de todas as fun&ccedil;&otilde;es" style="width:64px;font-size:12px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center">
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#111827;border-radius:10px;padding:12px 18px;min-width:120px;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Conferente</div>
+      <div id="lp-meta-card-conferente" style="font-size:20px;font-weight:700;color:#fff">0,00</div>
+    </div>
+    <div style="background:#111827;border-radius:10px;padding:12px 18px;min-width:120px;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Ajudante</div>
+      <div id="lp-meta-card-ajudante" style="font-size:20px;font-weight:700;color:#fff">0,00</div>
+    </div>
+    <div style="background:#111827;border-radius:10px;padding:12px 18px;min-width:120px;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Terceiros</div>
+      <div id="lp-meta-card-terceiros" style="font-size:20px;font-weight:700;color:#fff">0,00</div>
+    </div>
+    <div style="background:#16a34a;border-radius:10px;padding:12px 18px;min-width:120px;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:10px;font-weight:700;color:#dcfce7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Capacidade</div>
+      <div id="lp-meta-card-capacidade" style="font-size:20px;font-weight:700;color:#fff">0,00</div>
+    </div>
+  </div>
+
+  <div id="lp-inbound" style="margin-bottom:22px"></div>
+  <div id="lp-outbound"></div>
+
+  <div style="font-size:11px;color:#94a3b8;margin-top:14px">
+    Capacidade = QTD &times; Meta da fun&ccedil;&atilde;o &times; Atua&ccedil;&atilde;o Turno &nbsp;&middot;&nbsp; Terceiros usa a meta do Ajudante
+  </div>
+</div>
+
 <div id="tab-histRelOut-content" class="tab-content" style="background:#f1f5f9;min-height:calc(100vh - 64px);padding:20px 24px;box-sizing:border-box">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <div>
@@ -6959,6 +7076,275 @@ function updateClock() {
 }
 
 // ===== TAB NAVIGATION =====
+// ═══════════ LISTA DE PRESENÇA — HC Produtivo Peso Mov. ═══════════
+// Capacidade = QTD × Meta da função × Atuação Turno  (conferido contra a planilha de referência)
+// Terceiros usa a mesma meta do Ajudante.
+var LP_CHAVE = 'lista_presenca';
+var LP_FUNCOES = ['Conferente', 'Ajudante', 'Terceiros'];
+var LP_TURNOS = ['1º Turno', '2º Turno', '3º Turno'];
+var LP_METAS_PADRAO = { ajudante: '1,09', conferente: '2,15', atuacao: '7,33' };
+
+var _lpDados = { metas: null, dias: {} };
+try {
+  var _lpBruto = JSON.parse(localStorage.getItem('lista_presenca_v2') || 'null');
+  if (_lpBruto && _lpBruto.dias) _lpDados = _lpBruto;
+} catch (e) {}
+if (!_lpDados.metas) _lpDados.metas = { ajudante: LP_METAS_PADRAO.ajudante, conferente: LP_METAS_PADRAO.conferente, atuacao: LP_METAS_PADRAO.atuacao };
+if (!_lpDados.dias) _lpDados.dias = {};
+
+function _lpHojeISO() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+var _lpDataSel = _lpHojeISO();
+
+function _lpDiaAtual() {
+  if (!_lpDados.dias[_lpDataSel]) {
+    var vazio = function() {
+      var o = {};
+      LP_TURNOS.forEach(function(t) { o[t] = { Conferente:'', Ajudante:'', Terceiros:'' }; });
+      return o;
+    };
+    _lpDados.dias[_lpDataSel] = { inbound: vazio(), outbound: vazio() };
+  }
+  return _lpDados.dias[_lpDataSel];
+}
+
+function _lpNum(v) {
+  var t = String(v == null ? '' : v).trim().replace(/\s/g, '');
+  if (!t) return 0;
+  if (t.indexOf(',') !== -1) t = t.split('.').join('').replace(',', '.');
+  return parseFloat(t) || 0;
+}
+function _lpFmt(n, casas) {
+  return (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+}
+// Meta usada por cada função (Terceiros compartilha a meta do Ajudante)
+function _lpMetaDe(funcao) {
+  var m = _lpDados.metas || {};
+  if (funcao === 'Conferente') return _lpNum(m.conferente);
+  return _lpNum(m.ajudante);
+}
+
+function lpSalvar() {
+  try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
+  try {
+    fetch(SB_URL + '/configuracoes', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ chave: LP_CHAVE, valor: JSON.stringify(_lpDados) })
+    }).catch(function(){});
+  } catch (e) {}
+}
+
+function lpCarregarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.' + LP_CHAVE + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      if (!data || !data.length || !data[0].valor) return;
+      var remoto = null;
+      try { remoto = JSON.parse(data[0].valor); } catch (e) { return; }
+      if (!remoto || !remoto.dias) return;
+      if (remoto.metas && !localStorage.getItem('lista_presenca_v2')) _lpDados.metas = remoto.metas;
+      Object.keys(remoto.dias).forEach(function(dia) {
+        if (!_lpDados.dias[dia]) _lpDados.dias[dia] = remoto.dias[dia];
+      });
+      try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
+      var el = document.getElementById('tab-listaPresenca-content');
+      if (el && el.classList.contains('active')) lpRenderizar();
+    }).catch(function(){});
+  } catch (e) {}
+}
+
+function lpTrocarData() {
+  var el = document.getElementById('lp-data');
+  if (el && el.value) _lpDataSel = el.value;
+  lpRenderizar();
+}
+function lpMetaAlterada() {
+  _lpDados.metas = {
+    ajudante: (document.getElementById('lp-meta-ajudante') || {}).value || '',
+    conferente: (document.getElementById('lp-meta-conferente') || {}).value || '',
+    atuacao: (document.getElementById('lp-meta-atuacao') || {}).value || ''
+  };
+  lpSalvar(); lpRenderizar();
+}
+function lpQtdAlterada(fluxo, turno, funcao, valor) {
+  var dia = _lpDiaAtual();
+  if (!dia[fluxo]) return;
+  if (!dia[fluxo][turno]) dia[fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
+  dia[fluxo][turno][funcao] = valor;
+  lpSalvar(); lpRenderizar();
+}
+
+// Peso realizado (toneladas) por turno, na mesma fonte do Painel Executivo
+function _lpRealizadoPorTurno(fluxo) {
+  var out = {};
+  LP_TURNOS.forEach(function(t){ out[t] = null; });
+  try {
+    var f = (fluxo === 'inbound')
+      ? ((typeof _gvFluxoFilaIN === 'function') ? _gvFluxoFilaIN() : null)
+      : ((typeof _gvFluxoFilaOUT === 'function') ? _gvFluxoFilaOUT() : null);
+    if (f && f.linhas) f.linhas.forEach(function(l) {
+      if (out.hasOwnProperty(l.turno)) out[l.turno] = (l.executado || 0) / 1000;
+    });
+  } catch (e) {}
+  return out;
+}
+
+function _lpTabelaTurno(fluxo, turno, atuacao, realizadoTon) {
+  var dia = _lpDiaAtual();
+  var dados = (dia[fluxo] && dia[fluxo][turno]) ? dia[fluxo][turno] : {};
+  var somaQtd = 0, somaCap = 0;
+  var linhas = LP_FUNCOES.map(function(f) {
+    var qtd = _lpNum(dados[f]);
+    var cap = qtd * _lpMetaDe(f) * atuacao;
+    somaQtd += qtd; somaCap += cap;
+    var val = String(dados[f] == null ? '' : dados[f]).split('"').join('&quot;');
+    return '<tr>' +
+      '<td style="padding:5px 8px;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + f + '</td>' +
+      '<td style="padding:5px 8px;text-align:center;border-bottom:1px solid #f1f5f9">' +
+        '<input type="text" value="' + val + '" onblur="lpQtdAlterada(\'' + fluxo + '\',\'' + turno + '\',\'' + f + '\',this.value)" ' +
+        'style="width:56px;font-size:12px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:4px;text-align:center"></td>' +
+      '<td style="padding:5px 8px;text-align:right;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + (qtd > 0 ? _lpFmt(cap, 2) : '') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var comparativo = '';
+
+  return '<div style="border:1px solid #111827;border-radius:4px;padding:0;background:#fff;flex:1 1 280px;min-width:280px;max-width:420px">' +
+    '<table style="width:100%;border-collapse:collapse">' +
+      '<thead><tr>' +
+        '<th style="padding:6px 8px;text-align:left;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">' + turno + '</th>' +
+        '<th style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">QTD</th>' +
+        '<th style="padding:6px 8px;text-align:right;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">Capacidade</th>' +
+      '</tr></thead>' +
+      '<tbody>' + linhas +
+        '<tr>' +
+          '<td style="padding:6px 8px;font-size:12px;font-weight:700;color:#1e293b">Total</td>' +
+          '<td style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:#1e293b">' + (somaQtd > 0 ? _lpFmt(somaQtd, 0) : '') + '</td>' +
+          '<td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:700;color:#1e293b">' + (somaCap > 0 ? _lpFmt(somaCap, 2) : '') + '</td>' +
+        '</tr>' +
+      '</tbody>' +
+    '</table>' + comparativo +
+  '</div>';
+}
+
+// Card com o somatório dos 3 turnos — mesma fórmula e fonte de dados das tabelas
+// individuais, apenas somando QTD/Capacidade por função nos 3 turnos do fluxo.
+function _lpCardTotal(fluxo, atuacao, realizadoTotal) {
+  var dia = _lpDiaAtual();
+  var somaQtdFuncao = {}; LP_FUNCOES.forEach(function(f){ somaQtdFuncao[f] = 0; });
+  var somaQtd = 0, somaCap = 0;
+  LP_TURNOS.forEach(function(t) {
+    var dados = (dia[fluxo] && dia[fluxo][t]) ? dia[fluxo][t] : {};
+    LP_FUNCOES.forEach(function(f) {
+      var qtd = _lpNum(dados[f]);
+      somaQtdFuncao[f] += qtd;
+      somaQtd += qtd;
+      somaCap += qtd * _lpMetaDe(f) * atuacao;
+    });
+  });
+
+  var linhas = LP_FUNCOES.map(function(f) {
+    var qtd = somaQtdFuncao[f];
+    var cap = qtd * _lpMetaDe(f) * atuacao;
+    return '<tr>' +
+      '<td style="padding:5px 8px;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + f + '</td>' +
+      '<td style="padding:5px 8px;text-align:center;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + (qtd > 0 ? _lpFmt(qtd, 0) : '') + '</td>' +
+      '<td style="padding:5px 8px;text-align:right;font-size:12px;color:#000;font-weight:700;border-bottom:1px solid #f1f5f9">' + (qtd > 0 ? _lpFmt(cap, 2) : '') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var comparativo = '';
+
+  return '<div style="border:1px solid #111827;border-radius:4px;padding:0;background:#eef2f7;flex:1 1 280px;min-width:280px;max-width:420px">' +
+    '<table style="width:100%;border-collapse:collapse">' +
+      '<thead><tr>' +
+        '<th style="padding:6px 8px;text-align:left;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">Total (3 Turnos)</th>' +
+        '<th style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">QTD</th>' +
+        '<th style="padding:6px 8px;text-align:right;font-size:12px;font-weight:700;color:#fff;background:#000;border-bottom:1px solid #000">Capacidade</th>' +
+      '</tr></thead>' +
+      '<tbody>' + linhas +
+        '<tr>' +
+          '<td style="padding:6px 8px;font-size:12px;font-weight:700;color:#1e293b">Total</td>' +
+          '<td style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:#1e293b">' + (somaQtd > 0 ? _lpFmt(somaQtd, 0) : '') + '</td>' +
+          '<td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:700;color:#1e293b">' + (somaCap > 0 ? _lpFmt(somaCap, 2) : '') + '</td>' +
+        '</tr>' +
+      '</tbody>' +
+    '</table>' + comparativo +
+  '</div>';
+}
+
+function _lpSecao(fluxo, titulo) {
+  var atuacao = _lpNum((_lpDados.metas || {}).atuacao);
+  var realizado = _lpRealizadoPorTurno(fluxo);
+  var realizadoTotal = LP_TURNOS.reduce(function(s, t){ return s + (realizado[t] || 0); }, 0);
+  var partes = _lpDataSel.split('-');
+  var dataBR = partes.length === 3 ? (partes[2] + '/' + partes[1] + '/' + partes[0]) : _lpDataSel;
+  return '<div style="font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:1px solid #cbd5e1;display:inline-block;padding-right:40px">' +
+      titulo + ' - ' + dataBR + '</div>' +
+    '<div style="display:flex;gap:18px;flex-wrap:wrap">' +
+      LP_TURNOS.map(function(t){ return _lpTabelaTurno(fluxo, t, atuacao, realizado[t]); }).join('') +
+      _lpCardTotal(fluxo, atuacao, realizadoTotal) +
+    '</div>';
+}
+
+// Soma a capacidade de uma função (Conferente/Ajudante/Terceiros) em TODOS os
+// turnos e nos DOIS fluxos (Inbound + Outbound) do dia selecionado.
+function _lpCapacidadeTotalFuncao(funcao) {
+  var atuacao = _lpNum((_lpDados.metas || {}).atuacao);
+  var dia = _lpDiaAtual();
+  var meta = _lpMetaDe(funcao);
+  var total = 0;
+  ['inbound', 'outbound'].forEach(function(fluxo) {
+    LP_TURNOS.forEach(function(t) {
+      var dados = (dia[fluxo] && dia[fluxo][t]) ? dia[fluxo][t] : {};
+      var qtd = _lpNum(dados[funcao]);
+      total += qtd * meta * atuacao;
+    });
+  });
+  return total;
+}
+
+// Atualiza os 4 cards ao lado da META: Conferente, Ajudante, Terceiros e
+// Capacidade (Ajudante + Terceiros), somando Inbound + Outbound e os 3 turnos.
+function _lpAtualizarCardsMeta() {
+  var capConferente = _lpCapacidadeTotalFuncao('Conferente');
+  var capAjudante = _lpCapacidadeTotalFuncao('Ajudante');
+  var capTerceiros = _lpCapacidadeTotalFuncao('Terceiros');
+  var capCapacidade = capAjudante + capTerceiros;
+
+  var setTxt = function(id, val) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = _lpFmt(val, 2);
+  };
+  setTxt('lp-meta-card-conferente', capConferente);
+  setTxt('lp-meta-card-ajudante', capAjudante);
+  setTxt('lp-meta-card-terceiros', capTerceiros);
+  setTxt('lp-meta-card-capacidade', capCapacidade);
+}
+
+function lpRenderizar() {
+  var elIn = document.getElementById('lp-inbound');
+  var elOut = document.getElementById('lp-outbound');
+  if (!elIn || !elOut) return;
+
+  var elData = document.getElementById('lp-data');
+  if (elData && !elData.value) elData.value = _lpDataSel;
+
+  var m = _lpDados.metas || {};
+  [['lp-meta-ajudante','ajudante'], ['lp-meta-conferente','conferente'], ['lp-meta-atuacao','atuacao']].forEach(function(par) {
+    var el = document.getElementById(par[0]);
+    if (el && document.activeElement !== el) el.value = m[par[1]] || '';
+  });
+
+  elIn.innerHTML = _lpSecao('inbound', 'Inbound');
+  elOut.innerHTML = _lpSecao('outbound', 'Outbound');
+  _lpAtualizarCardsMeta();
+}
+
 function showTab(tab) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn, .sb-item').forEach(el => el.classList.remove('active'));
@@ -6972,6 +7358,7 @@ function showTab(tab) {
     if (dot) dot.remove();
   }
   if (tab === 'grade') renderGrade();
+  if (tab === 'listaPresenca' && typeof lpRenderizar === 'function') lpRenderizar();
 
   if (tab === 'dashboard') { renderDashboard(); 
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -8347,11 +8734,15 @@ function salvarProg() {
 
 // ===== LIMPAR FORM =====
 function limparForm() {
-  ['f-destino','f-regiao','f-composicao','f-saida','f-tipo','f-frota','f-motorista','f-cavalinho','f-obs','f-tipo_prior','f-data_crit','f-prev_fech','f-ocup'].forEach(id => {
+  // f-ocup fica de fora deste reset genérico: é campo obrigatório, agora oculto na
+  // tela, e precisa manter um valor válido ('0') para o botão Salvar continuar
+  // funcionando — ver ajuste logo abaixo.
+  ['f-destino','f-regiao','f-composicao','f-saida','f-tipo','f-frota','f-motorista','f-cavalinho','f-obs','f-tipo_prior','f-data_crit','f-prev_fech'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
   document.getElementById('f-dia').value = '';
+  var _ocup = document.getElementById('f-ocup'); if (_ocup) _ocup.value = '0';
   var _fill = document.getElementById('f-ocup-bar-fill'); if(_fill) _fill.style.width = '0%';
   var _fill2 = document.getElementById('f-ocup-bar-fill'); if(_fill2) _fill2.style.background = '#9ca3af';
   var _gi = document.getElementById('grade-info'); if(_gi) _gi.classList.remove('visible');
@@ -8895,7 +9286,75 @@ function cfClose() {
 document.addEventListener('click', function(e) {
   var dd=document.getElementById('cf-dropdown');
   if(dd&&dd.style.display==='flex'&&!dd.contains(e.target)&&!e.target.classList.contains('cf-btn')) cfClose();
+  var addOut=document.getElementById('acf-dropdown');
+  if(addOut&&addOut.style.display==='flex'&&!addOut.contains(e.target)&&!e.target.classList.contains('cf-btn')) acfClose();
 });
+
+// ── Filtro de coluna do Acompanhamento OUT (independente do _cfF usado no Recurso
+// Programado/Programar — cada tela tem seu próprio estado, para não haver conflito) ──
+var _acfF = {}, _acfCol = null, _acfVals = {};
+function _acfVal(r, campo) {
+  var rec = (typeof _acompOutData !== 'undefined' && _acompOutData[r._id]) ? _acompOutData[r._id] : {};
+  if (campo === 'destino') return r.destino || '';
+  if (campo === 'regiao') return r.regiao || '';
+  if (campo === 'composicao') return r.composicao || '';
+  if (campo === 'frota') return r.frota || '';
+  if (campo === 'status') return (typeof _acompOutStatusDe === 'function') ? _acompOutStatusDe(r._id).label : '';
+  if (campo === 'conferente') return rec.conferente || '';
+  return '';
+}
+// Base para montar as opções do dropdown: mesma lista já filtrada por busca/período
+// da tela, mas ANTES dos filtros de coluna já aplicados (padrão Excel: cada coluna
+// mostra os valores possíveis dado o que as outras já filtraram).
+function _acfBase() {
+  return (typeof _acompOutBaseFiltrada === 'function') ? _acompOutBaseFiltrada() : [];
+}
+function acfOpen(campo, btn) {
+  var dd = document.getElementById('acf-dropdown');
+  var same = dd.style.display === 'flex' && _acfCol === campo;
+  acfClose(); if (same) return;
+  _acfCol = campo;
+  var base = _acfBase();
+  var map = {}; base.forEach(function(r){ var v=_acfVal(r,campo); if(v) map[v]=true; });
+  var vals = Object.keys(map).sort();
+  _acfVals[campo] = vals;
+  var sel = _acfF[campo] || new Set(vals);
+  document.getElementById('acf-search-input').value = '';
+  acfDraw(vals, sel);
+  var rect = btn.getBoundingClientRect();
+  dd.style.top = (rect.bottom + 4) + 'px';
+  dd.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 290)) + 'px';
+  dd.style.display = 'flex'; btn.classList.add('active');
+}
+function acfDraw(vals, sel) {
+  var s = (document.getElementById('acf-search-input') || {}).value || '';
+  s = s.toLowerCase();
+  var f = s ? vals.filter(function(v){ return v.toLowerCase().indexOf(s) !== -1; }) : vals;
+  document.getElementById('acf-list').innerHTML = f.map(function(v) {
+    var chk = sel && sel.has ? sel.has(v) : true;
+    return '<label class="cf-item"><input type="checkbox" value="' + v.split('"').join('&quot;') + '" ' + (chk ? 'checked' : '') + '><span>' + (v || '(vazio)') + '</span></label>';
+  }).join('') || '<div style="padding:10px;font-size:11px;color:#9ca3af;text-align:center">Nenhum valor encontrado</div>';
+}
+function acfSearchFilter() { if (!_acfCol) return; acfDraw(_acfVals[_acfCol] || [], _acfF[_acfCol] || new Set(_acfVals[_acfCol] || [])); }
+function acfSelectAll() { document.querySelectorAll('#acf-list input').forEach(function(c){ c.checked = true; }); }
+function acfClearAll()  { document.querySelectorAll('#acf-list input').forEach(function(c){ c.checked = false; }); }
+function acfApply() {
+  if (!_acfCol) return;
+  var m = new Set();
+  document.querySelectorAll('#acf-list input').forEach(function(c){ if (c.checked) m.add(c.value); });
+  var all = new Set(_acfVals[_acfCol] || []);
+  if (m.size === all.size) delete _acfF[_acfCol]; else _acfF[_acfCol] = m;
+  var btn = document.getElementById('acfb-' + _acfCol);
+  if (btn) btn.classList.toggle('active', !!_acfF[_acfCol]);
+  acfClose();
+  acompOutRenderizar();
+}
+function acfClose() {
+  var dd = document.getElementById('acf-dropdown');
+  dd.style.display = 'none';
+  if (_acfCol) { var btn = document.getElementById('acfb-' + _acfCol); if (btn && !_acfF[_acfCol]) btn.classList.remove('active'); }
+  _acfCol = null;
+}
 
 // Aplicar filtros + badges no renderHist
 var _origRenderHist = null;
@@ -11487,14 +11946,17 @@ function descargaRenderizar() {
 
   var htmlColetas = _descColetaRanking.map(function(c, i) {
     var pos = (i+1) + 'º';
+    var macEsc = c.mac.split("'").join("\\'");
     return '<div class="desc-mac-item' + (c.mac===_descMacSel?' selected':'') + '"' +
       ' style="background:#ffffff;color:#111111;border:2px solid #15803d"' +
       ' title="' + ('Coleta · ' + c.ctrcs + ' CTRCs · ' + c.atras + ' atrasado(s) · ' + c.hoje + ' hoje').split('"').join('&quot;') + '"' +
-      ' onclick="descargaSelectMac(\'' + c.mac.split("'").join("\\'") + '\')">' +
+      ' onclick="descargaSelectMac(\'' + macEsc + '\')">' +
       '<div><span style="font-size:10px;opacity:.7">' + pos + '</span>' +
       '<span style="font-weight:800;margin-left:6px">MEC: ' + _descColetaRotulo(c) + '</span></div>' +
       '<div style="text-align:right"><div style="font-size:13px;font-weight:800">' + c.ctrcs + '</div>' +
       '<div style="font-size:9px;opacity:.75">' + String(c.dataStr||'').split(' ')[0] + '</div></div>' +
+      '<label style="display:flex;align-items:center;margin-left:10px" title="Selecionar para o card Fila de Programados" onclick="event.stopPropagation()">' +
+      '<input type="checkbox" ' + (_descFilaSelecionados.has(c.mac)?'checked':'') + ' onchange="descargaFilaCheckboxToggle(\'' + macEsc + '\', this.checked)" style="width:16px;height:16px;cursor:pointer"></label>' +
     '</div>';
   }).join('');
 
@@ -11504,11 +11966,14 @@ function descargaRenderizar() {
     var bg = usaRemetente ? '#f97316' : '#111111';
     var txtColor = usaRemetente ? '#000000' : '#ffffff';
     var destLabel = usaRemetente ? m.remetente : m.dest;
-    return '<div class="desc-mac-item'+(m.mac===_descMacSel?' selected':'')+'" style="background:'+bg+';color:'+txtColor+'" onclick="descargaSelectMac(\''+m.mac.replace(/'/g,"\\'")+'\')">' +
+    var macEsc = m.mac.replace(/'/g,"\\'");
+    return '<div class="desc-mac-item'+(m.mac===_descMacSel?' selected':'')+'" style="background:'+bg+';color:'+txtColor+'" onclick="descargaSelectMac(\''+macEsc+'\')">' +
       '<div><span style="font-size:10px;opacity:.8">'+pos+'</span>' +
       '<span style="font-weight:800;margin-left:6px">MAC: '+m.mac+' – '+destLabel+'</span></div>' +
       '<div style="text-align:right"><div style="font-size:13px;font-weight:800">'+(m.atras+m.hoje)+'</div>' +
       '<div style="font-size:9px;opacity:.85">'+m.menorDtStr+' · ⚠'+m.atras+' 📅'+m.hoje+'</div></div>' +
+      '<label style="display:flex;align-items:center;margin-left:10px" title="Selecionar para o card Fila de Programados" onclick="event.stopPropagation()">' +
+      '<input type="checkbox" '+(_descFilaSelecionados.has(m.mac)?'checked':'')+' onchange="descargaFilaCheckboxToggle(\''+macEsc+'\', this.checked)" style="width:16px;height:16px;cursor:pointer"></label>' +
     '</div>';
   }).join('');
 
@@ -11521,14 +11986,41 @@ function descargaRenderizar() {
   // Mantém o Acompanhamento de Produção sincronizado com a fila atual
   if (typeof descargaAcompRenderizar === 'function') descargaAcompRenderizar();
 
-  // Card de Peso Total na Fila de Descarga
+  // Card de Peso Total na Fila de Descarga + Fila de Programados (seleção via checkbox)
   var cardsDiv = document.getElementById('descarga-cards');
   if (cardsDiv) {
     var pesoTotalFila = _descMacRanking.reduce(function(s, m){ return s + (m.pesoTotal || 0); }, 0);
     cardsDiv.innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:140px;flex:1;max-width:200px">' +
       '<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Peso Total na Fila</div>' +
-      '<div style="font-size:20px;font-weight:800;color:#475569;margin-top:4px">' + Math.round(pesoTotalFila).toLocaleString('pt-BR') + ' kg</div></div>';
+      '<div style="font-size:20px;font-weight:800;color:#475569;margin-top:4px">' + Math.round(pesoTotalFila).toLocaleString('pt-BR') + ' kg</div></div>' +
+      '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:140px;flex:1;max-width:200px">' +
+      '<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Fila de Programados</div>' +
+      '<div id="descarga-card-fila-prog-valor" style="font-size:20px;font-weight:800;color:#15803d;margin-top:4px">0 kg</div>' +
+      '<div id="descarga-card-fila-prog-sub" style="font-size:10px;color:#94a3b8;margin-top:2px">0 selecionado(s)</div></div>';
+    descargaAtualizarCardFilaProgramados();
   }
+}
+
+// Seleção via checkbox nos cards da fila (independente de qual MAC/MEC está aberto
+// para ver os CTRCs) — alimenta só o card "Fila de Programados".
+var _descFilaSelecionados = new Set();
+function descargaFilaCheckboxToggle(mac, marcado) {
+  if (marcado) _descFilaSelecionados.add(mac); else _descFilaSelecionados.delete(mac);
+  descargaAtualizarCardFilaProgramados();
+}
+function descargaAtualizarCardFilaProgramados() {
+  var elValor = document.getElementById('descarga-card-fila-prog-valor');
+  var elSub = document.getElementById('descarga-card-fila-prog-sub');
+  if (!elValor) return;
+  var peso = 0, qtd = 0;
+  (_descColetaRanking || []).forEach(function(c) {
+    if (_descFilaSelecionados.has(c.mac)) { peso += c.peso || 0; qtd++; }
+  });
+  (_descMacRanking || []).forEach(function(m) {
+    if (_descFilaSelecionados.has(m.mac)) { peso += m.pesoTotal || 0; qtd++; }
+  });
+  elValor.textContent = Math.round(peso).toLocaleString('pt-BR') + ' kg';
+  if (elSub) elSub.textContent = qtd + ' selecionado(s)';
 }
 
 var _descRows = []; // stores all rows for current MAC
@@ -13134,13 +13626,10 @@ function acompOutFiltro7Dias() {
   acompOutRenderizar();
 }
 
-function acompOutRenderizar() {
-  var tbody = document.getElementById('acompOut-tbody');
-  if (!tbody) return;
-  if (typeof progData === 'undefined') return;
-  // Usuário digitando: adia o redesenho para não tirar o cursor do campo
-  if (_acompOutFocoNaTabela()) { _acompOutRenderPendente = true; return; }
-
+// Lista já filtrada por busca de texto e período (sem os filtros de coluna) —
+// usada tanto pela renderização quanto para montar as opções do dropdown de coluna.
+function _acompOutBaseFiltrada() {
+  if (typeof progData === 'undefined') return [];
   var busca = ((document.getElementById('acompOut-busca')||{}).value || '').trim().toLowerCase();
   var filterDe = ((document.getElementById('acompOut-de')||{}).value || '').trim();
   var filterAte = ((document.getElementById('acompOut-ate')||{}).value || '').trim();
@@ -13148,7 +13637,7 @@ function acompOutRenderizar() {
   var dAte = _acompOutParseBRDate(filterAte);
   if (dAte) dAte.setHours(23,59,59);
 
-  var data = progData.filter(function(r) {
+  return progData.filter(function(r) {
     if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
     if (busca) {
       var s = (String(r.destino||'') + String(r.frota||'') + String(r.composicao||'') + String(r.dia||'')).toLowerCase();
@@ -13162,6 +13651,23 @@ function acompOutRenderizar() {
     }
     return true;
   });
+}
+
+function acompOutRenderizar() {
+  var tbody = document.getElementById('acompOut-tbody');
+  if (!tbody) return;
+  if (typeof progData === 'undefined') return;
+  // Usuário digitando: adia o redesenho para não tirar o cursor do campo
+  if (_acompOutFocoNaTabela()) { _acompOutRenderPendente = true; return; }
+
+  var data = _acompOutBaseFiltrada();
+  // Filtros de coluna (▼ no cabeçalho) — aplicados por cima da busca/período
+  var acfCols = Object.keys(_acfF);
+  if (acfCols.length) {
+    data = data.filter(function(r) {
+      return acfCols.every(function(c) { return _acfF[c].has(_acfVal(r, c)); });
+    });
+  }
 
   data.sort(function(a, b) {
     // Linhas já preenchidas sempre acima das vazias
@@ -14148,6 +14654,32 @@ function _gvExtratoDataISO(offsetDias) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 
+// ── Capacidade (HC - Produtivo Peso Mov.) ──
+// Mesma fórmula usada nos cards de META daquela tela: soma da capacidade de
+// Ajudante + Terceiros, em todos os turnos. Se "fluxo" for informado
+// ('inbound' ou 'outbound'), soma apenas aquele fluxo; caso contrário soma os dois.
+// Retorna em TONELADAS (mesma unidade usada na tela HC).
+function _gvCapacidadeHC(dataISO, fluxo) {
+  try {
+    if (typeof _lpDados === 'undefined' || !_lpDados || !_lpDados.dias) return 0;
+    var dia = _lpDados.dias[dataISO];
+    if (!dia) return 0;
+    var atuacao = _lpNum((_lpDados.metas || {}).atuacao);
+    var fluxos = fluxo ? [fluxo] : ['inbound', 'outbound'];
+    var total = 0;
+    fluxos.forEach(function(fx) {
+      LP_TURNOS.forEach(function(t) {
+        var dados = (dia[fx] && dia[fx][t]) ? dia[fx][t] : {};
+        ['Ajudante', 'Terceiros'].forEach(function(f) {
+          var qtd = _lpNum(dados[f]);
+          total += qtd * _lpMetaDe(f) * atuacao;
+        });
+      });
+    });
+    return total;
+  } catch (e) { return 0; }
+}
+
 function _gvExtratoColeta() {
   // ── Descarga (IN) — tabela Extrato do Dia — Peso OPL (kg) ──
   var fIn = (typeof _gvFluxoFilaIN === 'function') ? _gvFluxoFilaIN() : null;
@@ -14177,13 +14709,33 @@ function _gvExtratoColeta() {
   var dfp = (typeof _fpColeta === 'function') ? _fpColeta() : {};
   var progFp = dfp.programadosCount || 0;
 
+  // ── Capacidade — HC - Produtivo Peso Mov. (Ajudante + Terceiros) ──
+  // Total (topo/rosca) soma Inbound + Outbound; IN e OUT usam a capacidade do próprio fluxo.
+  var dataISO = _gvExtratoDataISO(0);
+  var capacidadeInTon  = _gvCapacidadeHC(dataISO, 'inbound');
+  var capacidadeOutTon = _gvCapacidadeHC(dataISO, 'outbound');
+  var capacidadeTon    = capacidadeInTon + capacidadeOutTon;
+  var capacidadeKg     = capacidadeTon * 1000;
+  var capacidadeInKg   = capacidadeInTon * 1000;
+  var capacidadeOutKg  = capacidadeOutTon * 1000;
+  var pctCapacidadeTotal = capacidadeKg    ? ((planoIn + planoOut) / capacidadeKg * 100) : 0;
+  var pctCapacidadeIn    = capacidadeInKg  ? (planoIn  / capacidadeInKg  * 100) : 0;
+  var pctCapacidadeOut   = capacidadeOutKg ? (planoOut / capacidadeOutKg * 100) : 0;
+
   return {
-    data: _gvExtratoDataISO(0),
+    data: dataISO,
     in:  { plano: planoIn,  programado: progIn,  executado: execIn,  saldo: saldoIn  },
     out: { plano: planoOut, programado: progOut, executado: execOut, saldo: saldoOut },
     fp:  { plano: planoFp,  programado: progFp,  executado: execFp,  saldo: saldoFp  },
     movimentado: execIn + execOut,
-    planoTotal: planoIn + planoOut
+    planoTotal: planoIn + planoOut,
+    capacidadeTon: capacidadeTon,
+    capacidadeKg: capacidadeKg,
+    capacidadeInKg: capacidadeInKg,
+    capacidadeOutKg: capacidadeOutKg,
+    pctCapacidadeTotal: pctCapacidadeTotal,
+    pctCapacidadeIn: pctCapacidadeIn,
+    pctCapacidadeOut: pctCapacidadeOut
   };
 }
 
@@ -14227,14 +14779,15 @@ function _gvExtratoBarra(pctVerde, pctAmbar) {
   '</div>';
 }
 
-function _gvExtratoMetrica(rotulo, valor, cor) {
+function _gvExtratoMetrica(rotulo, valor, cor, sub) {
   return '<div style="flex:1;padding:0 18px;border-left:1px solid #2b2b2b">' +
     '<div style="font-size:11px;color:#9a9a9a;margin-bottom:4px">' + rotulo + '</div>' +
     '<div style="font-size:17px;font-weight:700;color:' + (cor || '#ffffff') + '">' + valor + '</div>' +
+    (sub ? '<div style="font-size:11px;color:#6b6b6b;margin-top:2px">' + sub + '</div>' : '') +
   '</div>';
 }
 
-function _gvExtratoProcesso(titulo, bloco, formatar) {
+function _gvExtratoProcesso(titulo, bloco, formatar, pctCapacidade, capacidadeKgBloco) {
   var pctExec = bloco.plano ? Math.round(bloco.executado / bloco.plano * 100) : 0;
   var pctProg = bloco.plano ? Math.round(bloco.programado / bloco.plano * 100) : 0;
   var metricas =
@@ -14242,7 +14795,8 @@ function _gvExtratoProcesso(titulo, bloco, formatar) {
     _gvExtratoMetrica('Programado', formatar(bloco.programado), '#f0b429') +
     _gvExtratoMetrica('Executado', formatar(bloco.executado), '#3fb950') +
     _gvExtratoMetrica('Saldo', formatar(bloco.saldo)) +
-    _gvExtratoMetrica('Atingimento', pctExec + '%', '#3fb950');
+    _gvExtratoMetrica('Atingimento', pctExec + '%', '#3fb950') +
+    (pctCapacidade != null ? _gvExtratoMetrica('Plano ÷ Capacidade', Math.round(pctCapacidade) + '%', '#3fb950', formatar(capacidadeKgBloco)) : '');
   return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:8px;padding:18px 20px;margin-bottom:16px">' +
     '<div style="display:flex;align-items:center">' +
       '<div style="min-width:210px"><span style="font-size:15px;font-weight:700;color:#fff">' + titulo + '</span></div>' +
@@ -14286,17 +14840,18 @@ function gvExtratoRenderizar() {
 
   var kg = function(v) { return Math.round(v || 0).toLocaleString('pt-BR') + ' kg'; };
   var qtd = function(v) { return Math.round(v || 0).toLocaleString('pt-BR'); };
-  var pctDia = e.planoTotal ? Math.round(e.movimentado / e.planoTotal * 100) : 0;
+  var pctDia = (e.pctCapacidadeTotal != null) ? Math.round(e.pctCapacidadeTotal) : 0;
 
   topo.innerHTML =
     _fpKpiCard('Peso Movimentado', Math.round(e.movimentado), '#3fb950', ' kg', 'Descarregado + carregado') +
     _fpKpiCard('Plano de Movimentação', Math.round(e.planoTotal), '#ffffff', ' kg', 'Plano IN + OUT') +
-    _gvDonutEficienciaCard(pctDia, 'executado', 'Atingimento do Dia', '#3fb950');
+    _fpKpiCard('Capacidade', Math.round(e.capacidadeKg || 0), '#3fb950', ' kg', 'HC - Ajudante + Terceiros (Lista de Presença)') +
+    _gvDonutEficienciaCard(pctDia, null, 'Eficiência da Capacidade', '#3fb950');
 
   proc.innerHTML =
     (aviso ? '<div style="font-size:11px;color:#f0b429;margin-bottom:10px">' + aviso + '</div>' : '') +
-    _gvExtratoProcesso('Descarga (IN)', e.in, kg) +
-    _gvExtratoProcesso('Carregamento (OUT)', e.out, kg) +
+    _gvExtratoProcesso('Descarga (IN)', e.in, kg, e.pctCapacidadeIn, e.capacidadeInKg) +
+    _gvExtratoProcesso('Carregamento (OUT)', e.out, kg, e.pctCapacidadeOut, e.capacidadeOutKg) +
     _gvExtratoProcesso('Programação de Frotas', e.fp, qtd);
 }
 
@@ -14596,7 +15151,7 @@ function _gvDonutEficienciaCard(pct, legenda, titulo, corFixa) {
         '</svg>' +
         '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column">' +
           '<span style="font-size:22px;font-weight:800;color:' + cor + '">' + p + '%</span>' +
-          '<span style="font-size:9px;color:#6b6b6b">' + (legenda || 'executado') + '</span>' +
+          (legenda ? '<span style="font-size:9px;color:#6b6b6b">' + legenda + '</span>' : '') +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -14948,11 +15503,23 @@ function frotasProgramadasRenderizar() {
   }
 }
 
+// Registros do Carregamento (OUT) usados pelo Painel Executivo — SEMPRE restritos
+// a HOJE (campo "gerado"). Sem este filtro, um registro de ontem ou anteontem que
+// ainda estivesse em progData (retenção de 3 dias) continuava entrando nas somas de
+// Executado/Programado/Plano do dia, inflando os três cards com dias que já passaram.
+function _gvItensOutHoje() {
+  if (typeof progData === 'undefined' || !progData.length) return [];
+  var hojeStr = (typeof getDataHoje === 'function') ? getDataHoje() : new Date().toLocaleDateString('pt-BR');
+  return progData.filter(function(r) {
+    if (!(r.frota || r.ocup || r.motorista || r.cavalinho)) return false;
+    var gerado = String(r.gerado || '').substring(0, 10);
+    return !gerado || gerado === hojeStr; // sem data legível: mantém (não descarta por segurança)
+  });
+}
+
 function _gvColetarDadosOUT() {
   // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
-  var itens = (typeof progData !== 'undefined' && progData.length) 
-    ? progData.filter(function(r) { return !!(r.frota || r.ocup || r.motorista || r.cavalinho); })
-    : [];
+  var itens = _gvItensOutHoje();
   var acompData = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
   var relD = (typeof _relData !== 'undefined') ? _relData : [];
 
@@ -15017,9 +15584,7 @@ function _gvColetarDadosOUT() {
 function _gvFluxoFilaOUT() {
   var historico = (typeof _cargaCriticaHistorico !== 'undefined') ? _cargaCriticaHistorico : [];
   // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
-  var itensBase = (typeof progData !== 'undefined' && progData.length)
-    ? progData.filter(function(r) { return !!(r.frota || r.ocup || r.motorista || r.cavalinho); })
-    : [];
+  var itensBase = _gvItensOutHoje();
   var acompData = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
   var hojeStr = new Date().toLocaleDateString('pt-BR');
   var agoraHora = new Date().toTimeString().substring(0,5);
@@ -15348,9 +15913,7 @@ function gestaoVistaRenderizar() {
 
   if (_gvVisaoAtual === 'out') {
     // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
-    var itensOut = (typeof progData !== 'undefined' && progData.length)
-      ? progData.filter(function(r) { return !!(r.frota || r.ocup || r.motorista || r.cavalinho); })
-      : [];
+    var itensOut = _gvItensOutHoje();
     var acompOut = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
     var relD3 = (typeof _relData !== 'undefined') ? _relData : [];
     var relByFrotaGV = {};
@@ -15398,16 +15961,22 @@ function gestaoVistaRenderizar() {
         if (!turnoVigenteGV || turnoDeGV(rec.horaInicio) === turnoVigenteGV) pesoProgramado += peso;
       } else pesoNaoIniciado += peso;
     });
-    // Plano OUT = tudo disponível no relatório do TMS (Fila Inicial + Entrou Depois do dia)
-    if (fluxoOut && fluxoOut.temTms) pesoTotalHoje = fluxoOut.plano;
-    else pesoTotalHoje = pesoExecutado + pesoProgramado + pesoNaoIniciado;
-    // Programado no OUT = peso registrado no Histórico de Relatório OUT, só do turno vigente
-    // (mesma regra de corte usada nos medidores por turno logo abaixo) — sem isso o card
-    // continuava somando o 1º Turno mesmo depois do 2º Turno já ter começado.
-    if (typeof _histRelOutPesoTurno === 'function' && typeof _gvTurnoDoHorario === 'function') {
-      var horaAgoraProg = new Date().toTimeString().substring(0, 5);
-      var turnoAgoraProg = _gvTurnoDoHorario(horaAgoraProg);
-      pesoProgramado = _histRelOutPesoTurno(turnoAgoraProg);
+    // Plano do dia OUT = "Início de Turno" da linha do turno vigente na tabela Extrato do
+    // Dia — que, pelo próprio modelo em cascata da tabela, já é Pendente do turno anterior
+    // + peso que entrou no início deste turno. Antes o card somava o dia inteiro
+    // (Fila Inicial + Entrou Depois de todos os turnos), inflando o valor.
+    var turnoVigenteOut = _gvTurnoCustomOut(new Date().toTimeString().substring(0, 5));
+    if (fluxoOut && fluxoOut.temTms && fluxoOut.linhas) {
+      var linhaVigente = fluxoOut.linhas.filter(function(l){ return l.turno === turnoVigenteOut; })[0];
+      pesoTotalHoje = linhaVigente ? linhaVigente.filaInicial : fluxoOut.plano;
+    } else {
+      pesoTotalHoje = pesoExecutado + pesoProgramado + pesoNaoIniciado;
+    }
+    // Programado no OUT = soma dos relatórios impressos no Histórico de Relatório OUT,
+    // filtrados pelo horário de geração dentro do turno vigente (corte customizado:
+    // 1º 07:00–14:48 · 2º 14:48–22:15 · 3º 22:15–06:00).
+    if (typeof _histRelOutPesoTurnoCustom === 'function') {
+      pesoProgramado = _histRelOutPesoTurnoCustom(turnoVigenteOut);
     } else if (typeof _histRelOutPesoHoje === 'function') {
       pesoProgramado = _histRelOutPesoHoje();
     }
@@ -15500,13 +16069,17 @@ function gestaoVistaRenderizar() {
   }
 
   // ── Card principal: peso feito / peso na fila (clicável → tooltip com análise) ──
+  // No OUT, "Peso Carregado" precisa ser SEMPRE igual ao card "Executado" do topo — usa o
+  // mesmo valor já calculado (pesoExecutado, turno-vigente) em vez de recalcular pelo dia
+  // inteiro via dados.pesoFeito. O IN não é afetado (mantém dados.pesoFeito como antes).
+  var pesoFeitoExibido = (_gvVisaoAtual === 'out' && typeof pesoExecutado === 'number') ? pesoExecutado : dados.pesoFeito;
   var salesDiv = document.getElementById('gv-card-sales');
   if (salesDiv) {
     salesDiv.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between">' +
-        '<div onmousemove="_gvTooltipMostrar(event, \'<b>'+dados.labelFeito+'</b><br>'+Math.round(dados.pesoFeito).toLocaleString('pt-BR')+' kg já concluídos hoje\')" onmouseout="_gvTooltipEsconder()">' +
+        '<div onmousemove="_gvTooltipMostrar(event, \'<b>'+dados.labelFeito+'</b><br>'+Math.round(pesoFeitoExibido).toLocaleString('pt-BR')+' kg já concluídos hoje\')" onmouseout="_gvTooltipEsconder()">' +
           '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em">' + dados.labelFeito + '</div>' +
-          '<div class="gv-count" data-val="'+Math.round(dados.pesoFeito)+'" data-suf=" kg" style="font-size:30px;font-weight:800;color:#fff;margin-top:6px">' + Math.round(dados.pesoFeito).toLocaleString('pt-BR') + ' kg</div>' +
+          '<div class="gv-count" data-val="'+Math.round(pesoFeitoExibido)+'" data-suf=" kg" style="font-size:30px;font-weight:800;color:#fff;margin-top:6px">' + Math.round(pesoFeitoExibido).toLocaleString('pt-BR') + ' kg</div>' +
         '</div>' +
         '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #262626" onmousemove="_gvTooltipMostrar(event, \'<b>'+dados.labelFila+'</b><br>'+Math.round(dados.pesoFila).toLocaleString('pt-BR')+' kg ainda pendentes\')" onmouseout="_gvTooltipEsconder()">' +
           '<div class="gv-count" data-val="'+Math.round(dados.pesoFila)+'" data-suf=" kg" style="font-size:22px;font-weight:800;color:#f59e0b">' + Math.round(dados.pesoFila).toLocaleString('pt-BR') + ' kg</div>' +
