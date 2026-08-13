@@ -5085,7 +5085,16 @@ document.addEventListener('click',function(e){
     <span style="font-size:11px;color:#94a3b8;font-weight:600">até</span>
     <input type="text" id="acompOut-ate" placeholder="dd/mm/aaaa" maxlength="10" data-dtfmt="d" oninput="acompOutRenderizar()"
       style="width:110px;font-size:12px;font-weight:500;border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;background:#fff">
-    <button onclick="document.getElementById('acompOut-de').value='';document.getElementById('acompOut-ate').value='';acompOutRenderizar()" style="padding:5px 10px;background:#333333;border:none;border-radius:6px;font-size:11px;color:#fff;cursor:pointer">Limpar</button>
+    <div style="height:20px;width:1px;background:#e2e8f0;margin:0 2px"></div>
+    <label style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em">Turno:</label>
+    <select id="acompOut-turno-filtro" onchange="this.blur();acompOutRenderizar()"
+      style="width:120px;font-size:12px;font-weight:500;border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;background:#fff;color:#1e293b;cursor:pointer">
+      <option value="">Todos</option>
+      <option value="1º Turno">1º Turno</option>
+      <option value="2º Turno">2º Turno</option>
+      <option value="3º Turno">3º Turno</option>
+    </select>
+    <button onclick="document.getElementById('acompOut-de').value='';document.getElementById('acompOut-ate').value='';var _tf=document.getElementById('acompOut-turno-filtro');if(_tf)_tf.value='';acompOutRenderizar()" style="padding:5px 10px;background:#333333;border:none;border-radius:6px;font-size:11px;color:#fff;cursor:pointer">Limpar</button>
     <button onclick="acompOutFiltroHoje()" style="padding:5px 10px;background:#333333;border:none;border-radius:6px;font-size:11px;color:#fff;cursor:pointer">Hoje</button>
     <button onclick="acompOutFiltro7Dias()" style="padding:5px 10px;background:#333333;border:none;border-radius:6px;font-size:11px;color:#fff;cursor:pointer">7 dias</button>
   </div>
@@ -5102,6 +5111,7 @@ document.addEventListener('click',function(e){
           <th onclick="acompOutOrdenar('prevFech')" title="Ordenar por Prev. Fechamento" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Prev. Fechamento<span id="acompOut-arw-prevFech"></span></th>
           <th onclick="acompOutOrdenar('status')" title="Ordenar por Status Carregamento" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;background:#111827;cursor:pointer;user-select:none">Status Carregamento<span id="acompOut-arw-status"></span> <button class="cf-btn" id="acfb-status" onclick="event.stopPropagation();acfOpen('status',this)" style="color:#9ca3af">&#9660;</button></th>
           <th onclick="acompOutOrdenar('pesoOpl')" title="Ordenar por Peso OPL" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Peso OPL (kg)<span id="acompOut-arw-pesoOpl"></span></th>
+          <th onclick="acompOutOrdenar('turno')" title="Ordenar por Turno" style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Turno<span id="acompOut-arw-turno"></span></th>
           <th onclick="acompOutOrdenar('conferente')" title="Ordenar por Conferente" style="padding:8px 10px;text-align:left;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Conferente<span id="acompOut-arw-conferente"></span> <button class="cf-btn" id="acfb-conferente" onclick="event.stopPropagation();acfOpen('conferente',this)" style="color:#9ca3af">&#9660;</button></th>
           <th onclick="acompOutOrdenar('qtdConf')" title="Ordenar por Qtd. Conf." style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Qtd. Conf.<span id="acompOut-arw-qtdConf"></span></th>
           <th onclick="acompOutOrdenar('qtdAjud')" title="Ordenar por Qtd. Ajud." style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap;background:#111827;cursor:pointer;user-select:none">Qtd. Ajud.<span id="acompOut-arw-qtdAjud"></span></th>
@@ -13432,10 +13442,59 @@ function _acompOutGet(id) {
   return _acompOutData[id];
 }
 
+// ── Turno do registro de Carregamento (OUT) ────────────────────────────────
+// Fonte única usada pela coluna "Turno" do Acompanhamento OUT e por todos os
+// cálculos por turno do Painel Executivo (OUT).
+//   1) Turno digitado manualmente na coluna "Turno"  → sempre tem prioridade
+//   2) Sem digitação → deduz pelo horário, conforme o modo:
+//        'fim'    → Hora Fim (turno que EXECUTOU o carregamento)
+//        'inicio' → Hora Início (turno que iniciou o carregamento)
+// Antes o Executado era classificado pela Hora Início, então um veículo que
+// começava no 1º Turno e terminava no 2º era contado como executado do 1º —
+// era isso que zerava o Executado do turno vigente.
+var _ACOMP_OUT_TURNOS = ['1º Turno', '2º Turno', '3º Turno'];
+
+function _acompOutTurnoAuto(rec, modo) {
+  rec = rec || {};
+  var hi = String(rec.horaInicio || '').trim();
+  var hf = String(rec.horaFim || '').trim();
+  var hora = (modo === 'fim') ? (hf || hi) : (hi || hf);
+  if (!hora) hora = new Date().toTimeString().substring(0, 5);
+  var t = (typeof _gvTurnoCustomOut === 'function') ? _gvTurnoCustomOut(hora) : null;
+  if (t) return t;
+  var hh = parseInt(String(hora).split(':')[0], 10); if (isNaN(hh)) hh = 0;
+  if (hh >= 6 && hh < 15) return '1º Turno';
+  if (hh >= 15 && hh < 23) return '2º Turno';
+  return '3º Turno';
+}
+
+function _acompOutTurnoEfetivo(rec, modo) {
+  rec = rec || {};
+  var manual = String(rec.turno || '').trim();
+  if (_ACOMP_OUT_TURNOS.indexOf(manual) !== -1) return manual;
+  return _acompOutTurnoAuto(rec, modo);
+}
+
+// Célula da coluna "Turno": em branco significa automático (deduzido pela Hora
+// Fim); escolher um turno na lista fixa o registro naquele turno.
+function _acompOutTurnoCelula(id, rec) {
+  var manual = String((rec || {}).turno || '').trim();
+  if (_ACOMP_OUT_TURNOS.indexOf(manual) === -1) manual = '';
+  var auto = _acompOutTurnoAuto(rec, 'fim');
+  var cor = manual ? '#1e293b' : '#94a3b8';
+  var opcoes = '<option value="" ' + (manual ? '' : 'selected') + '>Auto — ' + auto + '</option>';
+  _ACOMP_OUT_TURNOS.forEach(function(t) {
+    opcoes += '<option value="' + t + '" ' + (manual === t ? 'selected' : '') + '>' + t + '</option>';
+  });
+  return '<select id="acompOut-turno-' + id + '" ' +
+    'style="width:110px;padding:4px 6px;font-size:11px;border:1px solid #e2e8f0;border-radius:4px;background:#fff;font-weight:700;color:' + cor + ';cursor:pointer" ' +
+    'onchange="acompOutCampoAlterado(' + id + ',\'turno\',this.value)">' + opcoes + '</select>';
+}
+
 // ── Ordenação da tabela (linhas já preenchidas sempre no topo) ──────────────
 var _acompOutSortCol = '';
 var _acompOutSortDir = 1;
-var _ACOMP_OUT_COLS = ['gerado','destino','regiao','composicao','frota','prevFech','status','pesoOpl','conferente','qtdConf','qtdAjud','horaInicio','horaFim'];
+var _ACOMP_OUT_COLS = ['gerado','destino','regiao','composicao','frota','prevFech','status','pesoOpl','turno','conferente','qtdConf','qtdAjud','horaInicio','horaFim'];
 
 function _acompOutPreenchido(rec) {
   if (!rec) return false;
@@ -13454,6 +13513,7 @@ function _acompOutSortVal(r, col) {
   if (col === 'prevFech') return String(rec.prevFech||'');
   if (col === 'status') return _acompOutStatusRank(r._id);
   if (col === 'pesoOpl') return _parsePesoBR(rec.pesoOpl);
+  if (col === 'turno') return _acompOutTurnoEfetivo(rec, 'fim');
   if (col === 'conferente') return String(rec.conferente||'');
   if (col === 'qtdConf') return parseFloat(rec.qtdConf) || 0;
   if (col === 'qtdAjud') return parseFloat(rec.qtdAjud) || 0;
@@ -13511,6 +13571,19 @@ function acompOutCampoAlterado(id, campo, valor) {
     var st = _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim);
     var selectEl = document.getElementById('acompOut-status-select-' + id);
     if (selectEl) { selectEl.value = st.valor; selectEl.style.color = st.cor; }
+  }
+  // Coluna Turno: recalcula o rótulo "Auto — Xº Turno" quando os horários mudam
+  // e realça em escuro quando o turno passa a ser escolhido manualmente.
+  if (campo === 'horaInicio' || campo === 'horaFim' || campo === 'turno') {
+    var selTurno = document.getElementById('acompOut-turno-' + id);
+    if (selTurno) {
+      var manualT = String(rec.turno || '').trim();
+      if (_ACOMP_OUT_TURNOS.indexOf(manualT) === -1) manualT = '';
+      var opt0 = selTurno.querySelector('option[value=""]');
+      if (opt0) opt0.textContent = 'Auto — ' + _acompOutTurnoAuto(rec, 'fim');
+      selTurno.value = manualT;
+      selTurno.style.color = manualT ? '#1e293b' : '#94a3b8';
+    }
   }
   // Recalcula Tempo Total e Produtividade sempre que horário, ajudantes ou peso mudam
   if (campo === 'horaInicio' || campo === 'horaFim' || campo === 'qtdAjud' || campo === 'pesoOpl') {
@@ -13633,12 +13706,14 @@ function _acompOutBaseFiltrada() {
   var busca = ((document.getElementById('acompOut-busca')||{}).value || '').trim().toLowerCase();
   var filterDe = ((document.getElementById('acompOut-de')||{}).value || '').trim();
   var filterAte = ((document.getElementById('acompOut-ate')||{}).value || '').trim();
+  var filtroTurno = ((document.getElementById('acompOut-turno-filtro')||{}).value || '').trim();
   var dDe = _acompOutParseBRDate(filterDe);
   var dAte = _acompOutParseBRDate(filterAte);
   if (dAte) dAte.setHours(23,59,59);
 
   return progData.filter(function(r) {
     if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
+    if (filtroTurno && _acompOutTurnoEfetivo(_acompOutGet(r._id), 'fim') !== filtroTurno) return false;
     if (busca) {
       var s = (String(r.destino||'') + String(r.frota||'') + String(r.composicao||'') + String(r.dia||'')).toLowerCase();
       if (s.indexOf(busca) < 0) return false;
@@ -13685,7 +13760,7 @@ function acompOutRenderizar() {
   _acompOutUltimaLista = data;
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:30px;color:#94a3b8">Nenhum registro encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;padding:30px;color:#94a3b8">Nenhum registro encontrado.</td></tr>';
     acompOutAtualizarCards();
     return;
   }
@@ -13710,6 +13785,7 @@ function acompOutRenderizar() {
         '<div style="font-size:9px;color:#94a3b8;margin-top:2px;text-align:center">Automático</div>' +
       '</td>' +
       '<td style="padding:8px 10px;text-align:center"><input type="text" value="' + (rec.pesoOpl||'').toString().replace(/"/g,'&quot;') + '" placeholder="0" style="width:80px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center" onblur="acompOutCampoAlterado(' + r._id + ',\'pesoOpl\',this.value)"></td>' +
+      '<td style="padding:8px 10px;text-align:center">' + _acompOutTurnoCelula(r._id, rec) + '</td>' +
       '<td style="padding:8px 10px"><input type="text" value="' + (rec.conferente||'').replace(/"/g,'&quot;') + '" placeholder="Nome" style="width:110px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px" onblur="acompOutCampoAlterado(' + r._id + ',\'conferente\',this.value)"></td>' +
       '<td style="padding:8px 10px;text-align:center"><input type="number" min="0" value="' + (rec.qtdConf||'') + '" placeholder="0" style="width:56px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center" onblur="acompOutCampoAlterado(' + r._id + ',\'qtdConf\',this.value)"></td>' +
       '<td style="padding:8px 10px;text-align:center"><input type="number" min="0" value="' + (rec.qtdAjud||'') + '" placeholder="0" style="width:56px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;text-align:center" onblur="acompOutCampoAlterado(' + r._id + ',\'qtdAjud\',this.value)"></td>' +
@@ -15553,11 +15629,14 @@ function _gvColetarDadosOUT() {
     // Turno pelos horários gerados no Acompanhamento OUT: Hora Início; sem início, hora atual (mesma regra do IN)
     var t = _gvTurnoDoHorario(temInicio ? rec.horaInicio : agoraHoraOut);
     if (!t) return;
+    // Turno que EXECUTOU: coluna Turno do Acompanhamento OUT; sem ela, a Hora Fim.
+    var tFeito = (typeof _acompOutTurnoEfetivo === 'function') ? _acompOutTurnoEfetivo(rec, 'fim') : t;
+    if (!turnoFeitoPeso.hasOwnProperty(tFeito)) tFeito = t;
     turnoTotal[t]++;
     turnoTotalPeso[t] += peso;
     if (finalizado) {
-      turnoFeito[t]++;
-      turnoFeitoPeso[t] += peso;
+      turnoFeito[tFeito]++;
+      turnoFeitoPeso[tFeito] += peso;
     }
     turnoItens[t].push({ label: (r.destino||'—') + ' — frota ' + (r.frota||'—'), peso: peso, finalizado: finalizado });
 
@@ -15667,13 +15746,24 @@ function _gvFluxoFilaOUT() {
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
     var pesoTms2 = pesoTMSOut(r.frota);
     var peso = pesoTms2 > 0 ? pesoTms2 : (_parsePesoBR(rec.pesoOpl));
-    var t = turnoDe(temInicio ? rec.horaInicio : (rec.horaFim || agoraHora));
-    
+    // Turno da carga (para ratear a fila): coluna Turno do Acompanhamento OUT; sem
+    // ela, pela Hora Início — mantém o comportamento anterior.
+    var t = (typeof _acompOutTurnoEfetivo === 'function')
+      ? _acompOutTurnoEfetivo(rec, 'inicio')
+      : turnoDe(temInicio ? rec.horaInicio : (rec.horaFim || agoraHora));
+    // Turno que EXECUTOU: coluna Turno do Acompanhamento OUT; sem ela, pela Hora Fim
+    // (o veículo pertence ao turno que fechou o carregamento, não ao que o iniciou).
+    var tExec = (typeof _acompOutTurnoEfetivo === 'function')
+      ? _acompOutTurnoEfetivo(rec, 'fim')
+      : turnoDe(rec.horaFim || rec.horaInicio || agoraHora);
+    if (!pesoAcompTurno.hasOwnProperty(t)) t = '1º Turno';
+    if (!execTurno.hasOwnProperty(tExec)) tExec = t;
+
     pesoAcompTurno[t] += peso;
-    
+
     if (temFim) {
       execTotal += peso;
-      execTurno[t] += peso;
+      execTurno[tExec] += peso;
     }
   });
 
@@ -15690,13 +15780,20 @@ function _gvFluxoFilaOUT() {
   // Distribui filaInicial proporcionalmente por turno baseado no acompanhamento
   var totalAcomp = execTotal + (ordem.reduce(function(sum, t) { return sum + (pesoAcompTurno[t] - execTurno[t]); }, 0));
   
+  // ── Cascata entre turnos ──────────────────────────────────────────────────
+  // O que ficou Pendente no turno anterior é saldo que o turno seguinte herda:
+  //   Início de Turno = Pendente do turno anterior + fila própria do turno
+  // Assim o Pendente do último turno fecha com o Pendente do dia (linha Total).
+  var pendenteAnterior = 0;
   var linhas = ordem.map(function(t) {
     var proporcao = totalAcomp > 0 ? pesoAcompTurno[t] / totalAcomp : 0;
-    var filaInicialT = Math.round(filaInicial * proporcao);
+    var filaPropriaT = Math.round(filaInicial * proporcao);
     var entrouDeT = Math.round(entrouDepois * proporcao);
+    var filaInicialT = pendenteAnterior + filaPropriaT;
     var planoT = filaInicialT + entrouDeT;
     var execT = execTurno[t];
     var faltaT = planoT - execT;
+    pendenteAnterior = faltaT;
     var pctT = plano ? Math.round(execT / plano * 100) : 0;
     // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
     if (pctT === 0 && execT > 0) pctT = 1;
@@ -15704,6 +15801,7 @@ function _gvFluxoFilaOUT() {
     return { 
       turno: t, 
       filaInicial: filaInicialT,
+      filaPropria: filaPropriaT,
       entrouDepois: entrouDeT,
       filaFinal: faltaT,
       executado: execT, 
@@ -15939,9 +16037,13 @@ function gestaoVistaRenderizar() {
     // turno em que sua Hora Fim foi registrada, e no Programado do turno da Hora Início.
     // Sem esse recorte, o card continuava exibindo o que foi feito nos turnos anteriores
     // (ex.: mostrando o 3º Turno da madrugada enquanto a equipe já está no 1º Turno).
-    var turnoVigenteGV = (typeof _gvTurnoDoHorario === 'function')
-      ? _gvTurnoDoHorario(new Date().toTimeString().substring(0, 5)) : null;
-    function turnoDeGV(horaStr) {
+    // O turno de cada veículo vem da coluna "Turno" do Acompanhamento OUT quando
+    // preenchida; sem ela, é deduzido pela Hora Fim (Executado) / Hora Início
+    // (Programado), usando o mesmo corte de horário do card Plano do dia.
+    var turnoVigenteGV = _gvTurnoCustomOut(new Date().toTimeString().substring(0, 5));
+    function turnoDeGV(rec, modo) {
+      if (typeof _acompOutTurnoEfetivo === 'function') return _acompOutTurnoEfetivo(rec, modo);
+      var horaStr = (modo === 'fim') ? (rec.horaFim || rec.horaInicio) : (rec.horaInicio || rec.horaFim);
       var t = (typeof _gvTurnoDoHorario === 'function') ? _gvTurnoDoHorario(horaStr) : null;
       if (t) return t;
       var hh = parseInt(String(horaStr||'').split(':')[0], 10); if (isNaN(hh)) hh = 0;
@@ -15956,9 +16058,9 @@ function gestaoVistaRenderizar() {
       var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
       var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
       if (temFim) {
-        if (!turnoVigenteGV || turnoDeGV(rec.horaFim) === turnoVigenteGV) pesoExecutado += peso;
+        if (!turnoVigenteGV || turnoDeGV(rec, 'fim') === turnoVigenteGV) pesoExecutado += peso;
       } else if (temInicio) {
-        if (!turnoVigenteGV || turnoDeGV(rec.horaInicio) === turnoVigenteGV) pesoProgramado += peso;
+        if (!turnoVigenteGV || turnoDeGV(rec, 'inicio') === turnoVigenteGV) pesoProgramado += peso;
       } else pesoNaoIniciado += peso;
     });
     // Plano do dia OUT = "Início de Turno" da linha do turno vigente na tabela Extrato do
@@ -16255,7 +16357,10 @@ function gestaoVistaRenderizar() {
       var selecionado = (_gvFiltroTurno === l.turno);
       var zebra = (i % 2 === 0) ? '#121212' : '#161616';
       var totalCargaO = l.filaInicial + l.entrouDepois;
-      var tip = '<b>'+l.turno+'</b><br>Início de turno: '+fmtKgO(l.filaInicial)+' kg<br>Pendente: '+fmtKgO(l.filaFinal)+' kg<br>Executado: '+fmtKgO(l.executado)+' kg ('+l.pctExec+'%)';
+      var herdadoO = Math.max(0, (l.filaInicial || 0) - (l.filaPropria || 0));
+      var tip = '<b>'+l.turno+'</b><br>Início de turno: '+fmtKgO(l.filaInicial)+' kg' +
+        (herdadoO > 0 ? '<br>(inclui '+fmtKgO(herdadoO)+' kg pendentes do turno anterior)' : '') +
+        '<br>Pendente: '+fmtKgO(l.filaFinal)+' kg<br>Executado: '+fmtKgO(l.executado)+' kg ('+l.pctExec+'%)';
       return '<tr onclick="gestaoVistaFiltrarTurno(\''+l.turno+'\')" ' +
         'onmousemove="_gvTooltipMostrar(event, \''+tip.replace(/'/g,"\\'")+'\')" onmouseout="_gvTooltipEsconder()" ' +
         'style="cursor:pointer;background:'+(selecionado?'rgba(232,179,57,.12)':zebra)+'" ' +
