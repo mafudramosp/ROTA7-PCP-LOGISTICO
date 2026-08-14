@@ -12539,9 +12539,31 @@ function _descAcompListaCarregarSupabase() {
 // - Marca como ativo=false os que saíram da fila
 // - Adiciona os MACs novos que ainda não estavam na lista
 // - Atualiza peso/ctrcs/dest dos que continuam (podem ter mudado)
+//
+// A fila é a soma das duas listas da tela Descarga: Transferências
+// (_descMacRanking) + Coletas (_descColetaRanking). As coletas usam nomes de
+// campo diferentes (peso/destinoAJ/nome), então são normalizadas aqui para o
+// mesmo formato — sem isso o Acompanhamento IN mostrava só as transferências.
+function _descAcompFilaCompleta() {
+  var fila = (_descMacRanking || []).map(function(m) {
+    return { mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: 'Transferência' };
+  });
+  (typeof _descColetaRanking !== 'undefined' ? (_descColetaRanking || []) : []).forEach(function(c) {
+    fila.push({
+      mac: c.mac,
+      dest: String(c.destinoAJ || c.nome || '—').trim() || '—',
+      pesoTotal: c.peso || 0,
+      ctrcs: c.ctrcs || 0,
+      tipo: 'Coleta'
+    });
+  });
+  return fila;
+}
+
 function _descAcompListaMerge() {
+  var filaAtual = _descAcompFilaCompleta();
   var mapaAtual = {};
-  (_descMacRanking || []).forEach(function(m){
+  filaAtual.forEach(function(m){
     mapaAtual[m.mac] = m;
   });
 
@@ -12552,6 +12574,7 @@ function _descAcompListaMerge() {
       item.dest = mapaAtual[item.mac].dest || item.dest;
       item.pesoTotal = mapaAtual[item.mac].pesoTotal || item.pesoTotal;
       item.ctrcs = mapaAtual[item.mac].ctrcs || item.ctrcs;
+      item.tipo = mapaAtual[item.mac].tipo || item.tipo;
     } else {
       item.ativo = false; // saiu da fila → marca mas NÃO remove
     }
@@ -12560,9 +12583,9 @@ function _descAcompListaMerge() {
   // 2) Acrescenta novos MACs que ainda não estão na lista
   var existentes = {};
   _descAcompLista.forEach(function(item){ existentes[item.mac] = true; });
-  (_descMacRanking || []).forEach(function(m){
+  filaAtual.forEach(function(m){
     if (!existentes[m.mac]) {
-      _descAcompLista.push({ mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, ativo: true });
+      _descAcompLista.push({ mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: m.tipo, ativo: true });
     }
   });
 
@@ -12810,7 +12833,7 @@ function descargaAcompSalvarHistoricoSheets() {
     if (typeof showToast === 'function') showToast('Configure o Apps Script (USAR_SHEETS/APPS_SCRIPT_URL) primeiro', 'error');
     return;
   }
-  var lista = (_descAcompLista.length ? _descAcompLista : (_descMacRanking || []).map(function(m){
+  var lista = (_descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){
     return { mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, ativo: true };
   })).map(function(m){
     var rec = _descAcompGet(m.mac);
@@ -12850,7 +12873,7 @@ function descargaAcompAtualizarCards() {
     }
   } catch(ex) {}
   
-  var macsFila = _descAcompLista.length ? _descAcompLista : (_descMacRanking || []).map(function(m){ return {mac:m.mac, ativo:true}; });
+  var macsFila = _descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){ return {mac:m.mac, ativo:true}; });
   var total = macsFila.filter(function(m){ return m.ativo !== false; }).length;
   var totalGeral = macsFila.length;
   var naoIniciado = 0, emAndamento = 0, finalizado = 0, finalizadoAnter = 0, totalImpressoes = 0;
@@ -12935,8 +12958,8 @@ function descargaAcompRenderizar() {
   }
 
   // Usa a lista acumulada (nunca apaga MACs antigos), não só a fila atual
-  var lista = _descAcompLista.length ? _descAcompLista : (_descMacRanking || []).map(function(m){
-    return { mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, ativo: true };
+  var lista = _descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){
+    return { mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: m.tipo, ativo: true };
   });
 
   descargaAcompAtualizarCards();
@@ -12995,11 +13018,14 @@ function descargaAcompRenderizar() {
     var inativo = m.ativo === false;
     var bgRow = inativo ? 'background:#f8fafc;opacity:0.75' : '';
     var statusInativo = inativo ? '<span style="font-size:9px;background:#e2e8f0;color:#64748b;border-radius:10px;padding:1px 7px;margin-left:6px;font-weight:700">Saiu da fila</span>' : '';
+    // Coleta e Transferência convivem na mesma fila; o selo evita confundir um MEC
+    // de coleta com um MAC de transferência.
+    var tagColeta = (m.tipo === 'Coleta') ? '<span style="font-size:9px;background:#dcfce7;color:#15803d;border:1px solid #86efac;border-radius:10px;padding:1px 7px;margin-left:6px;font-weight:700">Coleta</span>' : '';
     var st = inativo ? { label: 'Finalizado anteriormente', cor: '#7c3aed', valor: 'finalizado-anteriormente' } : _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim);
     var posicaoFila = idx + 1;
     return '<tr style="border-bottom:1px solid #f1f5f9;' + bgRow + '">' +
       '<td style="padding:8px 10px;text-align:center;font-weight:700;color:#1e293b">#' + posicaoFila + '</td>' +
-      '<td style="padding:8px 10px;font-weight:700;color:' + (inativo?'#94a3b8':'#1e293b') + '">' + m.mac + statusInativo + '</td>' +
+      '<td style="padding:8px 10px;font-weight:700;color:' + (inativo?'#94a3b8':'#1e293b') + '">' + m.mac + tagColeta + statusInativo + '</td>' +
       '<td style="padding:8px 10px">' + (m.dest || '—') + '</td>' +
       '<td style="padding:8px 10px;text-align:right;font-family:monospace">' + Math.round(m.pesoTotal||0).toLocaleString('pt-BR') + '</td>' +
       '<td style="padding:8px 10px;text-align:right;font-family:monospace">' + (m.ctrcs||0) + '</td>' +
