@@ -2236,6 +2236,15 @@ function _gradeAtualizarComMalha(rows) {
     <button id="btn-hist-periodo-24h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('24h')" style="font-size:11px" title="Ver registros das últimas 24 horas">24h</button>
     <button id="btn-hist-periodo-48h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('48h')" style="font-size:11px" title="Ver registros das últimas 48 horas">48h</button>
     <button id="btn-hist-periodo-72h" class="btn btn-ghost btn-sm" onclick="histFiltrarPeriodo('72h')" style="font-size:11px" title="Ver registros das últimas 72 horas (janela completa de retenção)">72h</button>
+    <div class="header-divider" style="height:20px;background:var(--border);margin:0 4px"></div>
+    <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Turno:</label>
+    <select id="filter-hist-turno" onchange="this.blur();renderHist()" title="Turno escolhido no Acompanhamento OUT; sem escolha, o turno do horário de saída"
+      style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);cursor:pointer">
+      <option value="">Todos</option>
+      <option value="1º Turno">1º Turno</option>
+      <option value="2º Turno">2º Turno</option>
+      <option value="3º Turno">3º Turno</option>
+    </select>
     <div style="margin-left:auto;display:flex;gap:8px">
       <button id="btn-excluir-sel" class="btn btn-danger btn-sm" onclick="excluirSelecionados()" disabled style="opacity:0.4;cursor:not-allowed" title="Excluir os registros selecionados">Excluir selecionados</button>
       <button class="btn btn-ghost btn-sm" onclick="exportCSV('hist')" title="Exportar os registros para Excel">Exportar Excel</button>
@@ -4429,6 +4438,10 @@ function relProcessarRows(rows) {
         ocorr:String(row[cOcorr]||'').trim(),
         motivo:String(row[cMotivo]||'').trim(),frotaPlan:String(row[cPlan]||'').trim(),
         mac: macFinal,
+        // Nr_Mac bruto (coluna W) — é o VEÍCULO. Em coletas (B=510/540) o card usa o
+        // MEC da coluna AN, e vários MECs cabem no mesmo veículo; por isso o número
+        // de cards na lista não serve para contar veículos.
+        macW: macW,
         isAN: usaMacAN,
         // Critérios da fila de Coletas (não afetam Transferências):
         // colB = coluna B (510/540) | acZeroOuVazio = coluna AC igual a 0 ou em branco
@@ -6238,7 +6251,7 @@ function _relComprimir(r) {
     ds:(r.destinatario||'').substring(0,40),
     md:r.modal, oc:r.ocorr||'',
     mo:r.motivo||'', fp:r.frotaPlan||'',
-    mc:r.mac||'', pe:r.peso||0,
+    mc:r.mac||'', mw:r.macW||'', pe:r.peso||0,
     vl:r.valor||0, sh:r.sitAH||'',
     rb:r.reboque||'', vo:r.vols||'',
     mdst:r.macDest||'',
@@ -6272,7 +6285,7 @@ function _relDescomprimir(o) {
     remetente:o.rm||'', destinatario:o.ds||'',
     modal:o.md||'', ocorr:o.oc||'',
     motivo:o.mo||'', frotaPlan:o.fp||'',
-    mac:o.mc||'', peso:o.pe||0,
+    mac:o.mc||'', macW:o.mw||o.mc||'', peso:o.pe||0,
     valor:o.vl||0, sitAH:o.sh||'',
     reboque:o.rb||'', vols:o.vo||'',
     macDest:o.mdst||'',
@@ -8569,6 +8582,21 @@ function aplicarFiltrosColuna(data) {
   return data.filter(function(r){return cols.every(function(c){return _cfF[c].has(cfVal(r,c));});});
 }
 
+// ── Turno de uma linha do Recurso Programado ───────────────────────────────
+// Ordem de prioridade:
+//   1) Turno escolhido à mão na coluna "Turno" do Acompanhamento OUT — respeita
+//      a decisão do operador e mantém as duas telas contando o mesmo veículo no
+//      mesmo turno;
+//   2) sem escolha, o turno do horário de SAÍDA programada (calcTurnoCorte), que
+//      toda linha tem, inclusive as que ainda não começaram a carregar.
+function _histTurnoDaLinha(r) {
+  if (!r) return '—';
+  var rec = (typeof _acompOutData !== 'undefined' && _acompOutData) ? (_acompOutData[r._id] || {}) : {};
+  var manual = String(rec.turno || '').trim();
+  if (typeof _ACOMP_OUT_TURNOS !== 'undefined' && _ACOMP_OUT_TURNOS.indexOf(manual) !== -1) return manual;
+  return (typeof calcTurnoCorte === 'function') ? calcTurnoCorte(r.saida) : '—';
+}
+
 function renderHist() {
   const search = (document.getElementById('search-hist')?.value || '').toLowerCase();
   const tipo = document.getElementById('filter-hist-tipo')?.value || '';
@@ -8578,10 +8606,12 @@ function renderHist() {
   var cutoffHoras = _histFiltroPeriodo === '72h' ? 72 : (_histFiltroPeriodo === '48h' ? 48 : (_histFiltroPeriodo === '24h' ? 24 : null));
   var cutoffData = cutoffHoras ? new Date(agora.getTime() - cutoffHoras * 60 * 60 * 1000) : null;
   var hojeStr = getDataHoje();
+  var filtroTurnoHist = (document.getElementById('filter-hist-turno')?.value || '');
 
   let data = progData.filter(r => {
     if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
     if (tipo && r.tipo !== tipo) return false;
+    if (filtroTurnoHist && _histTurnoDaLinha(r) !== filtroTurnoHist) return false;
     // Filtro de período: Hoje (mesma data civil) ou janela rolante de 24h/48h
     if (cutoffData) {
       var dg = parseDateTimeBR(r.gerado);
@@ -12008,23 +12038,24 @@ function descargaRenderizar() {
   var dataHub = _relData.filter(function(r){ return (r.etiq||'') === 'Reembarque'; });
   var agora = new Date(); var h36 = 36*60*60*1000;
 
-  // Marca MACs inválidos se QUALQUER linha não atender ao critério (AC=0 + AE vazia + AM vazia).
-  // IMPORTANTE: usa r.disp (salvo no Supabase como 'dv') — r.descCompleta NÃO é salvo.
-  // disp='Patio' ou 'Em descarregamento' → critério OK
-  // disp='Disponível' (AM preenchida ou AC≠0) ou 'Planejado' (AE preenchida) → excluir MAC
-  var invalidMacsD = new Set();
-  dataHub.forEach(function(r) {
-    var mac = r.mac && r.mac.trim();
-    if (!mac) return;
+  // Linhas que continuam na fila de descarga: as que ainda atendem ao critério
+  // (AC=0 + AE vazia + AM vazia), o que em r.disp equivale a 'Patio' ou
+  // 'Em descarregamento'. A exclusão é LINHA A LINHA, igual ao filtro do TMS.
+  //
+  // Antes, um MAC inteiro era descartado quando QUALQUER linha dele já estivesse
+  // baixada ('Disponível') ou planejada ('Planejado'). Isso derrubava veículos que
+  // mal tinham começado — o MAC 37891, por exemplo, sumia da fila com 164 CTRCs e
+  // 10.752 kg pendentes por causa de 2 linhas baixadas em 210.
+  function _descLinhaNaFila(r) {
     var d = r.disp || '';
-    if (d === 'Disponível' || d === 'Planejado') invalidMacsD.add(mac);
-  });
+    return d !== 'Disponível' && d !== 'Planejado';
+  }
 
-  // Build mac map — exceto MACs inválidos — consolidando linhas duplicadas da coluna W
+  // Build mac map — consolidando linhas duplicadas da coluna W
   var macMap = {};
   dataHub.forEach(function(r) {
     var mac = r.mac && r.mac.trim();
-    if (!mac || mac === '—' || invalidMacsD.has(mac)) return;
+    if (!mac || mac === '—' || !_descLinhaNaFila(r)) return;
     if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'', _isAN:r.isAN||false, _isColeta:false, pesoTotal:0, disp:r.disp||'Patio' };
     var m = macMap[mac];
     m.pesoTotal = (m.pesoTotal||0) + (r.peso||0);
@@ -12124,10 +12155,26 @@ function descargaRenderizar() {
   // Card de Peso Total na Fila de Descarga + Fila de Programados (seleção via checkbox)
   var cardsDiv = document.getElementById('descarga-cards');
   if (cardsDiv) {
-    var pesoTotalFila = _descMacRanking.reduce(function(s, m){ return s + (m.pesoTotal || 0); }, 0);
+    // O card soma a FILA INTEIRA — Transferências + Coletas — sem os cortes de
+    // ranking (≥11 CTRCs nas transferências, >5 nas coletas), que existem só para
+    // enxugar a lista. Somar _descMacRanking deixava de fora as coletas e todo MAC
+    // pequeno, e era por isso que o peso não fechava com o relatório do TMS.
+    var pesoTotalFila = 0;
+    var veiculosFila = {};
+    (_relData || []).forEach(function(r) {
+      if (!_descLinhaNaFila(r)) return;
+      if (!(r.mac && String(r.mac).trim())) return;
+      pesoTotalFila += (r.peso || 0);
+      // Veículo = Nr_Mac (coluna W). Coleta ainda sem MAC atribuído entra no peso,
+      // mas não conta como veículo — não há carreta na fila para ela ainda.
+      var vw = String(r.macW || '').trim();
+      if (vw) veiculosFila[vw] = 1;
+    });
+    var qtdVeic = Object.keys(veiculosFila).length;
     cardsDiv.innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:140px;flex:1;max-width:200px">' +
       '<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Peso Total na Fila</div>' +
-      '<div style="font-size:20px;font-weight:800;color:#475569;margin-top:4px">' + Math.round(pesoTotalFila).toLocaleString('pt-BR') + ' kg</div></div>' +
+      '<div style="font-size:20px;font-weight:800;color:#475569;margin-top:4px">' + Math.round(pesoTotalFila).toLocaleString('pt-BR') + ' kg</div>' +
+      '<div style="font-size:10px;color:#94a3b8;margin-top:2px">' + qtdVeic + ' veículo(s) · Transferências + Coletas</div></div>' +
       '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:140px;flex:1;max-width:200px">' +
       '<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Fila de Programados</div>' +
       '<div id="descarga-card-fila-prog-valor" style="font-size:20px;font-weight:800;color:#15803d;margin-top:4px">0 kg</div>' +
