@@ -12551,7 +12551,10 @@ function _descAcompFilaCompleta() {
   (typeof _descColetaRanking !== 'undefined' ? (_descColetaRanking || []) : []).forEach(function(c) {
     fila.push({
       mac: c.mac,
-      dest: String(c.destinoAJ || c.nome || '—').trim() || '—',
+      // Em coleta o que identifica a carga é o REMETENTE (c.nome), igual ao card da
+      // fila na tela Descarga — não a sigla de destino, que ali não diz nada ao
+      // conferente. destinoAJ só entra se o remetente vier vazio.
+      dest: String(c.nome || c.destinoAJ || '—').trim() || '—',
       pesoTotal: c.peso || 0,
       ctrcs: c.ctrcs || 0,
       tipo: 'Coleta'
