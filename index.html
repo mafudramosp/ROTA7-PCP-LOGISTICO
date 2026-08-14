@@ -7327,12 +7327,14 @@ function _lpRealizadoPorTurno(fluxo) {
   return out;
 }
 
-// Paleta dos cards de capacidade: a cor identifica o turno e se repete em
-// Inbound/Outbound. 'ac' é o tom sólido usado no texto sobre a tarja branca.
+// Paleta dos cards de capacidade: os 3 turnos usam o mesmo degradê preto→branco
+// (grafite claro no rodapé para o texto branco continuar legível) e apenas o card
+// Total mantém a identidade verde. 'ac' é o tom sólido usado no texto sobre a
+// tarja branca (subtítulo do topo e efetivo escalado do rodapé).
 var LP_PALETA = {
-  '1º Turno': { g1: '#8f6df2', g2: '#46b3ea', ac: '#6f5ad6' },
-  '2º Turno': { g1: '#f79a5b', g2: '#f6c85f', ac: '#dd8130' },
-  '3º Turno': { g1: '#f2748f', g2: '#d95fa8', ac: '#d5507f' },
+  '1º Turno': { g1: '#000000', g2: '#6e6e6e', ac: '#111111' },
+  '2º Turno': { g1: '#000000', g2: '#6e6e6e', ac: '#111111' },
+  '3º Turno': { g1: '#000000', g2: '#6e6e6e', ac: '#111111' },
   'Total':    { g1: '#12a150', g2: '#5fd68a', ac: '#0f8a45' }
 };
 
