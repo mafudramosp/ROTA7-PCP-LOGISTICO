@@ -559,14 +559,12 @@
     .lp-card--destaque { margin-top: 0; }
   }
 
-  /* Tela Programar: colunas 2 (Status Carregamento) e 13 (Prev. Fechamento) ocultas apenas
-     visualmente. Os inputs continuam no DOM e com os mesmos ids (ocup_, status_, prev_),
-     porque autoSalvarLinha() os lê para decidir o que salvar — removê-los do HTML faria
-     um registro que só tem ocupação ou previsão ser apagado automaticamente. */
+  /* Tela Programar Malha do dia: coluna 2 (Tipo) oculta apenas visualmente — o <select>
+     continua no DOM com o mesmo id (tipo_), porque autoSalvarLinha() o lê para decidir
+     o que salvar. Status Carregamento e Prev. Fechamento agora ficam logo após Corte
+     Malha (colunas 7 e 8) e são somente leitura, puxadas do Acompanhamento OUT. */
   #table-prog thead th:nth-child(2),
-  #table-prog tbody td:nth-child(2),
-  #table-prog thead th:nth-child(13),
-  #table-prog tbody td:nth-child(13) { display: none; }
+  #table-prog tbody td:nth-child(2) { display: none; }
   
   .search-box { position: relative; }
   .search-box input { padding-left: 28px; width: 200px; }
@@ -1484,6 +1482,7 @@
 .rel-badge-disp  { background:#dbeafe; color:#2563eb; }
 .rel-badge-patio { background:#fef9c3; color:#854d0e; }
 .rel-badge-desc  { background:#e0e7ff; color:#4f46e5; }
+.rel-badge-dcgd  { background:#f1f5f9; color:#0f766e; }
 .rel-badge-crit  { background:#fff7ed; color:#ea580c; }
 .rel-badge-agend { background:#fef3c7; color:#d97706; }
 .rel-badge-fluxo { background:#f1f5f9; color:#475569; }
@@ -1645,7 +1644,7 @@
     </button>
     <button class="mobile-nav-item" id="mnav-historico" onclick="mobileGoTo('historico')">
       <span class="mobile-nav-icon"></span>
-      <span class="mobile-nav-label">Recurso Programado</span>
+      <span class="mobile-nav-label">Recursos Programados</span>
     </button>
     <button class="mobile-nav-item" id="mnav-plataforma" onclick="mobileGoTo('plataforma')">
       <span class="mobile-nav-icon"></span>
@@ -1746,8 +1745,8 @@
     <div class="sb-group-items open" id="items-programar">
       <button class="sb-item" id="tab-consolidacao" onclick="showTab('consolidacao')" data-tip="Peso em Rota"><span class="sb-text">Peso em Rota</span></button>
       <button class="sb-item" id="tab-cargaCritica" onclick="showTab('cargaCritica')" data-tip="Carga Crítica"><span class="sb-text">Carga Crítica</span></button>
-      <button class="sb-item active" id="tab-programacao" onclick="showTab('programacao')" data-tip="Programar"><span class="sb-text">Programar</span><span class="sb-badge" id="badge-prog" style="display:none"></span></button>
-      <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Recurso Programado"><span class="sb-text">Recurso Programado</span><span class="sb-badge" id="badge-hist" style="display:none"></span></button>
+      <button class="sb-item active" id="tab-programacao" onclick="showTab('programacao')" data-tip="Programar Malha do dia"><span class="sb-text">Programar Malha do dia</span><span class="sb-badge" id="badge-prog" style="display:none"></span></button>
+      <button class="sb-item" id="tab-historico" onclick="showTab('historico')" data-tip="Recursos Programados"><span class="sb-text">Recursos Programados</span><span class="sb-badge" id="badge-hist" style="display:none"></span></button>
       <button class="sb-item" id="tab-nova" onclick="showTab('nova')" data-tip="Adicionar"><span class="sb-text">Adicionar</span></button>
       <button class="sb-item" id="tab-cargaCriticaHistorico" onclick="showTab('cargaCriticaHistorico')" data-tip="Histórico de Relatório"><span class="sb-text">Histórico de Relatório</span></button>
     </div>
@@ -1793,6 +1792,7 @@
       <span class="search-icon">🔍</span>
       <input type="text" id="search-prog" placeholder="Destino, frota, região, motorista..." oninput="renderProg()">
     </div>
+    <button class="btn btn-ghost btn-sm" id="btn-pf-limpar" onclick="pfClearAllCols()" style="display:none" title="Remove os filtros aplicados nas colunas da tabela">Limpar filtros de coluna</button>
     
     
     
@@ -1824,18 +1824,29 @@
         <thead>
           <tr>
             <th style="width:36px">#</th>
-            <th style="width:130px">Status Carregamento</th>
             <th style="width:130px">Tipo</th>
-            <th style="width:70px">Destino</th>
-            <th style="width:100px">Região</th>
-            <th style="width:180px">Composição</th>
-            <th style="width:80px">Corte Malha</th>
-            <th style="width:90px">Turno</th>
-            <th style="width:100px">Dia</th>
-            <th style="width:150px">Nome do Motorista</th>
-            <th style="width:130px">Nº Cavalinho</th>
-            <th style="width:160px">Frota Carreta</th>
-            <th style="width:160px">Prev. Fechamento</th>
+            <th style="width:70px"><div class="col-filter-wrap"><span class="col-label">Destino</span>
+              <button class="cf-btn" id="pfb-destino" onclick="event.stopPropagation();pfOpen('destino',this)">▼</button></div></th>
+            <th style="width:100px"><div class="col-filter-wrap"><span class="col-label">Região</span>
+              <button class="cf-btn" id="pfb-regiao" onclick="event.stopPropagation();pfOpen('regiao',this)">▼</button></div></th>
+            <th style="width:180px"><div class="col-filter-wrap"><span class="col-label">Composição</span>
+              <button class="cf-btn" id="pfb-composicao" onclick="event.stopPropagation();pfOpen('composicao',this)">▼</button></div></th>
+            <th style="width:80px"><div class="col-filter-wrap"><span class="col-label">Corte Malha</span>
+              <button class="cf-btn" id="pfb-saida" onclick="event.stopPropagation();pfOpen('saida',this)">▼</button></div></th>
+            <th style="width:130px" title="Puxado automaticamente do Acompanhamento OUT"><div class="col-filter-wrap"><span class="col-label">Status Carregamento</span>
+              <button class="cf-btn" id="pfb-status" onclick="event.stopPropagation();pfOpen('status',this)">▼</button></div></th>
+            <th style="width:160px" title="Puxado automaticamente do Acompanhamento OUT"><div class="col-filter-wrap"><span class="col-label">Prev. Fechamento</span>
+              <button class="cf-btn" id="pfb-prev_fech" onclick="event.stopPropagation();pfOpen('prev_fech',this)">▼</button></div></th>
+            <th style="width:90px"><div class="col-filter-wrap"><span class="col-label">Turno</span>
+              <button class="cf-btn" id="pfb-turno" onclick="event.stopPropagation();pfOpen('turno',this)">▼</button></div></th>
+            <th style="width:100px"><div class="col-filter-wrap"><span class="col-label">Dia</span>
+              <button class="cf-btn" id="pfb-dia" onclick="event.stopPropagation();pfOpen('dia',this)">▼</button></div></th>
+            <th style="width:150px"><div class="col-filter-wrap"><span class="col-label">Nome do Motorista</span>
+              <button class="cf-btn" id="pfb-motorista" onclick="event.stopPropagation();pfOpen('motorista',this)">▼</button></div></th>
+            <th style="width:130px"><div class="col-filter-wrap"><span class="col-label">Nº Cavalinho</span>
+              <button class="cf-btn" id="pfb-cavalinho" onclick="event.stopPropagation();pfOpen('cavalinho',this)">▼</button></div></th>
+            <th style="width:160px"><div class="col-filter-wrap"><span class="col-label">Frota Carreta</span>
+              <button class="cf-btn" id="pfb-frota" onclick="event.stopPropagation();pfOpen('frota',this)">▼</button></div></th>
           </tr>
         </thead>
         <tbody id="tbody-prog"></tbody>
@@ -2517,6 +2528,9 @@ function _gradeAtualizarComMalha(rows) {
 <!-- ===================== TAB: PLATAFORMA ===================== -->
 <div class="cf-dropdown" id="cf-dropdown" style="display:none"><div class="cf-search"><input type="text" id="cf-search-input" placeholder="Buscar..." oninput="cfSearchFilter()"></div><div class="cf-actions"><button onclick="cfSelectAll()">Marcar todos</button><button onclick="cfClearAll()">Desmarcar todos</button></div><div class="cf-list" id="cf-list"></div><div class="cf-footer"><button class="cf-cancel" onclick="cfClose()">Cancelar</button><button class="cf-ok" onclick="cfApply()">OK</button></div></div>
 <div class="cf-dropdown" id="acf-dropdown" style="display:none"><div class="cf-search"><input type="text" id="acf-search-input" placeholder="Buscar..." oninput="acfSearchFilter()"></div><div class="cf-actions"><button onclick="acfSelectAll()">Marcar todos</button><button onclick="acfClearAll()">Desmarcar todos</button></div><div class="cf-list" id="acf-list"></div><div class="cf-footer"><button class="cf-cancel" onclick="acfClose()">Cancelar</button><button class="cf-ok" onclick="acfApply()">OK</button></div></div>
+<!-- Painel de filtro de coluna da tela Programar Malha do dia (independente de cf-dropdown/acf-dropdown,
+     que pertencem a Recursos Programados e Acompanhamento OUT) -->
+<div class="cf-dropdown" id="pf-dropdown" style="display:none"><div class="cf-search"><input type="text" id="pf-search-input" placeholder="Buscar..." oninput="pfSearchFilter()"></div><div class="cf-actions"><button onclick="pfSelectAll()">Marcar todos</button><button onclick="pfClearAll()">Desmarcar todos</button></div><div class="cf-list" id="pf-list"></div><div class="cf-footer"><button class="cf-cancel" onclick="pfClose()">Cancelar</button><button class="cf-ok" onclick="pfApply()">OK</button></div></div>
 
 <div id="tab-plataforma-content" class="tab-content" style="background:#f3f4f6;min-height:calc(100vh - 104px)">
   <div class="plat-wrap">
@@ -3723,6 +3737,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof _histRelOutCarregarSupabase === 'function') setInterval(_histRelOutCarregarSupabase, 120000);
   // Carregar Acompanhamento de Produção do Supabase (horas/conferente/impressões + fila/"Finalizado Anteriormente")
   if (typeof _descAcompCarregarSupabase === 'function') setTimeout(_descAcompCarregarSupabase, 1400);
+  if (typeof _descProgramacaoCarregarSupabase === 'function') setTimeout(_descProgramacaoCarregarSupabase, 1425);
   if (typeof _descAcompListaCarregarSupabase === 'function') setTimeout(_descAcompListaCarregarSupabase, 1450);
   if (typeof _cargaCriticaHistoricoCarregarSupabase === 'function') setTimeout(_cargaCriticaHistoricoCarregarSupabase, 1500);
   if (typeof _deletedIdsCarregarSupabase === 'function') setTimeout(_deletedIdsCarregarSupabase, 1000);
@@ -4023,6 +4038,24 @@ function relFecharExport() { document.getElementById('rel-export-modal').style.d
 function relExportSelAll()  { document.querySelectorAll('#rel-export-cols input').forEach(function(c){c.checked=true;}); }
 function relExportSelNone() { document.querySelectorAll('#rel-export-cols input').forEach(function(c){c.checked=false;}); }
 
+// ── Nomenclatura sequencial das saídas geradas ─────────────────────────────
+// O primeiro arquivo novo recebe ROTA7-V118; os próximos avançam para V119,
+// V120 e assim por diante. A sequência fica salva no navegador para não voltar
+// ao V118 quando a página for recarregada.
+var ROTA7_ARQUIVO_SEQ_KEY = 'rota7_arquivo_seq_v1';
+var _rota7SeqFallback = 117;
+function _rota7ProximoArquivo(extensao) {
+  var ultimo = _rota7SeqFallback;
+  try {
+    var salvo = parseInt(localStorage.getItem(ROTA7_ARQUIVO_SEQ_KEY), 10);
+    if (!isNaN(salvo)) ultimo = Math.max(ultimo, salvo);
+  } catch (e) {}
+  var proximo = ultimo + 1;
+  _rota7SeqFallback = proximo;
+  try { localStorage.setItem(ROTA7_ARQUIVO_SEQ_KEY, String(proximo)); } catch (e) {}
+  return 'ROTA7-V' + proximo + (extensao || '');
+}
+
 function relExecutarExport() {
   if (typeof XLSX === 'undefined') { showToast('Biblioteca XLSX não disponível','error'); return; }
   var selCols = [];
@@ -4032,7 +4065,7 @@ function relExecutarExport() {
   relFecharExport();
 
   var colMap = {}; REL_COLS.forEach(function(c){ colMap[c.k]=c; });
-  var dispLabel2 = {'Patio':'Pátio','Em descarregamento':'Em descarga'};
+  var dispLabel2 = {'Patio':'Pátio','Em descarregamento':'Em descarga','Descarregado':'Descarregado'};
 
   // Cabeçalho
   var headers = selCols.map(function(k){ return colMap[k].l; });
@@ -4055,7 +4088,7 @@ function relExecutarExport() {
 
   XLSX.utils.book_append_sheet(wb, ws, 'Relatório Embarque');
   var ts = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-  XLSX.writeFile(wb, 'Relatorio_Embarque_GRU_' + ts + '.xlsx');
+  XLSX.writeFile(wb, _rota7ProximoArquivo('.xlsx'));
   showToast('✅ Excel exportado!', 'success');
 }
 
@@ -4107,10 +4140,10 @@ function relExecutarImpressao() {
 
   var colMap = {};
   REL_COLS.forEach(function(c){ colMap[c.k] = c; });
-  var dispBadgeL   = {'Planejado':'#16a34a','Disponível':'#2563eb','Patio':'#854d0e','Em descarregamento':'#4f46e5'};
+  var dispBadgeL   = {'Planejado':'#16a34a','Disponível':'#2563eb','Patio':'#854d0e','Em descarregamento':'#4f46e5','Descarregado':'#0f766e'};
   var critColor    = {'⚠ Cliente critico':'#ea580c','⚠ Agendamento':'#d97706','Fluxo':'#475569'};
-  var dispLabel2   = {'Patio':'Pátio','Em descarregamento':'Em descarga'};
-  var posicaoColor = {'Fila de descarga':'#854d0e','Disponível':'#2563eb','Carregando':'#16a34a'};
+  var dispLabel2   = {'Patio':'Pátio','Em descarregamento':'Em descarga','Descarregado':'Descarregado'};
+  var posicaoColor = {'Fila de descarga':'#854d0e','Disponível':'#2563eb','Carregando':'#16a34a','Descarregado':'#0f766e'};
 
   var theadRow = '<tr>' + selCols.map(function(k){
     return '<th style="padding:7px 8px;background:#1e293b;color:#fff;font-size:12px;font-weight:700;text-transform:uppercase;white-space:nowrap;border:1px solid #0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact">' + colMap[k].l + '</th>';
@@ -4377,20 +4410,34 @@ function relProcessarRows(rows) {
       // AL e AM: 0 se em branco, 1 se preenchido
       var alVal = (row[cIniDes]!==null&&row[cIniDes]!==undefined&&String(row[cIniDes]).trim()!=='') ? 1 : 0;
       var amVal = (row[cFimDes]!==null&&row[cFimDes]!==undefined&&String(row[cFimDes]).trim()!=='') ? 1 : 0;
-      // Regras em ordem de prioridade:
-      // 1. Planejado:          AE preenchida
-      // 2. Em descarregamento: AL=1 + AM=0 + AC=0 + AE vazia
-      // 3. Pátio:              AL=0 + AM=0 + AC=0 + AE vazia
-      // 4. Disponível:         demais
+      // AC > 0 (parâmetro oficial de "Disponível"). Distinto de eqP, que só diz
+      // "preenchido e diferente de 0" — mantido intacto porque alimenta
+      // acZeroOuVazio/descCompleta na fila de Coletas.
+      var acMaiorZero = (function(){
+        if (eqRaw===null || eqRaw===undefined || String(eqRaw).trim()==='') return false;
+        var n = parseFloat(String(eqRaw).replace(',','.'));
+        return !isNaN(n) && n > 0;
+      })();
+      // Regras em ordem de prioridade (parâmetros das colunas do TMS):
+      // 1. Planejado (Em Carregamento): AE preenchida
+      // 2. Disponível:                  AC > 0  + AE vazia
+      // 3. Em descarregamento:          AC = 0  + AE vazia + AM vazia + AL preenchida
+      // 4. Pátio:                       AC = 0  + AE vazia + AL vazia + AM vazia
+      // 5. Descarregado:                AC = 0  + AE vazia + AM preenchida
+      //    (descarga concluída e mercadoria ainda sem equipamento/endereço).
+      //    Antes essas linhas caíam no "demais" e inflavam o Disponível — era a
+      //    origem da divergência contra o filtro do Excel.
       var disp;
       if (aeP) {
         disp = 'Planejado';
-      } else if (alVal===1 && amVal===0 && !eqP) {
+      } else if (acMaiorZero) {
+        disp = 'Disponível';
+      } else if (amVal===0 && alVal===1) {
         disp = 'Em descarregamento';
-      } else if (alVal===0 && amVal===0 && !eqP) {
+      } else if (amVal===0 && alVal===0) {
         disp = 'Patio';
       } else {
-        disp = 'Disponível';
+        disp = 'Descarregado';
       }
 
       // ── REGRA DE ORIGEM DO MAC (tela Prioridade de Descarga) ──
@@ -4461,6 +4508,7 @@ function relProcessarRows(rows) {
           if (d === 'em descarregamento' || d === 'patio') return 'Fila de descarga';
           if (d === 'planejado') return 'Carregando';
           if (d === 'disponível') return 'Disponível';
+          if (d === 'descarregado') return 'Descarregado';
           return '—';
         })(),
         programacao: ''
@@ -4528,9 +4576,9 @@ var REL_COLS = [
   {k:'valor',       l:'Valor (R$)',       w:110, right:true, type:'num', filter:true}
 ];
 
-var dispBadge={'Planejado':'rel-badge-plan','Disponível':'rel-badge-disp','Patio':'rel-badge-patio','Em descarregamento':'rel-badge-desc'};
+var dispBadge={'Planejado':'rel-badge-plan','Disponível':'rel-badge-disp','Patio':'rel-badge-patio','Em descarregamento':'rel-badge-desc','Descarregado':'rel-badge-dcgd'};
 var dispLabel={'Patio':'Pátio','Em descarregamento':'Em descarga'};
-var posicaoBadge={'Fila de descarga':'rel-badge-patio','Disponível':'rel-badge-disp','Carregando':'rel-badge-plan'};
+var posicaoBadge={'Fila de descarga':'rel-badge-patio','Disponível':'rel-badge-disp','Carregando':'rel-badge-plan','Descarregado':'rel-badge-dcgd'};
 var critBadge={'⚠ Cliente critico':'rel-badge-crit','⚠ Agendamento':'rel-badge-agend','Fluxo':'rel-badge-fluxo'};
 var etiqBadge={'Coleta':'rel-badge-colet','Reembarque':'rel-badge-remb'};
 
@@ -4753,20 +4801,20 @@ function _histRelOutPesoHoje() {
 }
 
 // ── Classificador de turno dedicado ao Painel Executivo — Carregamento (OUT) ──
-// Horários de corte informados pela operação para este dashboard especificamente:
-// 1º Turno 07:00–14:48 · 2º Turno 14:48–22:15 · 3º Turno 22:15–06:00 (vira o dia).
-// É DIFERENTE do corte padrão usado no resto do sistema (_resumoMalhaClassificarTurno,
-// 06–15/15–23/23–06) — por pedido explícito, só para os cards Plano do dia/Programado
-// deste dashboard. Nenhuma outra tela ou cálculo usa esta função.
+// Horários de corte operacionais usados pelo Dashboard e pelo Extrato:
+// 1º Turno 06:00–14:59 · 2º Turno 15:00–22:30 · 3º Turno 22:31–05:59.
+// O 3º Turno cruza a meia-noite e, por isso, é classificado pela janela
+// operacional, não apenas pela data civil do registro.
 function _gvTurnoCustomOut(horaStr) {
   var partes = String(horaStr || '').split(':');
   var h = parseInt(partes[0], 10), m = parseInt(partes[1], 10);
   if (isNaN(h)) return null;
   if (isNaN(m)) m = 0;
   var minutos = h * 60 + m;
-  if (minutos >= 420 && minutos < 888) return '1º Turno';   // 07:00–14:48
-  if (minutos >= 888 && minutos < 1335) return '2º Turno';  // 14:48–22:15
-  return '3º Turno';                                        // 22:15–06:00
+  if (minutos <= 359) return '3º Turno';    // 00:00–05:59
+  if (minutos <= 899) return '1º Turno';    // 06:00–14:59
+  if (minutos <= 1350) return '2º Turno';   // 15:00–22:30
+  return '3º Turno';                        // 22:31–23:59
 }
 
 // Peso total (kg) registrado HOJE no Histórico de Relatório OUT, só do turno informado,
@@ -4774,12 +4822,14 @@ function _gvTurnoCustomOut(horaStr) {
 // resto do sistema. Usada exclusivamente pelo card "Programado" do Painel Executivo (OUT).
 function _histRelOutPesoTurnoCustom(turnoAlvo) {
   var lista = (typeof _histRelOut !== 'undefined' && _histRelOut) ? _histRelOut : [];
+  var janela = (typeof _gvJanelaOperacionalAtual === 'function') ? _gvJanelaOperacionalAtual() : null;
   var hojeStr = new Date().toLocaleDateString('pt-BR');
   var total = 0;
   lista.forEach(function(s) {
     if (!s || !s.ts) return;
     var d = new Date(s.ts);
-    if (isNaN(d.getTime()) || d.toLocaleDateString('pt-BR') !== hojeStr) return;
+    if (isNaN(d.getTime())) return;
+    if (janela ? !_gvDataDentroDaJanela(d, janela) : d.toLocaleDateString('pt-BR') !== hojeStr) return;
     var horaStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     if (_gvTurnoCustomOut(horaStr) !== turnoAlvo) return;
     total += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
@@ -4803,6 +4853,79 @@ function _histRelOutPesoTurno(turnoAlvo) {
     var horaStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     var turno = (typeof _resumoMalhaClassificarTurno === 'function') ? _resumoMalhaClassificarTurno(horaStr) : null;
     if (turno !== turnoAlvo) return;
+    total += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
+  });
+  return total;
+}
+
+// ═══ HISTÓRICO DE RELATÓRIO OUT — Cards de Peso por Turno (1º/2º/3º) ═══
+// Regra de corte pedida especificamente para estes 3 cards do Histórico de Relatório —
+// é DIFERENTE das outras 3 regras de turno já existentes no app, então ganhou nome e
+// funções próprias para não colidir com nenhuma delas:
+//   • calcTurnoCorte / _resumoMalhaClassificarTurno → 06h–15h / 15h–23h / 23h–06h
+//   • _gvTurnoCustomOut (Painel Executivo)          → 07:00–14:48 / 14:48–22:15 / 22:15–06:00
+//   • _hroTurnoClassificar (ESTA, só para os 3 cards abaixo):
+//       1º Turno 06:00–14:59 | 2º Turno 15:00–22:30 | 3º Turno 22:31–05:59 (vira o dia)
+function _hroTurnoClassificar(horaStr) {
+  var partes = String(horaStr || '').split(':');
+  var h = parseInt(partes[0], 10), m = parseInt(partes[1], 10);
+  if (isNaN(h)) return null;
+  if (isNaN(m)) m = 0;
+  var minutos = h * 60 + m;
+  if (minutos <= 359) return '3º Turno';    // 00:00–05:59 (madrugada da virada do 3º Turno)
+  if (minutos <= 899) return '1º Turno';    // 06:00–14:59
+  if (minutos <= 1350) return '2º Turno';   // 15:00–22:30
+  return '3º Turno';                        // 22:31–23:59
+}
+
+// Data de referência dos 3 cards de turno: usa a mesma data selecionada no filtro
+// da tela (hro-filter-date) — igual aos outros 6 cards de totais — e cai para hoje
+// quando o filtro está vazio.
+function _hroDataReferencia() {
+  var f = document.getElementById('hro-filter-date');
+  if (f && f.value) {
+    var p = f.value.split('-'); // yyyy-mm-dd
+    return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  }
+  return new Date();
+}
+
+// Peso (kg) do 1º ou 2º Turno na data de referência: soma só os registros daquele
+// mesmo dia civil, dentro da janela do turno pedido (nenhuma virada de dia aqui).
+function _hroPesoTurno1e2(turnoAlvo, dataRef) {
+  var lista = (typeof _histRelOut !== 'undefined' && _histRelOut) ? _histRelOut : [];
+  var dataStr = dataRef.toLocaleDateString('pt-BR');
+  var total = 0;
+  lista.forEach(function(s) {
+    if (!s || !s.ts) return;
+    var d = new Date(s.ts);
+    if (isNaN(d.getTime()) || d.toLocaleDateString('pt-BR') !== dataStr) return;
+    var horaStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    if (_hroTurnoClassificar(horaStr) !== turnoAlvo) return;
+    total += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
+  });
+  return total;
+}
+
+// Peso (kg) do 3º Turno na data de referência: soma a virada de dia — a noite da
+// PRÓPRIA data de referência (22:31–23:59) com a madrugada do dia SEGUINTE
+// (00:00–05:59), porque é o mesmo turno operacional mesmo cruzando a meia-noite.
+// Ex. pedido: 3º Turno de segunda 17/08 = segunda 17/08 22:31–23:59 + terça 18/08 00:00–05:59.
+function _hroPesoTurno3(dataRef) {
+  var lista = (typeof _histRelOut !== 'undefined' && _histRelOut) ? _histRelOut : [];
+  var dataStr = dataRef.toLocaleDateString('pt-BR');
+  var proximo = new Date(dataRef); proximo.setDate(proximo.getDate() + 1);
+  var proximoStr = proximo.toLocaleDateString('pt-BR');
+  var total = 0;
+  lista.forEach(function(s) {
+    if (!s || !s.ts) return;
+    var d = new Date(s.ts);
+    if (isNaN(d.getTime())) return;
+    var diaStr = d.toLocaleDateString('pt-BR');
+    var minutos = d.getHours() * 60 + d.getMinutes();
+    var pertenceNoite = (diaStr === dataStr) && minutos >= 1351;        // 22:31–23:59 do dia de referência
+    var pertenceMadrugada = (diaStr === proximoStr) && minutos <= 359;  // 00:00–05:59 do dia seguinte
+    if (!pertenceNoite && !pertenceMadrugada) return;
     total += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
   });
   return total;
@@ -4835,6 +4958,16 @@ function histRelOutRenderizar() {
   if (document.getElementById('hro-c-vols')) document.getElementById('hro-c-vols').textContent = tVols.toLocaleString('pt-BR');
   if (document.getElementById('hro-c-notas')) document.getElementById('hro-c-notas').textContent = tNotas.toLocaleString('pt-BR');
   if (document.getElementById('hro-c-crit')) document.getElementById('hro-c-crit').textContent = tCrit.toLocaleString('pt-BR');
+
+  // Cards de Peso por Turno (1º/2º/3º) — usam a mesma data de referência do filtro
+  // da tela (ou hoje, se vazio); o 3º Turno já soma a virada de dia sozinho.
+  var _hroDataRef = _hroDataReferencia();
+  var _hroPesoT1 = _hroPesoTurno1e2('1º Turno', _hroDataRef);
+  var _hroPesoT2 = _hroPesoTurno1e2('2º Turno', _hroDataRef);
+  var _hroPesoT3 = _hroPesoTurno3(_hroDataRef);
+  if (document.getElementById('hro-c-peso-t1')) document.getElementById('hro-c-peso-t1').textContent = _hroPesoT1.toLocaleString('pt-BR', {maximumFractionDigits:1});
+  if (document.getElementById('hro-c-peso-t2')) document.getElementById('hro-c-peso-t2').textContent = _hroPesoT2.toLocaleString('pt-BR', {maximumFractionDigits:1});
+  if (document.getElementById('hro-c-peso-t3')) document.getElementById('hro-c-peso-t3').textContent = _hroPesoT3.toLocaleString('pt-BR', {maximumFractionDigits:1});
 
   if (!filtered.length) {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:24px">Nenhum registro encontrado</td></tr>';
@@ -5452,6 +5585,15 @@ document.addEventListener('click',function(e){
     <div class="rel-stat-card"><div class="rel-stat-label">Qtd. Crit. Entrega</div><div class="rel-stat-val" id="hro-c-crit">0</div></div>
   </div>
 
+  <!-- Cards de Peso por Turno (1º/2º/3º) — 1º Turno 06:00–14:59 · 2º Turno 15:00–22:30 ·
+       3º Turno 22:31–05:59 (soma a virada de dia com a madrugada do dia seguinte).
+       Mesmo padrão visual dos 6 cards de Totais Gerais acima (tamanho e cor). -->
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <div class="rel-stat-card" title="06:00–14:59"><div class="rel-stat-label">Peso 1º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t1">0</div></div>
+    <div class="rel-stat-card" title="15:00–22:30"><div class="rel-stat-label">Peso 2º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t2">0</div></div>
+    <div class="rel-stat-card" title="22:31–05:59 (inclui a madrugada do dia seguinte)"><div class="rel-stat-label">Peso 3º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t3">0</div></div>
+  </div>
+
   <div class="table-wrap">
     <table>
       <thead>
@@ -5512,7 +5654,7 @@ document.addEventListener('click',function(e){
         <span style="font-size:9px;color:#94a3b8;text-align:center">TMS &gt; Relatório &gt; Operacional &gt; Mercadorias &gt; No Armazém</span>
       </div>
       <button onclick="descargaImprimir()" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Imprimir</button>
-      <button onclick="descargaImprimirTodos()" title="Gera o relatório de todos os MACs da fila, um por vez, sem misturar" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Imprimir Todos</button>
+      <button onclick="descargaImprimirSelecionados()" title="Gera o relatório só dos MACs/MECs marcados no checkbox da fila, um por vez, sem misturar" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Imprimir Selecionados</button>
       <button onclick="imprimirListaDescarga()" style="padding:7px 16px;background:#333333;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Lista Plataforma</button>
     </div>
   </div>
@@ -5731,6 +5873,14 @@ function sbInicializarRealtime() {
             _descAcompAplicarDadosRemotos(payload.new.valor);
           } else if (typeof _descAcompCarregarSupabase === 'function') {
             _descAcompCarregarSupabase();
+          }
+        } else if (chave === 'descarga_programacao_in') {
+          // Programações impressas são permanentes por MAC/MEC e não devem ser
+          // substituídas pelo estado atual dos checkboxes ou por novo import.
+          if (payload.new && typeof payload.new.valor === 'string' && typeof _descProgramacaoAplicarDadosRemotos === 'function') {
+            _descProgramacaoAplicarDadosRemotos(payload.new.valor);
+          } else if (typeof _descProgramacaoCarregarSupabase === 'function') {
+            _descProgramacaoCarregarSupabase();
           }
         } else if (chave === 'descarga_acomp_lista') {
           // Lista/fila do Acompanhamento de Produção (inclui "Finalizado Anteriormente") mudou em outra máquina
@@ -6272,6 +6422,7 @@ function _relDescomprimir(o) {
     if (d === 'em descarregamento' || d === 'patio') return 'Fila de descarga';
     if (d === 'planejado') return 'Carregando';
     if (d === 'disponível') return 'Disponível';
+    if (d === 'descarregado') return 'Descarregado';
     return '—';
   })();
   return {
@@ -7706,13 +7857,20 @@ function _transitoProcessar(rows) {
     var origemK = String(row[10]||'').trim(); // K - Filial Atual (Origem)
     if (origemK.toUpperCase() === ai) continue; // ignora carga que já está na sua filial de destino
     var destinoJ = String(row[9]||'').trim(); // J - FL. Destino (para filhos)
+    var textoLinha = row.map(function(v){ return String(v == null ? '' : v); }).join(' ').toUpperCase();
+    var isAgendamento = sitAL.indexOf('AGENDAMENTO') !== -1 || textoLinha.indexOf('AGENDAMENTO') !== -1;
+    var categoriaPrazo = isAgendamento ? 'agendamento' : (sitAL === 'ATRASADO' ? 'atrasado' : (sitAL === 'HOJE' ? 'hoje' : 'noprazo'));
     var isCrit = (sitAL === 'ATRASADO' || sitAL === 'HOJE');
     // Chave única por MAC + filial de destino, pois um mesmo MAC pode ter cargas para filiais diferentes
     var macKey = mac + '|' + ai;
-    if (!macMap[macKey]) macMap[macKey] = {mac:mac, filialDestino:ai, origem:origemK, tonTotal:0, tonCrit:0, volumes:0, valor:0, chegada:null, children:{}, expanded:false, ctesSet:{}, atras:0, hoje:0};
+    if (!macMap[macKey]) macMap[macKey] = {mac:mac, filialDestino:ai, origem:origemK, tonTotal:0, tonCrit:0, pesoAtrasado:0, pesoHoje:0, pesoNoPrazo:0, pesoAgendamento:0, volumes:0, valor:0, chegada:null, children:{}, expanded:false, ctesSet:{}, atras:0, hoje:0};
     var m = macMap[macKey];
     m.tonTotal += peso; m.volumes += vols; m.valor += valor;
     if (isCrit) m.tonCrit += peso;
+    if (categoriaPrazo === 'atrasado') m.pesoAtrasado += peso;
+    else if (categoriaPrazo === 'hoje') m.pesoHoje += peso;
+    else if (categoriaPrazo === 'agendamento') m.pesoAgendamento += peso;
+    else m.pesoNoPrazo += peso;
     if (sitAL === 'ATRASADO') m.atras++;
     else if (sitAL === 'HOJE') m.hoje++;
     if (cte) m.ctesSet[cte] = true; // dedup por CTE (coluna L)
@@ -7730,6 +7888,10 @@ function _transitoProcessar(rows) {
   _transitoData = Object.values(macMap).map(function(m) {
     m.tonTotal = Math.round(m.tonTotal * 10) / 10000;
     m.tonCrit  = Math.round(m.tonCrit  * 10) / 10000;
+    m.pesoAtrasado = Math.round(m.pesoAtrasado * 10) / 10000;
+    m.pesoHoje = Math.round(m.pesoHoje * 10) / 10000;
+    m.pesoNoPrazo = Math.round(m.pesoNoPrazo * 10) / 10000;
+    m.pesoAgendamento = Math.round(m.pesoAgendamento * 10) / 10000;
     m.pctCrit  = m.tonTotal > 0 ? (m.tonCrit / m.tonTotal * 100) : 0;
     m.ctes = Object.keys(m.ctesSet).length;
     m.tempoChegada = _transitoTempoChegada(m.chegada);
@@ -7773,7 +7935,11 @@ function _transitoComprimir(m) {
     tc: m.tonCrit  || 0,
     vo: m.volumes  || 0,
     vl: m.valor    || 0,
-    ct: m.ctes     || 0,
+        ct: m.ctes || 0,
+    pa: m.pesoAtrasado || 0,
+    ph: m.pesoHoje || 0,
+    pn: m.pesoNoPrazo || 0,
+    pg: m.pesoAgendamento || 0,
     ch: m.chegada ? m.chegada.toISOString() : null,
     at: m.atras    || 0,
     hj: m.hoje     || 0,
@@ -7796,6 +7962,10 @@ function _transitoDescomprimir(o) {
     volumes:      o.vo || 0,
     valor:        o.vl || 0,
     ctes:         o.ct || 0,
+    pesoAtrasado: o.pa || 0,
+    pesoHoje:     o.ph || 0,
+    pesoNoPrazo:  o.pn || 0,
+    pesoAgendamento: o.pg || 0,
     chegada:      chegada,
     tempoChegada: _transitoTempoChegada(chegada),
     atras:        o.at || 0,
@@ -8102,7 +8272,7 @@ function getFilteredProg() {
   const tipo = document.getElementById('filter-tipo')?.value || '';
   const regiao = document.getElementById('filter-regiao')?.value || '';
   let rows = buildProgRows();
-  return rows.filter(r => {
+  rows = rows.filter(r => {
     if (tipo && r.tipo !== tipo) return false;
     if (regiao && r.regiao !== regiao) return false;
     if (search) {
@@ -8117,7 +8287,95 @@ function getFilteredProg() {
     }
     return true;
   });
+  // Filtros de coluna da tela Programar Malha do dia (ver bloco "FILTROS DE COLUNA — PROGRAMAR")
+  return rows.filter(function(r) {
+    for (var col in _pfF) {
+      if (_pfF.hasOwnProperty(col) && !_pfF[col].has(pfVal(r, col))) return false;
+    }
+    return true;
+  });
 }
+
+// ═══ FILTROS DE COLUNA — PROGRAMAR MALHA DO DIA ═══
+// Independente de _cfF/_acfF (usados em Recursos Programados / Acompanhamento OUT).
+// Fonte de valores: buildProgRows() — as mesmas linhas (grade do dia + progData salvo)
+// que alimentam a tabela #table-prog, então os valores do filtro sempre batem com o
+// que está sendo exibido.
+var _pfF = {}, _pfCol = null, _pfVals = {};
+function pfVal(r, c) {
+  // Status Carregamento e Prev. Fechamento são automáticos, puxados do Acompanhamento
+  // OUT (mesma fonte usada na tabela — ver ocupBarAcompOut/_acompOutRecProg em
+  // renderProg), então o filtro precisa ler os mesmos valores exibidos na coluna.
+  if (c === 'status') return (typeof _acompOutStatusProg === 'function') ? _acompOutStatusProg(r._id).label : '';
+  if (c === 'destino') return r.destino || '';
+  if (c === 'regiao') return r.regiao || '';
+  if (c === 'composicao') return r.composicao || '';
+  if (c === 'saida') return r.saida || '';
+  if (c === 'turno') return calcTurnoCorte(r.saida) || '';
+  if (c === 'dia') return r.dia || '';
+  if (c === 'motorista') return r.motorista || '';
+  if (c === 'cavalinho') return r.cavalinho || '';
+  if (c === 'frota') return r.frota || '';
+  if (c === 'prev_fech') {
+    var pf = (typeof _acompOutRecProg === 'function') ? (_acompOutRecProg(r._id).prevFech || '') : '';
+    return pf.slice(0, 10) || '(sem data)';
+  }
+  return '';
+}
+function pfOpen(campo, btn) {
+  var dd = document.getElementById('pf-dropdown');
+  var same = dd.style.display === 'flex' && _pfCol === campo;
+  pfClose(); if (same) return;
+  _pfCol = campo;
+  var base = buildProgRows();
+  var map = {}; base.forEach(function(r) { var v = pfVal(r, campo); if (v) map[v] = true; });
+  var vals = Object.keys(map).sort(); _pfVals[campo] = vals;
+  var sel = _pfF[campo] || new Set(vals);
+  document.getElementById('pf-search-input').value = '';
+  pfDraw(vals, sel);
+  var rect = btn.getBoundingClientRect();
+  dd.style.top = (rect.bottom + 4) + 'px'; dd.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 290)) + 'px';
+  dd.style.display = 'flex'; btn.classList.add('active');
+}
+function pfDraw(vals, sel) {
+  var s = (document.getElementById('pf-search-input')?.value || '').toLowerCase();
+  var f = s ? vals.filter(function(v) { return v.toLowerCase().includes(s); }) : vals;
+  document.getElementById('pf-list').innerHTML = f.map(function(v) {
+    var chk = sel && sel.has ? sel.has(v) : true;
+    return '<label class="cf-item"><input type="checkbox" value="' + v.replace(/"/g, '&quot;') + '" ' + (chk ? 'checked' : '') + '>​<span>' + (v || '(vazio)') + '</span></label>';
+  }).join('');
+}
+function pfSearchFilter() { if (!_pfCol) return; pfDraw(_pfVals[_pfCol] || [], _pfF[_pfCol] || new Set(_pfVals[_pfCol] || [])); }
+function pfSelectAll() { document.querySelectorAll('#pf-list input').forEach(function(c) { c.checked = true; }); }
+function pfClearAll() { document.querySelectorAll('#pf-list input').forEach(function(c) { c.checked = false; }); }
+function pfUpdateLimparBtn() {
+  var btn = document.getElementById('btn-pf-limpar');
+  if (btn) btn.style.display = Object.keys(_pfF).length ? '' : 'none';
+}
+function pfApply() {
+  if (!_pfCol) return;
+  var m = new Set(); document.querySelectorAll('#pf-list input').forEach(function(c) { if (c.checked) m.add(c.value); });
+  var all = new Set(_pfVals[_pfCol] || []);
+  if (m.size === all.size) delete _pfF[_pfCol]; else _pfF[_pfCol] = m;
+  var btn = document.getElementById('pfb-' + _pfCol); if (btn) btn.classList.toggle('active', !!_pfF[_pfCol]);
+  pfClose(); pfUpdateLimparBtn(); renderProg();
+}
+function pfClose() {
+  var dd = document.getElementById('pf-dropdown');
+  dd.style.display = 'none';
+  dd.classList.remove('open');
+  if (_pfCol) { var btn = document.getElementById('pfb-' + _pfCol); if (btn && !_pfF[_pfCol]) btn.classList.remove('active'); }
+  _pfCol = null;
+}
+function pfClearAllCols() {
+  _pfF = {};
+  document.querySelectorAll('[id^="pfb-"]').forEach(function(b) { b.classList.remove('active'); });
+  pfUpdateLimparBtn(); renderProg();
+}
+document.addEventListener('click', function(e) {
+  var dd = document.getElementById('pf-dropdown');
+  if (dd && dd.style.display === 'flex' && !dd.contains(e.target) && !e.target.classList.contains('cf-btn')) pfClose();
+});
 
 function renderProg() {
   const diaHoje = getDiaHoje();
@@ -8159,25 +8417,8 @@ function renderProg() {
   }
 
   tbody.innerHTML = data.map((r, i) => {
-    const ocupColor = getOcupColor(r.ocupPct);
-    const barW = Math.min(r.ocupPct, 100);
     return `<tr id="${r._rowId}" style="${r.ocupPct >= 100 ? 'background:rgba(22,163,74,0.04)' : ''}">
       <td class="row-pos">${i+1}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:6px;flex-direction:column">
-          <div style="display:flex;align-items:center;gap:4px;width:100%">
-            <div class="ocup-bar-bg" style="min-width:50px;flex:1"><div class="ocup-bar-fill" id="bar_${r._rowId}" style="width:${barW}%;background:${ocupColor}"></div></div>
-            <input type="number" min="0" max="100" step="1"
-              id="ocup_${r._rowId}"
-              value="${r.ocupPct || ''}"
-              placeholder="0"
-              style="width:44px;padding:3px 4px;font-size:11px;font-weight:600;color:${ocupColor};text-align:center;border-color:${r.ocupPct > 0 ? ocupColor+'66' : 'var(--border)'}"
-              oninput="updateOcupBar('${r._rowId}')" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})">
-            <span style="font-size:9px;color:var(--text3)">%</span>
-          </div>
-          <span id="status_${r._rowId}" style="font-size:10px;font-weight:700;color:${r.ocupPct >= 100 ? '#16a34a' : r.ocupPct > 1 ? '#ca8a04' : '#9ca3af'}">${r.ocupPct >= 100 ? 'Finalizado' : r.ocupPct > 1 ? 'Carregando' : 'Vazio'}</span>
-        </div>
-      </td>
       <td>
         <select id="tipo_${r._rowId}" onchange="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})" style="font-size:11px;padding:3px 6px;width:130px">
           <option value="Carro da Malha" ${r.tipo==='Carro da Malha'?'selected':''}>🔵 Malha</option>
@@ -8189,13 +8430,13 @@ function renderProg() {
       <td>${regiaoBadge(r.regiao)}</td>
       <td class="mono" style="font-size:11px">${r.composicao}</td>
       <td class="mono" style="color:#00B200;font-weight:600">${r.saida}</td>
+      <td>${ocupBarAcompOut(r.ocup, r._id)}</td>
+      <td style="text-align:center;font-size:11px;color:var(--text2);white-space:nowrap">${(_acompOutRecProg(r._id).prevFech) || '—'}</td>
       <td style="font-size:11px;color:var(--text2)">${calcTurnoCorte(r.saida)}</td>
       <td style="font-size:11px;color:var(--text2)">${r.dia}</td>
       <td><input type="text" id="motorista_${r._rowId}" value="${r.motorista||''}" placeholder="Nome do motorista" style="width:140px;font-size:12px" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})"></td>
       <td><input type="text" id="cavalinho_${r._rowId}" value="${r.cavalinho||''}" placeholder="Nº ou placa" style="width:120px;font-size:12px;font-family:monospace" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})"></td>
       <td><input type="text" id="frota_${r._rowId}" value="${r.frota}" placeholder="Nº ou placa" style="width:140px;font-size:12px;font-family:monospace" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})"></td>
-      <td><input type="text" id="prev_${r._rowId}" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})" value="${r.prev_fech || ''}" style="width:180px;font-size:11px"></td>
-      
     </tr>`;
   }).join('');
 }
@@ -8240,21 +8481,23 @@ function debounceSave(rowId, destino, saida, dia, existingId, delay) {
 
 function autoSalvarLinha(rowId, destino, saida, dia, existingId) {
   var frota = (document.getElementById('frota_' + rowId)?.value || '').trim();
-  var ocupPct = parseInt(document.getElementById('ocup_' + rowId)?.value) || 0;
   var motorista = (document.getElementById('motorista_' + rowId)?.value || '').trim();
   var cavalinho = (document.getElementById('cavalinho_' + rowId)?.value || '').trim();
-  // Obs. não é mais editável nesta tela (saiu da tabela Programar) — usa o valor já salvo
-  // no registro (pode ter vindo da aba Recurso Programado ou de sincronização com o TMS)
-  // em vez de ler um campo que não existe mais aqui.
+  // Obs., ocupação (Status Carregamento) e Prev. Fechamento não são mais editados nesta
+  // tela — Status Carregamento e Prev. Fechamento agora são automáticos, puxados do
+  // Acompanhamento OUT (ver ocupBarAcompOut/_acompOutRecProg em renderProg). Por isso
+  // usamos o que já está salvo no registro em vez de ler campos que não existem mais aqui.
   var numIdAtual = parseInt(existingId);
   var recAtual = (!isNaN(numIdAtual)) ? progData.find(function(p) { return p._id === numIdAtual; }) : null;
   var obs = recAtual ? (recAtual.obs || '') : '';
-  var prevFixo = _lerPrevFech(rowId);
+  var ocupPct = recAtual ? Math.round((recAtual.ocup || 0) * 100) : 0;
+  var prevFixo = recAtual ? (recAtual.prev_fech || '') : '';
 
   // V62 FIX — prev_fech (Previsão de Fechamento) agora conta como campo válido:
-  // se o usuário preencheu apenas a previsão, o registro deve ser salvo,
-  // e nunca deletado automaticamente (antes a linha era apagada ao limpar
-  // os outros campos, fazendo o dado compartilhado "sumir" para todos).
+  // se o registro já tiver previsão (vinda do Acompanhamento OUT) ou ocupação salva,
+  // ele nunca é deletado automaticamente só porque frota/motorista/cavalinho
+  // estão vazios nesta tela (antes a linha era apagada, fazendo o dado
+  // compartilhado "sumir" para todos).
   if (!frota && !ocupPct && !obs && !motorista && !cavalinho && !prevFixo) {
     if (existingId !== null && existingId !== undefined && existingId !== 'null') {
       var numId = parseInt(existingId);
@@ -8282,39 +8525,43 @@ function _lerPrevFech(rowId) {
 }
 
 function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
-  const ocupPct = parseInt(document.getElementById('ocup_' + rowId)?.value) || 0;
   const tipo = document.getElementById('tipo_' + rowId)?.value || 'Carro da Malha';
   const frota = document.getElementById('frota_' + rowId)?.value || '';
-  const prev_fech = fromDatetimeLocal(document.getElementById('prev_' + rowId)?.value || '');
   const motorista = document.getElementById('motorista_' + rowId)?.value || '';
   const cavalinho = document.getElementById('cavalinho_' + rowId)?.value || '';
+  // Status Carregamento (ocup) e Prev. Fechamento não são mais editados nesta tela —
+  // são automáticos, puxados do Acompanhamento OUT (ocupBarAcompOut/_acompOutRecProg).
+  // Por isso, ao atualizar um registro existente, preservamos o ocup/prev_fech que já
+  // estava salvo em vez de sobrescrevê-los com um campo que não existe mais aqui.
+  const recExistente = (existingId !== null && existingId !== undefined) ? progData.find(p => p._id === existingId) : null;
+  const ocupPct = recExistente ? Math.round((recExistente.ocup || 0) * 100) : 0;
+  const prev_fech = recExistente ? (recExistente.prev_fech || '') : '';
 
-  // V62 FIX — prev_fech (Previsão de Fechamento) agora conta como campo válido:
-  // a linha salva se qualquer um destes estiver preenchido
   if (!frota && !ocupPct && !motorista && !cavalinho && !prev_fech) {
-    showToast('Preencha a frota, a ocupação, o motorista, o cavalinho ou a Previsão de Fechamento antes de salvar', 'error');
+    showToast('Preencha a frota, o motorista ou o cavalinho antes de salvar', 'error');
     return;
   }
 
   const gradeRow = gradeData.find(g => g.destino === destino && g.saida === saida && g.dia === dia);
 
   if (existingId !== null && existingId !== undefined) {
-    // Update existing — obs/tipo_prior/data_crit não são mais editados nesta tela
-    // (saíram da tabela Programar), então preserva o que já estava salvo em vez de apagar.
-    const rec = progData.find(p => p._id === existingId);
+    // Update existing — obs/tipo_prior/data_crit/ocup/prev_fech não são mais editados
+    // nesta tela (saíram da tabela Programar), então preserva o que já estava salvo
+    // em vez de apagar.
+    const rec = recExistente;
     if (rec) {
-      rec.ocup = ocupPct / 100;
-      rec.tipo = tipo; rec.frota = frota; rec.prev_fech = prev_fech; rec.motorista = motorista; rec.cavalinho = cavalinho;
+      rec.tipo = tipo; rec.frota = frota; rec.motorista = motorista; rec.cavalinho = cavalinho;
       rec.gerado = now();
     } else {
       // V62 FIX — registro existia na lista local mas não foi encontrado: recriá-lo
       // com o mesmo _id para não gerar duplicata com id novo
       progData.push({ _id: existingId, gerado: now(), origem: gradeRow ? gradeRow.origem : 'GRU',
         destino, regiao: gradeRow ? gradeRow.regiao : '', composicao: gradeRow ? gradeRow.composicao : '',
-        saida, dia, tipo, frota, motorista, cavalinho, ocup: ocupPct / 100, prev_fech, obs: '', tipo_prior: '', data_crit: '', id: '' });
+        saida, dia, tipo, frota, motorista, cavalinho, ocup: 0, prev_fech: '', obs: '', tipo_prior: '', data_crit: '', id: '' });
     }
   } else {
-    // New record
+    // New record — ocup/prev_fech nascem zerados e passam a ser preenchidos
+    // automaticamente assim que o Acompanhamento OUT tiver dados para este veículo.
     const rec = {
       _id: nextId++,
       gerado: now(),
@@ -8322,7 +8569,7 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
       destino, regiao: gradeRow ? gradeRow.regiao : '',
       composicao: gradeRow ? gradeRow.composicao : '',
       saida, dia, tipo, frota, motorista, cavalinho,
-      ocup: ocupPct / 100, prev_fech, obs: '', tipo_prior: '', data_crit: '', id: ''
+      ocup: 0, prev_fech: '', obs: '', tipo_prior: '', data_crit: '', id: ''
     };
     progData.push(rec);
   }
@@ -8337,20 +8584,24 @@ function salvarTodos() {
   const data = getFilteredProg();
   let count = 0;
   data.forEach(r => {
-    const ocupPct = parseInt(document.getElementById('ocup_' + r._rowId)?.value) || 0;
     const frota = document.getElementById('frota_' + r._rowId)?.value || '';
     const tipo = document.getElementById('tipo_' + r._rowId)?.value || 'Carro da Malha';
-    const prev_fech = fromDatetimeLocal(document.getElementById('prev_' + r._rowId)?.value || '');
     const motorista = document.getElementById('motorista_' + r._rowId)?.value || '';
     const cavalinho = document.getElementById('cavalinho_' + r._rowId)?.value || '';
+    // Status Carregamento (ocup) e Prev. Fechamento não são mais editados nesta tela —
+    // são automáticos, vindos do Acompanhamento OUT. Usa o valor já salvo do registro
+    // (quando existir) só para decidir se a linha deve ser salva ou pulada.
+    const recAtual = (r._id !== null) ? progData.find(p => p._id === r._id) : null;
+    const ocupPct = recAtual ? Math.round((recAtual.ocup || 0) * 100) : 0;
+    const prev_fech = recAtual ? (recAtual.prev_fech || '') : '';
     if (!frota && !ocupPct && !motorista && !cavalinho && !prev_fech) return; // pula linhas totalmente vazias
     if (r._id !== null) {
-      const rec = progData.find(p => p._id === r._id);
-      // obs/tipo_prior/data_crit não são editados aqui — preserva o que já estava salvo
-      if (rec) { rec.ocup = ocupPct/100; rec.tipo=tipo; rec.frota=frota; rec.prev_fech=prev_fech; rec.motorista=motorista; rec.cavalinho=cavalinho; rec.gerado=now(); count++; }
+      const rec = recAtual;
+      // obs/tipo_prior/data_crit/ocup/prev_fech não são editados aqui — preserva o que já estava salvo
+      if (rec) { rec.tipo=tipo; rec.frota=frota; rec.motorista=motorista; rec.cavalinho=cavalinho; rec.gerado=now(); count++; }
     } else {
       const gradeRow = gradeData.find(g => g.destino===r.destino && g.saida===r.saida && g.dia===r.dia);
-      progData.push({ _id: nextId++, gerado: now(), origem: r.origem, destino: r.destino, regiao: r.regiao, composicao: r.composicao, saida: r.saida, dia: r.dia, tipo, frota, motorista, cavalinho, ocup: ocupPct/100, prev_fech, obs: '', tipo_prior: '', data_crit: '', id: '' });
+      progData.push({ _id: nextId++, gerado: now(), origem: r.origem, destino: r.destino, regiao: r.regiao, composicao: r.composicao, saida: r.saida, dia: r.dia, tipo, frota, motorista, cavalinho, ocup: 0, prev_fech: '', obs: '', tipo_prior: '', data_crit: '', id: '' });
       count++;
     }
   });
@@ -9147,7 +9398,7 @@ function exportCSV(type) {
   ws['!cols'] = [{wch:18},{wch:10},{wch:14},{wch:30},{wch:8},{wch:14},{wch:16},{wch:14},{wch:11},{wch:20},{wch:30},{wch:14},{wch:12}];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Programados GRU');
-  XLSX.writeFile(wb, 'Programados_GRU' + periodoLabel + '.xlsx');
+  XLSX.writeFile(wb, _rota7ProximoArquivo('.xlsx'));
   showToast('✅ Excel exportado — ' + data.length + ' registros!', 'success');
 }
 
@@ -9640,7 +9891,7 @@ async function enviarEmail() {
     // Download PNG
     const dataUrl = canvas.toDataURL('image/png');
     const hoje = getDataHoje().split('/').join('-');
-    const filename = 'Programacao_GRU_' + hoje + '.png';
+    const filename = _rota7ProximoArquivo('.png');
     const dlLink = document.createElement('a');
     dlLink.download = filename;
     dlLink.href = dataUrl;
@@ -11501,50 +11752,26 @@ function hubRenderizar() {
 
   // KPI cards — peso total, disponível, em descarga (deduplicado por CTRC)
   // ── Peso Total: todos os registros sem filtro de Ocor.Aberta
-  var pesoTotalBruto = 0;
-  var ctrcTotalMap = {};
+  // Pesos dos KPIs: soma LINHA A LINHA de todo o _relData, exatamente como o
+  // filtro do TMS no Excel. Sem deduplicacao por CTRC e sem descartar Ocor.Aberta
+  // — os dois cortes anteriores derrubavam o total e eram a causa da divergencia.
+  // A classificacao (r.disp) ja aplica os parametros das colunas AC/AE/AL/AM.
+  var pesoTotalBruto = 0, pesoDisp = 0, pesoDesc = 0, pesoPatio = 0, pesoPlan = 0, pesoDcgd = 0;
   _relData.forEach(function(r){
-    var ctrc = r.ctrc || '';
-    var key = ctrc ? ctrc : '_nokey_'+Math.random();
-    if (!ctrcTotalMap[key]) { ctrcTotalMap[key] = r.peso||0; pesoTotalBruto += r.peso||0; }
-  });
-
-  // ── Peso Disponível: AC>0 + AE vazio + desconsiderar Ocor.Aberta somente se AQ=NAO
-  var pesoCtrcMap = {};
-  dataHub.forEach(function(r){
-    var ctrc = r.ctrc || '';
-    var key  = ctrc ? ctrc+'|'+r.disp : '_nokey_'+Math.random();
-    if (!pesoCtrcMap[key]) pesoCtrcMap[key] = {disp:r.disp, peso:r.peso||0, r:r};
-  });
-  var pesoDisp=0, pesoDesc=0, pesoPatio=0;
-  // Peso Disponível com critérios específicos (sem deduplicação por disp)
-
-  var ctrcDispMap2 = {};
-  _relData.forEach(function(r){
-    var ctrc = r.ctrc || ('_nk_'+Math.random());
-    // Critério: AC>0, AE vazio
-    var eqNum = parseFloat(String(r.equip||'').replace(',','.'));
-    var acOk = !isNaN(eqNum) && eqNum > 0;
-    var aeVazio = !r.frotaPlan || String(r.frotaPlan).trim()==='' || String(r.frotaPlan).trim()==='0';
-    // Ocor.Aberta: desconsiderar SOMENTE se AQ = NAO
-    var isOcorAberta = r.ocorr === 'Ocor.Aberta' || r.motivo === 'Ocor.Aberta';
-    // Normaliza "NÃO"/"NAO" removendo acentos
-    var agendNorm = String(r.agend||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-    var agendNao = agendNorm === 'NAO';
-    if (isOcorAberta && agendNao) return; // descarta
-    if (acOk && aeVazio && !ctrcDispMap2[ctrc]) {
-      ctrcDispMap2[ctrc] = r.peso||0;
-      pesoDisp += r.peso||0;
-    }
-  });
-
-  Object.values(pesoCtrcMap).forEach(function(v){
-    if (v.disp==='Em descarregamento')  pesoDesc += v.peso;
-    if (v.disp==='Patio')               pesoPatio += v.peso;
+    var pz = r.peso || 0;
+    pesoTotalBruto += pz;
+    var d = String(r.disp||'').trim().toLowerCase();
+    if      (d === 'disponível')         pesoDisp  += pz;   // AC > 0 + AE vazia
+    else if (d === 'em descarregamento') pesoDesc  += pz;   // AC = 0 + AE/AM vazias + AL preenchida
+    else if (d === 'patio')              pesoPatio += pz;   // AC = 0 + AE/AL/AM vazias
+    else if (d === 'planejado')          pesoPlan  += pz;   // AE preenchida
+    else if (d === 'descarregado')       pesoDcgd  += pz;   // AC = 0 + AE vazia + AM preenchida
   });
   var pesoTotal = pesoTotalBruto;
-  // Se não há peso em descarga, usa o do Pátio
-  var pesoDescCard = pesoDesc > 0 ? pesoDesc : pesoPatio;
+  // Card "EM DESCARREGAMENTO" passa a mostrar so o que esta em descarga (AL preenchida).
+  // O fallback antigo exibia o peso do Patio sob esse rotulo quando nao havia descarga
+  // em andamento — dois indicadores diferentes com o mesmo nome.
+  var pesoDescCard = pesoDesc;
   function fmtKg(v){ return v.toLocaleString('pt-BR',{maximumFractionDigits:0})+' kg'; }
   function setEl(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
   setEl('hub-kpi-total', fmtKg(pesoTotal));
@@ -11575,19 +11802,22 @@ function hubRenderizar() {
   var eficBSubSrc = document.getElementById('cg-ind-efic-sub');
   setEl('hub-efic-b-sub', eficBSubSrc ? eficBSubSrc.textContent : 'Crítico planejado ÷ crítico disponível');
 
-  // Tabela de estoque deduplicada por CTRC
+  // Tabela de estoque: contagem de CTRCs unicos por status (deduplicada) e PESO
+  // somado linha a linha sobre todo o _relData — mesma base do filtro do TMS.
+  // Ocor.Aberta deixou de ser descartada aqui; era o que separava esta tabela do Excel.
   var sitPrioH = {'Atrasado':2,'Hoje':1};
   var statsMap = {};
-  ['Disponível','Em descarregamento','Patio','Planejado'].forEach(function(k){
+  ['Disponível','Em descarregamento','Patio','Planejado','Descarregado'].forEach(function(k){
     statsMap[k]={atras:0,hoje:0,prazo:0,peso:0,total:0};
   });
   var ctrcStatsMap = {};
-  dataHub.forEach(function(r){
+  _relData.forEach(function(r){
     var s = r.disp; if (!statsMap[s]) return;
+    statsMap[s].peso += r.peso || 0;
     var ctrc = r.ctrc || '';
     var key  = ctrc ? ctrc+'|'+s : '_nk_'+Math.random();
     if (!ctrcStatsMap[key]) {
-      ctrcStatsMap[key] = {disp:s, sitAH:r.sitAH||'', peso:r.peso||0};
+      ctrcStatsMap[key] = {disp:s, sitAH:r.sitAH||''};
     } else {
       if ((sitPrioH[r.sitAH]||0) > (sitPrioH[ctrcStatsMap[key].sitAH]||0))
         ctrcStatsMap[key].sitAH = r.sitAH;
@@ -11595,16 +11825,16 @@ function hubRenderizar() {
   });
   Object.values(ctrcStatsMap).forEach(function(v){
     var s=statsMap[v.disp]; if(!s) return;
-    s.total++; s.peso+=v.peso;
+    s.total++;
     if(v.sitAH==='Atrasado') s.atras++;
     else if(v.sitAH==='Hoje') s.hoje++;
     else s.prazo++;
   });
   var tbody=document.getElementById('hub-estoque-tbody');
   if(tbody){
-    var labels={'Disponível':'Disponível','Em descarregamento':'Em descarregamento','Patio':'Pátio','Planejado':'Planejado'};
+    var labels={'Disponível':'Disponível','Em descarregamento':'Em descarregamento','Patio':'Pátio','Planejado':'Planejado','Descarregado':'Descarregado'};
     var tot={atras:0,hoje:0,prazo:0,peso:0,total:0};
-    var rows=['Disponível','Em descarregamento','Patio','Planejado'];
+    var rows=['Disponível','Em descarregamento','Patio','Planejado','Descarregado'];
     var html='';
     rows.forEach(function(k){
       var s=statsMap[k];
@@ -11957,6 +12187,18 @@ function _descColetaRotulo(c) {
   return texto + ' – ' + c.nome;
 }
 
+// Critério ÚNICO da fila de descarga — vale igual para Transferências e Coletas:
+//   coluna AC = 0 ou em branco (nada maior que 0)
+//   coluna AE em branco (nada preenchido)
+//   coluna AM em branco
+// Em r.disp isso equivale exatamente a 'Patio' ou 'Em descarregamento'; qualquer
+// linha já endereçada (AC>0 → 'Disponível'), já planejada (AE → 'Planejado') ou
+// com descarga concluída (AM → 'Descarregado') fica de fora.
+function _descLinhaAtendeCriterio(r) {
+  var d = String((r && r.disp) || '').trim().toLowerCase();
+  return d === 'patio' || d === 'em descarregamento';
+}
+
 function _descMontarFilaColetas() {
   if (!_relData || !_relData.length) return [];
 
@@ -11967,24 +12209,38 @@ function _descMontarFilaColetas() {
   var h24 = 24*60*60*1000;
 
   // ── Etapa 1: quais MECs entram na fila ──
-  // Basta uma linha do MEC atender aos 3 critérios (B=510/540 + AC zero/vazio + coluna A ontem/hoje)
-  var mecsElegiveis = {};
+  // Regra "tudo ou nada": o MEC só entra se TODAS as suas linhas ainda atenderem
+  // ao critério (AC = 0/vazio + AE em branco + AM em branco). Basta UMA linha com
+  // AC > 0 (já endereçada) ou AE preenchida (já planejada) para o MEC inteiro sair
+  // da fila — a coleta já começou a ser trabalhada e não está mais parada no pátio.
+  // Antes bastava uma linha atender e o card aparecia mesmo com o veículo já baixado.
+  // A data (coluna A = ontem ou hoje) continua valendo se QUALQUER linha atender.
+  var mecStatus = {};
   _relData.forEach(function(r) {
     if (r.colB !== 510 && r.colB !== 540) return;
-    if (r.acZeroOuVazio !== true) return;
-    var dtA = _descColetaParseData(r.dtColA);
-    if (!dtA || dtA < ontem0 || dtA >= amanha0) return;
     var mec = String(r.mac || '').trim();
-    if (mec) mecsElegiveis[mec] = true;
+    if (!mec) return;
+    if (!mecStatus[mec]) mecStatus[mec] = { todasOk: true, dataOk: false };
+    var st = mecStatus[mec];
+    if (r.acZeroOuVazio !== true || !_descLinhaAtendeCriterio(r)) st.todasOk = false;
+    var dtA = _descColetaParseData(r.dtColA);
+    if (dtA && dtA >= ontem0 && dtA < amanha0) st.dataOk = true;
+  });
+  var mecsElegiveis = {};
+  Object.keys(mecStatus).forEach(function(mec) {
+    if (mecStatus[mec].todasOk && mecStatus[mec].dataOk) mecsElegiveis[mec] = true;
   });
 
-  // ── Etapa 2: agrega TODOS os CTRCs de cada MEC elegível ──
-  // Usa a mesma base que descargaSelectMac() exibe ao clicar no card, para que a
-  // contagem do card seja sempre igual ao número de linhas abertas.
+  // ── Etapa 2: agrega os CTRCs PENDENTES de cada MEC elegível ──
+  // A exclusão é LINHA A LINHA, igual ao filtro do TMS: entra só o que ainda
+  // atende AC=0/vazio + AE em branco + AM em branco. Antes somava-se TODAS as
+  // linhas do MEC, então CTRC já endereçado (AC>0) ou já planejado (AE
+  // preenchida) continuava contando e inflava a quantidade de coletas na fila.
   var mecMap = {};
   _relData.forEach(function(r) {
     var mec = String(r.mac || '').trim();
     if (!mec || !mecsElegiveis[mec]) return;
+    if (!_descLinhaAtendeCriterio(r)) return;
 
     var dtA = _descColetaParseData(r.dtColA);
 
@@ -12049,8 +12305,7 @@ function descargaRenderizar() {
   // mal tinham começado — o MAC 37891, por exemplo, sumia da fila com 164 CTRCs e
   // 10.752 kg pendentes por causa de 2 linhas baixadas em 210.
   function _descLinhaNaFila(r) {
-    var d = r.disp || '';
-    return d !== 'Disponível' && d !== 'Planejado';
+    return _descLinhaAtendeCriterio(r);
   }
 
   // Build mac map — consolidando linhas duplicadas da coluna W
@@ -12162,21 +12417,29 @@ function descargaRenderizar() {
     // enxugar a lista. Somar _descMacRanking deixava de fora as coletas e todo MAC
     // pequeno, e era por isso que o peso não fechava com o relatório do TMS.
     var pesoTotalFila = 0;
+    var pesoFilaPatio = 0;
+    var pesoFilaDesc  = 0;
     var veiculosFila = {};
     (_relData || []).forEach(function(r) {
       if (!_descLinhaNaFila(r)) return;
-      if (!(r.mac && String(r.mac).trim())) return;
+      // O peso soma TODAS as linhas da fila, tenham MAC/MEC atribuído ou não —
+      // é assim que o filtro do TMS fecha. Exigir MAC deixava de fora linhas já
+      // liberadas para descarga e derrubava o total.
       pesoTotalFila += (r.peso || 0);
+      if (String(r.disp||'').trim().toLowerCase() === 'em descarregamento') pesoFilaDesc += (r.peso || 0);
+      else pesoFilaPatio += (r.peso || 0);
       // Veículo = Nr_Mac (coluna W). Coleta ainda sem MAC atribuído entra no peso,
       // mas não conta como veículo — não há carreta na fila para ela ainda.
       var vw = String(r.macW || '').trim();
       if (vw) veiculosFila[vw] = 1;
     });
     var qtdVeic = Object.keys(veiculosFila).length;
+    function _fmtKgFila(v){ return Math.round(v).toLocaleString('pt-BR') + ' kg'; }
     cardsDiv.innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:140px;flex:1;max-width:200px">' +
       '<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Peso Total na Fila</div>' +
       '<div style="font-size:20px;font-weight:800;color:#475569;margin-top:4px">' + Math.round(pesoTotalFila).toLocaleString('pt-BR') + ' kg</div>' +
-      '<div style="font-size:10px;color:#94a3b8;margin-top:2px">' + qtdVeic + ' veículo(s) · Transferências + Coletas</div></div>' +
+      '<div style="font-size:10px;color:#94a3b8;margin-top:2px">' + qtdVeic + ' veículo(s) · Transferências + Coletas</div>' +
+      '<div style="font-size:10px;color:#94a3b8;margin-top:2px">Pátio ' + _fmtKgFila(pesoFilaPatio) + ' · Em descarga ' + _fmtKgFila(pesoFilaDesc) + '</div></div>' +
       '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:140px;flex:1;max-width:200px">' +
       '<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Fila de Programados</div>' +
       '<div id="descarga-card-fila-prog-valor" style="font-size:20px;font-weight:800;color:#15803d;margin-top:4px">0 kg</div>' +
@@ -12188,9 +12451,114 @@ function descargaRenderizar() {
 // Seleção via checkbox nos cards da fila (independente de qual MAC/MEC está aberto
 // para ver os CTRCs) — alimenta só o card "Fila de Programados".
 var _descFilaSelecionados = new Set();
+// Turno em que cada MAC/MEC foi marcado (fixado no momento do clique, não muda depois
+// mesmo que o relógio avance de turno enquanto o item continua marcado). Alimenta os
+// 3 cards de Peso por Turno no Histórico de Relatório (IN) — mesma regra de corte já
+// usada nos cards de turno do Histórico de Relatório (OUT): ver _hroTurnoClassificar.
+// Igual a _descFilaSelecionados, este mapa vive só em memória (não é salvo em
+// localStorage/Supabase) — reinicia ao recarregar a página, no mesmo padrão da seleção
+// que já existia antes desta mudança.
+var _descFilaTurnoMap = {};
 function descargaFilaCheckboxToggle(mac, marcado) {
-  if (marcado) _descFilaSelecionados.add(mac); else _descFilaSelecionados.delete(mac);
+  if (marcado) {
+    _descFilaSelecionados.add(mac);
+    if (!_descFilaTurnoMap[mac]) {
+      var agora = new Date();
+      var horaStr = String(agora.getHours()).padStart(2, '0') + ':' + String(agora.getMinutes()).padStart(2, '0');
+      _descFilaTurnoMap[mac] = (typeof _hroTurnoClassificar === 'function') ? _hroTurnoClassificar(horaStr) : null;
+    }
+  } else {
+    _descFilaSelecionados.delete(mac);
+    delete _descFilaTurnoMap[mac];
+  }
   descargaAtualizarCardFilaProgramados();
+  // Atualiza também os cards de Peso por Turno no Histórico de Relatório (IN) — o
+  // elemento fica sempre no DOM (showTab só alterna a classe "active"), então é
+  // seguro chamar isso mesmo com a aba de Histórico fechada no momento do clique.
+  // Usa a versão leve (só reescreve o texto dos 3 cards), sem redesenhar a tabela de
+  // até 100 importações — ver descargaHistoricoAtualizarCardsTurno.
+  if (typeof descargaHistoricoAtualizarCardsTurno === 'function') descargaHistoricoAtualizarCardsTurno();
+}
+// Atualização leve dos 3 cards de "Peso por Turno Programado" no Histórico de
+// Relatório (IN) — chamada a cada clique de checkbox em Prioridade de Descarga (para
+// manter os cards em dia caso algum MAC já esteja Programado) e também logo após
+// imprimir MACs selecionados. Só recalcula os totais por turno
+// (descargaPesoProgramadoPorTurno, cálculo em memória, ~0ms) e reescreve o texto dos
+// 3 cards via id — não toca no tbody nem nos outros 4 cards, então não redesenha a
+// tabela de até 100 importações (com as sub-tabelas de comparação MAC a MAC) a cada
+// marcação. Se os cards ainda não existirem no DOM (aba de Histórico nunca aberta
+// nesta sessão), cai para a renderização completa como fallback.
+function descargaHistoricoAtualizarCardsTurno() {
+  var v1 = document.getElementById('descarga-hist-turno-v1');
+  var v2 = document.getElementById('descarga-hist-turno-v2');
+  var v3 = document.getElementById('descarga-hist-turno-v3');
+  if (!v1 || !v2 || !v3) {
+    // Fallback: cards ainda não foram criados (primeira renderização da aba). Faz a
+    // renderização completa uma vez para criá-los; nos próximos cliques o caminho
+    // leve acima já os encontra.
+    if (typeof descargaHistoricoRenderizar === 'function') descargaHistoricoRenderizar();
+    return;
+  }
+  var totais = (typeof descargaPesoProgramadoPorTurno === 'function')
+    ? descargaPesoProgramadoPorTurno() : { '1º Turno': 0, '2º Turno': 0, '3º Turno': 0 };
+  v1.textContent = Math.round(totais['1º Turno']).toLocaleString('pt-BR');
+  v2.textContent = Math.round(totais['2º Turno']).toLocaleString('pt-BR');
+  v3.textContent = Math.round(totais['3º Turno']).toLocaleString('pt-BR');
+}
+// Soma o peso atualmente marcado (checkboxes) na fila de Descarga, separado pelo
+// turno em que cada item foi marcado. Usa a MESMA fonte de peso ao vivo que o card
+// "Fila de Programados" (_descColetaRanking / _descMacRanking), então nunca fica
+// dessincronizado daquele card.
+function descargaPesoSelecionadoPorTurno() {
+  var totais = { '1º Turno': 0, '2º Turno': 0, '3º Turno': 0 };
+  var pesoPorMac = {};
+  (_descColetaRanking || []).forEach(function(c) { pesoPorMac[c.mac] = c.peso || 0; });
+  (_descMacRanking || []).forEach(function(m) { pesoPorMac[m.mac] = m.pesoTotal || 0; });
+  _descFilaSelecionados.forEach(function(mac) {
+    var turno = _descFilaTurnoMap[mac];
+    if (!turno || !totais.hasOwnProperty(turno)) return;
+    totais[turno] += pesoPorMac[mac] || 0;
+  });
+  return totais;
+}
+// Soma o peso dos MACs marcados como "Programado" (ver descargaImprimirSelecionados),
+// separado pelo turno em que cada um foi impresso (_descAcompData[mac].programadoTurno).
+// Ao contrário de descargaPesoSelecionadoPorTurno (baseada no checkbox marcado NA HORA),
+// esta função reflete o que já foi efetivamente impresso — o valor não some se o
+// usuário desmarcar o checkbox depois de imprimir. Usa a mesma fonte de peso ao vivo
+// (_descColetaRanking / _descMacRanking) que as demais somas desta tela, para nunca
+// ficar dessincronizada.
+function descargaPesoProgramadoPorTurno() {
+  var totais = { '1º Turno': 0, '2º Turno': 0, '3º Turno': 0 };
+  var pesoPorMac = {};
+  function id(mac) {
+    return (typeof _descProgramacaoId === 'function') ? _descProgramacaoId(mac) : String(mac || '').trim().toUpperCase();
+  }
+  (_descColetaRanking || []).forEach(function(c) { pesoPorMac[id(c.mac)] = c.peso || 0; });
+  (_descMacRanking || []).forEach(function(m) { pesoPorMac[id(m.mac)] = m.pesoTotal || 0; });
+
+  // Fonte principal: Programação persistida após a impressão.
+  var programacoes = (typeof _descProgramacaoData === 'object' && _descProgramacaoData) ? _descProgramacaoData : {};
+  Object.keys(programacoes).forEach(function(chave) {
+    var rec = programacoes[chave];
+    if (!rec || rec.programado !== true) return;
+    var turno = rec.turno || '';
+    if (!turno || !totais.hasOwnProperty(turno)) return;
+    totais[turno] += pesoPorMac[chave] || 0;
+  });
+
+  // Fallback de compatibilidade: contempla registros antigos ainda não migrados.
+  if (typeof _descAcompData === 'object' && _descAcompData) {
+    Object.keys(_descAcompData).forEach(function(mac) {
+      var rec = _descAcompData[mac];
+      var chave = id(mac);
+      if (!rec || !rec.programado || programacoes[chave]) return;
+      var turno = rec.programadoTurno || '';
+      if (!turno || !totais.hasOwnProperty(turno)) return;
+      totais[turno] += pesoPorMac[chave] || 0;
+    });
+  }
+  return totais;
 }
 function descargaAtualizarCardFilaProgramados() {
   var elValor = document.getElementById('descarga-card-fila-prog-valor');
@@ -12312,9 +12680,11 @@ function descargaSelectMac(mac) {
     if (elMac) el.classList.toggle('selected', elMac[1] === mac);
   });
 
-  // Build table rows for this MAC
+  // Build table rows for this MAC — só os CTRCs que ainda atendem ao critério da
+  // fila (AC=0/vazio + AE e AM em branco), para a contagem do card ser sempre
+  // igual ao número de linhas abertas aqui.
   _descRows = (_relData||[]).filter(function(r){
-    return String(r.mac||'').trim() === mac;
+    return String(r.mac||'').trim() === mac && _descLinhaAtendeCriterio(r);
   });
 
   var title = document.getElementById('desc-rel-title');
@@ -12686,6 +13056,105 @@ function _descAcompGet(mac) {
     _descAcompData[mac] = { impressoes: 0, progresso: 0, conferente: '', doca: '', horaInicio: '', horaFim: '' };
   }
   return _descAcompData[mac];
+}
+
+// ═══ PERSISTÊNCIA EXCLUSIVA DA PROGRAMAÇÃO IN ═══
+// A marcação feita por "Imprimir Selecionados" não depende do estado atual dos
+// checkboxes nem do objeto operacional _descAcompData. Ela fica em uma estrutura
+// própria, indexada pelo MAC/MEC, para sobreviver a desmarcações, novos imports,
+// re-renderizações e atualizações remotas do acompanhamento.
+var DESC_PROGRAMACAO_CHAVE = 'descarga_programacao_in';
+var DESC_PROGRAMACAO_LOCAL_KEY = 'descarga_programacao_in_v1';
+var _descProgramacaoData = {};
+try {
+  _descProgramacaoData = JSON.parse(localStorage.getItem(DESC_PROGRAMACAO_LOCAL_KEY) || '{}');
+} catch (e) { _descProgramacaoData = {}; }
+
+function _descProgramacaoId(mac) {
+  return String(mac == null ? '' : mac).trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
+// Migração silenciosa do campo legado, preservando o que já foi impresso antes
+// desta correção.
+(function(){
+  try {
+    Object.keys(_descAcompData || {}).forEach(function(mac) {
+      var rec = _descAcompData[mac];
+      var id = _descProgramacaoId(mac);
+      if (!id || !rec || !rec.programado || _descProgramacaoData[id]) return;
+      _descProgramacaoData[id] = {
+        mac: String(mac), programado: true,
+        turno: rec.programadoTurno || '', dataISO: rec.programadoDataISO || ''
+      };
+    });
+    localStorage.setItem(DESC_PROGRAMACAO_LOCAL_KEY, JSON.stringify(_descProgramacaoData));
+  } catch (e) {}
+})();
+
+function _descProgramacaoSalvarLocal() {
+  try { localStorage.setItem(DESC_PROGRAMACAO_LOCAL_KEY, JSON.stringify(_descProgramacaoData)); } catch (e) {}
+}
+
+function _descProgramacaoSalvarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ chave: DESC_PROGRAMACAO_CHAVE, valor: JSON.stringify(_descProgramacaoData) })
+    }).catch(function(){});
+  } catch (e) {}
+}
+
+function _descProgramacaoRegistrarLista(listaMacs, turno, dataISO) {
+  var dataRegistro = dataISO || new Date().toISOString();
+  (listaMacs || []).forEach(function(mac) {
+    var id = _descProgramacaoId(mac);
+    if (!id) return;
+    _descProgramacaoData[id] = {
+      mac: String(mac).trim(), programado: true,
+      turno: turno || '', dataISO: dataRegistro
+    };
+  });
+  _descProgramacaoSalvarLocal();
+  _descProgramacaoSalvarSupabase();
+}
+
+function _descProgramacaoRegistrar(mac, turno, dataISO) {
+  _descProgramacaoRegistrarLista([mac], turno, dataISO);
+}
+
+function _descProgramacaoEstaRegistrado(mac) {
+  var id = _descProgramacaoId(mac);
+  return !!(id && _descProgramacaoData[id] && _descProgramacaoData[id].programado === true);
+}
+
+function _descProgramacaoAplicarDadosRemotos(valorStr) {
+  if (!valorStr) return;
+  try {
+    var remoto = JSON.parse(valorStr);
+    if (!remoto || typeof remoto !== 'object') return;
+    Object.keys(remoto).forEach(function(id) {
+      var local = _descProgramacaoData[id];
+      var remotoData = remoto[id];
+      if (!local || !local.dataISO || (remotoData && String(remotoData.dataISO || '') >= String(local.dataISO || ''))) {
+        _descProgramacaoData[id] = remotoData;
+      }
+    });
+    _descProgramacaoSalvarLocal();
+    if (typeof descargaHistoricoAtualizarCardsTurno === 'function') descargaHistoricoAtualizarCardsTurno();
+    var tab = document.getElementById('tab-descargaHistorico-content');
+    if (tab && tab.classList.contains('active') && typeof descargaHistoricoRenderizar === 'function') descargaHistoricoRenderizar();
+  } catch (e) {}
+}
+
+function _descProgramacaoCarregarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.' + DESC_PROGRAMACAO_CHAVE + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      if (data && data.length && data[0].valor) _descProgramacaoAplicarDadosRemotos(data[0].valor);
+    }).catch(function(){});
+  } catch (e) {}
 }
 
 // Chamada automaticamente por descargaImprimir() a cada impressão
@@ -13112,7 +13581,28 @@ function _relatorioHistoricoCarregarSupabase() {
 function _relatorioHistoricoRegistrar() {
   // Snapshot da fila de Descarga (Prioridade de Descarga) no momento exato da importação —
   // permite comparar depois "quantos tinha na fila às 9h" vs "quantos tem agora às 16h".
-  var filaSnapshot = (_descMacRanking || []).map(function(m, idx){
+  // Inclui Coletas (_descColetaRanking) além das Transferências (_descMacRanking), na mesma
+  // ordem em que aparecem na tela (coletas primeiro, depois transferências), para que o
+  // Histórico de Relatório reflita a fila completa exibida em Prioridade de Descarga.
+  var filaColetas = (_descColetaRanking || []).map(function(c){
+    var linhasMec = (_relData || []).filter(function(r){ return String(r.mac||'').trim() === c.mac; });
+    var qtdVolume = 0;
+    var notasUnicas = {};
+    linhasMec.forEach(function(r){
+      qtdVolume += parseFloat(String(r.vols || '0').replace(',', '.')) || 0;
+      if (r.nota) notasUnicas[r.nota] = true;
+    });
+    return {
+      mac: c.mac,
+      origem: c.nome || '',
+      qtdCtrcs: c.ctrcs || 0,
+      pesoOpl: c.peso || 0,
+      qtdVolume: qtdVolume,
+      qtdNotas: Object.keys(notasUnicas).length,
+      isColeta: true
+    };
+  });
+  var filaTransferencias = (_descMacRanking || []).map(function(m){
     var linhasMac = (_relData || []).filter(function(r){ return r.mac === m.mac; });
     var primeiraLinha = linhasMac[0];
     var pesoOpl = 0, qtdVolume = 0;
@@ -13125,12 +13615,16 @@ function _relatorioHistoricoRegistrar() {
     return {
       mac: m.mac,
       origem: primeiraLinha ? (primeiraLinha.origem || '') : '',
-      posicao: idx + 1,
       qtdCtrcs: m.ctrcs || 0,
       pesoOpl: pesoOpl,
       qtdVolume: qtdVolume,
-      qtdNotas: Object.keys(notasUnicas).length
+      qtdNotas: Object.keys(notasUnicas).length,
+      isColeta: false
     };
+  });
+  var filaSnapshot = filaColetas.concat(filaTransferencias).map(function(f, idx){
+    f.posicao = idx + 1;
+    return f;
   });
 
   // Total de CTRCs somado só dos MACs que estão na fila (não o total bruto do relatório inteiro)
@@ -13173,10 +13667,21 @@ function descargaHistoricoRenderizar() {
     { l: 'MACs na Última Importação', v: ultima ? ultima.totalMacs : '—', cor: '#16a34a' },
     { l: 'Peso Operacional Total', v: ultima ? Math.round(ultima.pesoTotal || 0).toLocaleString('pt-BR') + ' kg' : '—', cor: '#00B200' }
   ];
+  // Cards de Peso por Turno (1º/2º/3º) dos itens marcados como "Programado" — ou
+  // seja, que já passaram pelo botão "Imprimir Selecionados" na tela Prioridade de
+  // Descarga (ver descargaImprimirSelecionados e descargaPesoProgramadoPorTurno).
+  // Mesmo padrão visual dos cards de turno já usados no Histórico de Relatório (OUT).
+  var _descPesoTurnoSel = (typeof descargaPesoProgramadoPorTurno === 'function')
+    ? descargaPesoProgramadoPorTurno() : { '1º Turno': 0, '2º Turno': 0, '3º Turno': 0 };
+  cards.push(
+    { l: 'Peso 1º Turno Programado (kg)', v: Math.round(_descPesoTurnoSel['1º Turno']).toLocaleString('pt-BR'), cor: '#1e293b', id: 'descarga-hist-turno-v1' },
+    { l: 'Peso 2º Turno Programado (kg)', v: Math.round(_descPesoTurnoSel['2º Turno']).toLocaleString('pt-BR'), cor: '#1e293b', id: 'descarga-hist-turno-v2' },
+    { l: 'Peso 3º Turno Programado (kg)', v: Math.round(_descPesoTurnoSel['3º Turno']).toLocaleString('pt-BR'), cor: '#1e293b', id: 'descarga-hist-turno-v3' }
+  );
   if (cardsDiv) cardsDiv.innerHTML = cards.map(function(c){
     return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;min-width:160px;flex:1;max-width:240px">' +
       '<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.05em">' + c.l + '</div>' +
-      '<div style="font-size:18px;font-weight:800;color:' + c.cor + ';margin-top:4px">' + c.v + '</div></div>';
+      '<div style="font-size:18px;font-weight:800;color:' + c.cor + ';margin-top:4px"' + (c.id ? (' id="' + c.id + '"') : '') + '>' + c.v + '</div></div>';
   }).join('');
 
   if (!_relatorioHistorico.length) {
@@ -13237,7 +13742,7 @@ function descargaHistoricoRenderizar() {
         }
         return '<tr style="border-bottom:1px solid #f1f5f9">' +
           '<td style="padding:5px 10px;font-size:11px;color:#64748b;text-align:right">#' + f.posicao + '</td>' +
-          '<td style="padding:5px 10px;font-size:11px;font-weight:700">' + f.mac + '</td>' +
+          '<td style="padding:5px 10px;font-size:11px;font-weight:700">' + (f.isColeta ? 'MEC: ' : '') + f.mac + (f.isColeta ? ' <span style="font-size:9px;background:#dcfce7;color:#15803d;border:1px solid #86efac;border-radius:10px;padding:1px 7px;margin-left:6px;font-weight:700">Coleta</span>' : '') + '</td>' +
           '<td style="padding:5px 10px;font-size:11px">' + (f.origem || '—') + '</td>' +
           '<td style="padding:5px 10px;font-size:11px;text-align:right;font-family:monospace">' + f.qtdCtrcs + '</td>' +
           '<td style="padding:5px 10px;font-size:11px;text-align:right;font-family:monospace">' + (f.pesoOpl||0).toLocaleString('pt-BR',{maximumFractionDigits:1}) + '</td>' +
@@ -13262,6 +13767,19 @@ function descargaHistoricoRenderizar() {
             }
             return '<td style="padding:5px 10px;font-size:11px;text-align:center"><span style="background:' + bg + ';color:' + cor + ';padding:2px 8px;border-radius:10px;font-weight:700;font-size:10px;white-space:nowrap">' + label + '</span></td>';
           })() +
+          // Coluna PROGRAMAÇÃO: mostra "Programado" para MACs que já passaram pelo
+          // botão "Imprimir Selecionados". A leitura usa a fonte persistente exclusiva
+          // _descProgramacaoData, independente de checkbox, novo import ou status operacional.
+          (function(){
+            var rec = (typeof _descAcompGet === 'function') ? _descAcompGet(f.mac) : null;
+            var programado = (typeof _descProgramacaoEstaRegistrado === 'function')
+              ? _descProgramacaoEstaRegistrado(f.mac)
+              : !!(rec && rec.programado);
+            var label = programado ? 'Programado' : 'Não Programado';
+            var cor = programado ? '#16a34a' : '#94a3b8';
+            var bg = programado ? '#dcfce7' : '#f1f5f9';
+            return '<td style="padding:5px 10px;font-size:11px;text-align:center"><span style="background:' + bg + ';color:' + cor + ';padding:2px 8px;border-radius:10px;font-weight:700;font-size:10px;white-space:nowrap">' + label + '</span></td>';
+          })() +
         '</tr>';
       }).join('');
       linhaDetalhe =
@@ -13278,6 +13796,7 @@ function descargaHistoricoRenderizar() {
                 '<th style="padding:4px 10px;text-align:right;font-size:9px;color:#64748b;font-weight:700">QTD. NOTAS FISCAIS</th>' +
                 '<th style="padding:4px 10px;text-align:center;font-size:9px;color:#64748b;font-weight:700">VARIAÇÃO DE POSIÇÃO</th>' +
                 '<th style="padding:4px 10px;text-align:center;font-size:9px;color:#64748b;font-weight:700">STATUS DE PRODUÇÃO</th>' +
+                '<th style="padding:4px 10px;text-align:center;font-size:9px;color:#64748b;font-weight:700">PROGRAMAÇÃO</th>' +
               '</tr></thead>' +
               '<tbody>' + linhasFila + '</tbody>' +
             '</table>' +
@@ -13403,31 +13922,32 @@ function descargaImprimir() {
   if (typeof descargaAcompRegistrarImpressao === 'function') descargaAcompRegistrarImpressao(_descMacSel);
 }
 
-// Imprime o relatório de TODOS os MACs da fila numa única janela.
+// Imprime o relatório só dos MACs/MECs MARCADOS (checkbox) na fila numa única janela.
 // Cada MAC gera seu próprio bloco (cabeçalho + paginação própria) e sempre
 // começa em uma folha nova — os CTRCs de um MAC nunca aparecem na folha de outro.
-function descargaImprimirTodos() {
-  var temFila = (_descColetaRanking && _descColetaRanking.length) || (_descMacRanking && _descMacRanking.length);
-  if (!temFila) {
-    if (typeof showToast==='function') showToast('Importe o TMS primeiro','error');
+// Usa a mesma seleção (_descFilaSelecionados) que já alimenta o card "Fila de
+// Programados" e os cards de Peso por Turno do Histórico de Relatório (IN).
+function descargaImprimirSelecionados() {
+  if (!_descFilaSelecionados || !_descFilaSelecionados.size) {
+    if (typeof showToast==='function') showToast('Marque ao menos um MAC/MEC na fila antes de imprimir','error');
     return;
   }
   var blocos = [];
-  // Mesma ordem da fila na tela: Coletas primeiro, depois Transferências
+  // Mesma ordem da fila na tela: Coletas primeiro, depois Transferências — só os marcados
   (_descColetaRanking || []).forEach(function(c) {
     var mac = c.mac;
-    if (!mac) return;
+    if (!mac || !_descFilaSelecionados.has(mac)) return;
     var rows = (_relData||[]).filter(function(r){ return String(r.mac||'').trim() === String(mac).trim(); });
     if (rows.length) blocos.push({ mac: mac, rows: rows, ehColeta: true });
   });
   (_descMacRanking || []).forEach(function(m) {
     var mac = m.mac;
-    if (!mac) return;
+    if (!mac || !_descFilaSelecionados.has(mac)) return;
     var rows = (_relData||[]).filter(function(r){ return String(r.mac||'').trim() === String(mac).trim(); });
     if (rows.length) blocos.push({ mac: mac, rows: rows, ehColeta: false });
   });
   if (!blocos.length) {
-    if (typeof showToast==='function') showToast('Nenhum CTRC encontrado para os MACs da fila','error');
+    if (typeof showToast==='function') showToast('Nenhum CTRC encontrado para os MACs/MECs marcados','error');
     return;
   }
 
@@ -13506,7 +14026,7 @@ function descargaImprimirTodos() {
       '</div>';
   });
 
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Descarga — Todos os MACs</title>' +
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Descarga — Selecionados</title>' +
     '<style>body{font-family:Arial,sans-serif;font-size:13px;margin:0}' +
     'table{border-collapse:collapse;width:100%;table-layout:fixed}' +
     'th{background:#111827!important;color:#fff!important;padding:4px 5px;text-align:left;font-size:11px!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
@@ -13527,7 +14047,39 @@ function descargaImprimirTodos() {
   if (typeof descargaAcompRegistrarImpressao === 'function') {
     blocos.forEach(function(b){ descargaAcompRegistrarImpressao(b.mac); });
   }
-  if (typeof showToast==='function') showToast('Gerados ' + blocos.length + ' relatórios de MAC', 'info');
+  // Registra cada MAC impresso como "Programado" — alimenta a coluna
+  // PROGRAMAÇÃO no Histórico de Relatório (IN) e os cards de Peso por Turno.
+  // O registro definitivo fica em _descProgramacaoData, separado do estado dos
+  // checkboxes e do acompanhamento operacional, para não desaparecer em novos imports.
+  if (typeof _descAcompGet === 'function') {
+    var _progAgora = new Date();
+    var _progHoraStr = String(_progAgora.getHours()).padStart(2, '0') + ':' + String(_progAgora.getMinutes()).padStart(2, '0');
+    var _progTurno = (typeof _hroTurnoClassificar === 'function') ? _hroTurnoClassificar(_progHoraStr) : null;
+    blocos.forEach(function(b){
+      var rec = _descAcompGet(b.mac);
+      rec.programado = true;
+      rec.programadoTurno = _progTurno;
+      rec.programadoDataISO = _progAgora.toISOString();
+    });
+    if (typeof _descAcompSalvar === 'function') _descAcompSalvar();
+    // Registro definitivo, independente do estado dos checkboxes e de novos imports.
+    if (typeof _descProgramacaoRegistrarLista === 'function') {
+      _descProgramacaoRegistrarLista(blocos.map(function(b){ return b.mac; }), _progTurno, _progAgora.toISOString());
+    }
+  }
+  // Atualiza ao vivo os cards de Peso por Turno Programado, caso a aba de
+  // Histórico já tenha sido aberta nesta sessão (mesmo padrão leve usado no
+  // clique do checkbox — não redesenha a tabela de até 100 importações).
+  if (typeof descargaHistoricoAtualizarCardsTurno === 'function') descargaHistoricoAtualizarCardsTurno();
+  // Se a aba de Histórico estiver aberta AGORA, refaz a renderização completa uma
+  // única vez para que a nova coluna PROGRAMAÇÃO na sub-tabela (que só existe na
+  // renderização completa, não na atualização leve dos cards) também apareça sem
+  // precisar trocar de aba e voltar.
+  (function(){
+    var tab = document.getElementById('tab-descargaHistorico-content');
+    if (tab && tab.classList.contains('active') && typeof descargaHistoricoRenderizar === 'function') descargaHistoricoRenderizar();
+  })();
+  if (typeof showToast==='function') showToast('Gerados ' + blocos.length + ' relatório(s) dos selecionados', 'info');
 }
 
 // Hook showTab
@@ -14330,6 +14882,7 @@ function abrirModalCargaCritica(tipo) {
         if (disp === 'em descarregamento' || disp === 'patio') return 'Fila de descarga';
         if (disp === 'planejado') return 'Carregando';
         if (disp === 'disponível') return 'Disponível';
+        if (disp === 'descarregado') return 'Descarregado';
         return '—';
       }}
     ];
@@ -14482,7 +15035,7 @@ function cargaCriticaExportarExcel() {
   XLSX.utils.book_append_sheet(wb, ws, titulo.substring(0, 31));
 
   var ts = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
-  var nomeArquivo = 'CargaCritica_' + titulo.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40) + '_' + ts + '.xlsx';
+  var nomeArquivo = _rota7ProximoArquivo('.xlsx');
   XLSX.writeFile(wb, nomeArquivo);
   showToast('✅ Excel exportado!', 'success');
 }
@@ -15061,6 +15614,9 @@ function _gvGaugeSvg(pct, corAtivo, label, valorTexto) {
 }
 
 function _gvTurnoDoHorario(horaStr) {
+  // O Dashboard usa o corte operacional informado: 1º 06:00–14:59,
+  // 2º 15:00–22:30 e 3º 22:31–05:59.
+  if (typeof _hroTurnoClassificar === 'function') return _hroTurnoClassificar(horaStr);
   return (typeof _resumoMalhaClassificarTurno === 'function') ? _resumoMalhaClassificarTurno(horaStr) : null;
 }
 
@@ -15101,10 +15657,42 @@ function gestaoVistaTrocarVisao(visao) {
 var _gvExtratoDia = 'hoje';           // 'hoje' | 'ontem'
 var GV_EXTRATO_HIST_KEY = 'gv_extrato_hist';
 
-function _gvExtratoDataISO(offsetDias) {
-  var d = new Date();
-  d.setDate(d.getDate() - (offsetDias || 0));
+// Janela operacional do Dashboard/Extrato.
+// A data de referência é a data em que o 3º Turno termina: 22:31 do dia
+// anterior até 05:59 do dia de referência, seguido pelo 1º e 2º Turnos.
+// Assim, por exemplo, o extrato de 14/08/2026 começa em 13/08/2026 22:31.
+function _gvJanelaOperacionalAtual(agoraReferencia) {
+  var agora = (agoraReferencia instanceof Date && !isNaN(agoraReferencia.getTime()))
+    ? new Date(agoraReferencia.getTime()) : new Date();
+  var minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+  var dataRef = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0, 0);
+
+  // Depois das 22:31, o 3º Turno recém-iniciado pertence ao próximo dia
+  // operacional, pois termina às 05:59 da madrugada seguinte.
+  if (minutosAgora >= 1351) dataRef.setDate(dataRef.getDate() + 1);
+
+  var inicio = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate() - 1, 22, 31, 0, 0);
+  var fimProgramado = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), 22, 31, 0, 0);
+  var fim = agora < fimProgramado ? agora : fimProgramado;
+
+  return { agora: agora, dataRef: dataRef, inicio: inicio, fim: fim, fimProgramado: fimProgramado };
+}
+
+function _gvDataDentroDaJanela(valor, janela) {
+  var d = valor instanceof Date ? valor : new Date(valor);
+  if (!janela || isNaN(d.getTime())) return false;
+  return d.getTime() >= janela.inicio.getTime() && d.getTime() <= janela.fim.getTime();
+}
+
+function _gvDataISO(data) {
+  var d = data instanceof Date ? data : new Date(data);
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function _gvExtratoDataISO(offsetDias) {
+  var d = _gvJanelaOperacionalAtual().dataRef;
+  d.setDate(d.getDate() - (offsetDias || 0));
+  return _gvDataISO(d);
 }
 
 // ── Capacidade (HC - Produtivo Peso Mov.) ──
@@ -15171,7 +15759,13 @@ function _gvExtratoColeta() {
   var capacidadeKg     = capacidadeTon * 1000;
   var capacidadeInKg   = capacidadeInTon * 1000;
   var capacidadeOutKg  = capacidadeOutTon * 1000;
-  var pctCapacidadeTotal = capacidadeKg    ? ((planoIn + planoOut) / capacidadeKg * 100) : 0;
+  // Eficiência da Capacidade = Peso Movimentado ÷ Capacidade.
+  // Peso Movimentado é o Executado de IN + o Executado de OUT, em kg.
+  var pesoMovimentado = execIn + execOut;
+  var pctEficienciaCapacidade = capacidadeKg ? (pesoMovimentado / capacidadeKg * 100) : 0;
+  // Estes dois percentuais continuam representando Plano ÷ Capacidade de cada fluxo;
+  // não são usados no card geral de Eficiência da Capacidade.
+  var pctCapacidadeTotal = pctEficienciaCapacidade;
   var pctCapacidadeIn    = capacidadeInKg  ? (planoIn  / capacidadeInKg  * 100) : 0;
   var pctCapacidadeOut   = capacidadeOutKg ? (planoOut / capacidadeOutKg * 100) : 0;
 
@@ -15180,7 +15774,8 @@ function _gvExtratoColeta() {
     in:  { plano: planoIn,  programado: progIn,  executado: execIn,  saldo: saldoIn  },
     out: { plano: planoOut, programado: progOut, executado: execOut, saldo: saldoOut },
     fp:  { plano: planoFp,  programado: progFp,  executado: execFp,  saldo: saldoFp  },
-    movimentado: execIn + execOut,
+    movimentado: pesoMovimentado,
+    pctEficienciaCapacidade: pctEficienciaCapacidade,
     planoTotal: planoIn + planoOut,
     capacidadeTon: capacidadeTon,
     capacidadeKg: capacidadeKg,
@@ -15293,7 +15888,9 @@ function gvExtratoRenderizar() {
 
   var kg = function(v) { return Math.round(v || 0).toLocaleString('pt-BR') + ' kg'; };
   var qtd = function(v) { return Math.round(v || 0).toLocaleString('pt-BR'); };
-  var pctDia = (e.pctCapacidadeTotal != null) ? Math.round(e.pctCapacidadeTotal) : 0;
+  var pctDia = (e.pctEficienciaCapacidade != null)
+    ? Math.round(e.pctEficienciaCapacidade)
+    : ((e.pctCapacidadeTotal != null) ? Math.round(e.pctCapacidadeTotal) : 0);
 
   topo.innerHTML =
     _fpKpiCard('Peso Movimentado', Math.round(e.movimentado), '#3fb950', ' kg', 'Descarregado + carregado') +
@@ -15328,24 +15925,45 @@ function _gvTooltipEsconder() {
   if (tt) tt.style.display = 'none';
 }
 
+// Fonte única do Programado IN no Dashboard: os mesmos valores dos cards
+// "Peso 1º/2º/3º Turno Programado" exibidos no Histórico de Relatório (IN).
+// A distribuição por turno já é registrada no momento da impressão, usando:
+// 1º Turno 06:00–14:59 | 2º Turno 15:00–22:30 | 3º Turno 22:31–05:59.
+function _gvPesoProgramadoHistoricoIN(turnoAlvo) {
+  if (typeof descargaPesoProgramadoPorTurno !== 'function') return null;
+  var cards = descargaPesoProgramadoPorTurno();
+  if (!cards || typeof cards !== 'object') return null;
+  var ordem = ['1º Turno', '2º Turno', '3º Turno'];
+  if (turnoAlvo && Object.prototype.hasOwnProperty.call(cards, turnoAlvo)) {
+    return Math.max(0, Number(cards[turnoAlvo]) || 0);
+  }
+  return ordem.reduce(function(total, turno) {
+    return total + (Number(cards[turno]) || 0);
+  }, 0);
+}
+
 // ── Coleta dados do lado IN (Descarga) usando _descAcompLista + _descAcompData ──
 function _gvColetarDadosIN() {
   var acompData = (typeof _descAcompData !== 'undefined') ? _descAcompData : {};
   var historico = (typeof _relatorioHistorico !== 'undefined') ? _relatorioHistorico : [];
-  var agoraHora = new Date().toTimeString().substring(0,5);
-  var hojeStr = new Date().toLocaleDateString('pt-BR');
+  var agora = new Date();
+  var agoraHora = agora.toTimeString().substring(0,5);
+  var janela = _gvJanelaOperacionalAtual(agora);
 
-  // ── Deduplicação: pega os MACs únicos vistos HOJE no Histórico de Relatório ──
-  // _relatorioHistorico vem do mais recente pro mais antigo (unshift) — por isso a
-  // 1ª vez que encontramos um MAC nessa varredura já é o peso OPL mais atual dele.
+  // ── Deduplicação: considera somente a janela operacional atual ──
+  // O 3º Turno de 13/08, por exemplo, inclui 22:31–23:59 de 13/08 e
+  // 00:00–05:59 de 14/08. O primeiro MAC encontrado é mantido uma única vez,
+  // evitando somar novamente o mesmo peso quando ele reaparece no turno seguinte.
   var macsUnicos = {}; // mac -> { pesoOpl, origem }
-  historico.forEach(function(h) {
+  historico.slice().sort(function(a, b) {
+    return new Date(b.dataHoraISO).getTime() - new Date(a.dataHoraISO).getTime();
+  }).forEach(function(h) {
     var dh = new Date(h.dataHoraISO);
-    if (dh.toLocaleDateString('pt-BR') !== hojeStr) return; // só snapshots de hoje
+    if (!_gvDataDentroDaJanela(dh, janela)) return;
     (h.filaSnapshot || []).forEach(function(f) {
-      if (macsUnicos[f.mac] === undefined) {
-        macsUnicos[f.mac] = { pesoOpl: f.pesoOpl || 0, origem: f.origem || '—' };
-      }
+      var chaveMac = String(f.mac == null ? '' : f.mac).trim().toUpperCase();
+      if (!chaveMac || macsUnicos[chaveMac] !== undefined) return;
+      macsUnicos[chaveMac] = { mac: String(f.mac || '').trim(), pesoOpl: f.pesoOpl || 0, origem: f.origem || '—' };
     });
   });
 
@@ -15371,7 +15989,10 @@ function _gvColetarDadosIN() {
     else if (temInicio) pesoProgramado += peso;
     else { pesoSemProgramacao += peso; semProgramacaoLista.push({ mac: mac, origem: info.origem, peso: peso }); }
 
-    var horaRef = temInicio ? rec.horaInicio : agoraHora;
+    // O Executado pertence ao turno em que a descarga foi concluída; para
+    // registros ainda abertos, usa-se o início. Isso mantém a virada 22:31–05:59
+    // unida mesmo quando a operação começou antes da meia-noite.
+    var horaRef = temFim ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHora);
     var t = _gvTurnoDoHorario(horaRef);
     if (t) {
       turnoTotal[t]++;
@@ -15385,6 +16006,13 @@ function _gvColetarDadosIN() {
 
     pesoPorDestino[info.origem] = (pesoPorDestino[info.origem] || 0) + peso;
   });
+
+  // O Dashboard IN usa o card do turno vigente como fonte oficial do Programado.
+  // O cálculo operacional por Hora Início continua disponível para os demais
+  // indicadores, mas não substitui o registro de impressão do Histórico IN.
+  var turnoVigenteIN = _gvTurnoDoHorario(agoraHora);
+  var programadoHistoricoIN = _gvPesoProgramadoHistoricoIN(turnoVigenteIN);
+  if (programadoHistoricoIN !== null) pesoProgramado = programadoHistoricoIN;
 
   // ── Peso em Trânsito (destino GRU) — fonte separada, vem da aba Trânsito ──
   var pesoTransito = 0;
@@ -15402,6 +16030,8 @@ function _gvColetarDadosIN() {
     turnoTotalPeso: turnoTotalPeso, turnoFeitoPeso: turnoFeitoPeso,
     turnoItens: turnoItens,
     pesoPorDestino: pesoPorDestino,
+    pesoProgramadoHistoricoIN: programadoHistoricoIN,
+    turnoProgramadoIN: turnoVigenteIN,
     labelFeito: 'Peso Descarregado', labelFila: 'Peso na Fila (a descarregar)',
     labelDestino: 'Filial Origem'
   };
@@ -15573,6 +16203,20 @@ function _fpColeta() {
     return a.destino.localeCompare(b.destino);
   });
 
+  // Recursos Extras: veículos com tipo "Carro Extra" salvos hoje — mesma fonte/filtro da tela Recursos Programados
+  var hojeStrRP = (typeof getDataHoje === 'function') ? getDataHoje() : '';
+  var recursosExtrasCount = 0;
+  var _rpBase = (typeof progData !== 'undefined' && Array.isArray(progData)) ? progData : [];
+  _rpBase.forEach(function(r) {
+    if (!r) return;
+    if (!(r.frota || r.ocup || r.motorista || r.cavalinho)) return;
+    if (!r.gerado || r.gerado.substring(0, 10) !== hojeStrRP) return;
+    if (String(r.tipo || '').trim() === 'Carro Extra') recursosExtrasCount++;
+  });
+
+  // Malha do dia: total de rotas da grade de hoje — mesma fonte (buildProgRows) da tela Programar Malha do dia
+  var malhaDoDiaCount = linhas.length;
+
   return {
     totalRotas: base.totalGeral,
     programadosCount: base.completoGeral,
@@ -15583,7 +16227,8 @@ function _fpColeta() {
     pesoExecutado: pesoExecutado, pesoAndamento: pesoAndamento,
     execCount: execCount, andamentoCount: andamentoCount, aguardandoCount: aguardandoCount,
     porTurnoExec: porTurnoExec,
-    criticosLista: criticosLista, criticosCount: criticosLista.length
+    criticosLista: criticosLista, criticosCount: criticosLista.length,
+    recursosExtrasCount: recursosExtrasCount, malhaDoDiaCount: malhaDoDiaCount
   };
 }
 
@@ -15758,8 +16403,8 @@ function frotasProgramadasRenderizar() {
     kpisDiv.innerHTML =
       _fpKpiCard('Veículos Programados', d.programadosCount, '#3fb950', '', 'Já têm frota carreta e motorista/cavalo definidos') +
       _fpKpiCard('Faltam Programar', d.faltandoCount, '#ef4444', '', 'Falta frota carreta, motorista/cavalo ou os dois') +
-      _fpKpiCard('Peso em Carregamento', Math.round(d.pesoAndamento), '#f0b429', ' kg', 'Carregando agora, nos veículos já programados') +
-      _fpKpiCard('Críticos', d.criticosCount, '#ef4444', '', 'Destinos programados atrasados ou vencendo hoje') +
+      _fpKpiCard('Recursos Extras', d.recursosExtrasCount, '#f0b429', '', 'Veículos extras programados hoje (Recurso Programado)') +
+      _fpKpiCard('Malha do dia', d.malhaDoDiaCount, '#ffffff', '', 'Total de rotas da malha programada para hoje') +
       _gvDonutEficienciaCard(pctProgramados, 'programado');
   }
 
@@ -15962,15 +16607,16 @@ function frotasProgramadasRenderizar() {
 // Executado/Programado/Plano do dia, inflando os três cards com dias que já passaram.
 function _gvItensOutHoje() {
   if (typeof progData === 'undefined' || !progData.length) return [];
-  var hojeStr = (typeof getDataHoje === 'function') ? getDataHoje() : new Date().toLocaleDateString('pt-BR');
+  var janela = (typeof _gvJanelaOperacionalAtual === 'function') ? _gvJanelaOperacionalAtual() : null;
   var base = progData;
   // Cópias de Veículo Adiantado: não existem em progData, mas representam carga
   // real executada e precisam entrar nas somas do painel (peso sempre manual).
   if (typeof _acompOutLinhasAdiantadas === 'function') base = base.concat(_acompOutLinhasAdiantadas());
   return base.filter(function(r) {
     if (!(r._adiantado || r.frota || r.ocup || r.motorista || r.cavalinho)) return false;
-    var gerado = String(r.gerado || '').substring(0, 10);
-    return !gerado || gerado === hojeStr; // sem data legível: mantém (não descarta por segurança)
+    if (!String(r.gerado || '').trim()) return true;
+    var geradoDate = new Date(r.gerado);
+    return janela ? _gvDataDentroDaJanela(geradoDate, janela) : !isNaN(geradoDate.getTime());
   });
 }
 
@@ -16006,8 +16652,9 @@ function _gvColetarDadosOUT() {
     if (finalizado) pesoFeito += peso;
     else pesoFila += peso;
 
-    // Turno pelos horários gerados no Acompanhamento OUT: Hora Início; sem início, hora atual (mesma regra do IN)
-    var t = _gvTurnoDoHorario(temInicio ? rec.horaInicio : agoraHoraOut);
+    // A fila usa a Hora Início; o Executado fica no turno da Hora Fim.
+    // Em ambos os casos, o corte do 3º Turno é 22:31–05:59.
+    var t = _gvTurnoDoHorario(temFim ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHoraOut));
     if (!t) return;
     // Turno que EXECUTOU: coluna Turno do Acompanhamento OUT; sem ela, a Hora Fim.
     var tFeito = (typeof _acompOutTurnoEfetivo === 'function') ? _acompOutTurnoEfetivo(rec, 'fim') : t;
@@ -16043,13 +16690,17 @@ function _gvColetarDadosOUT() {
 function _gvFluxoFilaOUT() {
   var historico = (typeof _cargaCriticaHistorico !== 'undefined') ? _cargaCriticaHistorico : [];
   // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
+  var janela = (typeof _gvJanelaOperacionalAtual === 'function') ? _gvJanelaOperacionalAtual() : null;
   var itensBase = _gvItensOutHoje();
   var acompData = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
-  var hojeStr = new Date().toLocaleDateString('pt-BR');
-  var agoraHora = new Date().toTimeString().substring(0,5);
+  var agora = new Date();
+  var agoraHora = agora.toTimeString().substring(0,5);
 
   var snapsHoje = historico.filter(function(h) {
-    return new Date(h.dataHoraISO).toLocaleDateString('pt-BR') === hojeStr;
+    var dataSnapshot = new Date(h.dataHoraISO);
+    return janela ? _gvDataDentroDaJanela(dataSnapshot, janela) : !isNaN(dataSnapshot.getTime());
+  }).sort(function(a, b) {
+    return new Date(b.dataHoraISO).getTime() - new Date(a.dataHoraISO).getTime();
   }); // mais recente primeiro
   var temTms = snapsHoje.length > 0;
   var primeiroImport = temTms ? snapsHoje[snapsHoje.length - 1] : null;
@@ -16110,7 +16761,9 @@ function _gvFluxoFilaOUT() {
   var pipelineAtual = temTms ? pipelineDe(ultimoImport) : 0;
   var entrouDepois = temTms ? Math.max(0, Math.round((pipelineAtual + execTotalGeral - filaInicial) * 10) / 10) : 0;
   var plano = filaInicial + entrouDepois;
-  var filaFinal = plano - execTotalGeral;
+  // Nunca exibe saldo negativo: uma carga já executada não pode voltar a
+  // aumentar o plano nem ser contada novamente no turno seguinte.
+  var filaFinal = Math.max(0, plano - execTotalGeral);
 
   // ── Passe 2: o que é exibido como "Executado", por turno + distribuição proporcional de Fila ──
   var itens = itensBase;
@@ -16151,39 +16804,99 @@ function _gvFluxoFilaOUT() {
   
   var total = {
     turno: 'Total', filaInicial: filaInicial, entrouDepois: entrouDepois,
-    executado: execTotal, filaFinal: filaFinal,
+    executado: execTotal, filaFinal: Math.max(0, filaFinal),
     pctExec: pctTotalExec
   };
   
-  // Distribui filaInicial proporcionalmente por turno baseado no acompanhamento
-  var totalAcomp = execTotal + (ordem.reduce(function(sum, t) { return sum + (pesoAcompTurno[t] - execTurno[t]); }, 0));
-  
+  // ── Entradas próprias por turno, sem duplicidade ──────────────────────────
+  // O primeiro snapshot fornece a fila própria do turno em que foi importado.
+  // Nos snapshots seguintes, somente o crescimento positivo do pipeline vira
+  // "Entrou Depois". Um mesmo saldo repetido no TMS não é somado outra vez.
+  var filaPropriaPorTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var entrouDepoisPorTurno = {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+  var snapsCronologicos = snapsHoje.slice().sort(function(a, b) {
+    return new Date(a.dataHoraISO).getTime() - new Date(b.dataHoraISO).getTime();
+  });
+  if (temTms && snapsCronologicos.length) {
+    var pipelineAnterior = 0;
+    var ultimoTurnoSnapshot = '3º Turno';
+    var somaCrescimentos = 0;
+    snapsCronologicos.forEach(function(s, indice) {
+      var ds = new Date(s.dataHoraISO);
+      var hs = String(ds.getHours()).padStart(2, '0') + ':' + String(ds.getMinutes()).padStart(2, '0');
+      var turnoSnapshot = turnoDe(hs);
+      ultimoTurnoSnapshot = turnoSnapshot;
+      var pipelineSnapshot = Math.max(0, pipelineDe(s));
+      if (indice === 0) {
+        filaPropriaPorTurno[turnoSnapshot] += pipelineSnapshot;
+      } else {
+        var crescimento = Math.max(0, pipelineSnapshot - pipelineAnterior);
+        if (crescimento > 0) {
+          entrouDepoisPorTurno[turnoSnapshot] += crescimento;
+          somaCrescimentos += crescimento;
+        }
+      }
+      pipelineAnterior = pipelineSnapshot;
+    });
+    // Se a identidade contábil do TMS indicar entradas adicionais por causa de
+    // cargas executadas entre snapshots, coloca o residual no último turno
+    // observado. Se houve queda líquida, reduz proporcionalmente os crescimentos
+    // para que o total não seja duplicado.
+    if (somaCrescimentos > entrouDepois && somaCrescimentos > 0) {
+      var fatorReducao = entrouDepois / somaCrescimentos;
+      Object.keys(entrouDepoisPorTurno).forEach(function(t) {
+        entrouDepoisPorTurno[t] = Math.round(entrouDepoisPorTurno[t] * fatorReducao * 10) / 10;
+      });
+    } else if (entrouDepois > somaCrescimentos) {
+      entrouDepoisPorTurno[ultimoTurnoSnapshot] += entrouDepois - somaCrescimentos;
+    }
+  } else {
+    // Sem snapshots TMS, conserva a distribuição de segurança pelos pesos
+    // existentes no Acompanhamento OUT.
+    var totalAcomp = ordem.reduce(function(sum, t) { return sum + (pesoAcompTurno[t] || 0); }, 0);
+    ordem.forEach(function(t) {
+      var proporcao = totalAcomp > 0 ? pesoAcompTurno[t] / totalAcomp : 0;
+      filaPropriaPorTurno[t] = Math.round(filaInicial * proporcao);
+      entrouDepoisPorTurno[t] = Math.round(entrouDepois * proporcao);
+    });
+  }
+
   // ── Cascata entre turnos ──────────────────────────────────────────────────
-  // O que ficou Pendente no turno anterior é saldo que o turno seguinte herda:
-  //   Início de Turno = Pendente do turno anterior + fila própria do turno
-  // Assim o Pendente do último turno fecha com o Pendente do dia (linha Total).
+  // O 3º Turno é processado primeiro porque começa na noite anterior. Seu
+  // Pendente é carregado para o Início do 1º Turno, ao qual se soma somente a
+  // fila própria nova. O 2º Turno recebe o saldo do 1º pelo mesmo mecanismo.
   var pendenteAnterior = 0;
-  var linhas = ordem.map(function(t) {
-    var proporcao = totalAcomp > 0 ? pesoAcompTurno[t] / totalAcomp : 0;
-    var filaPropriaT = Math.round(filaInicial * proporcao);
-    var entrouDeT = Math.round(entrouDepois * proporcao);
+  var minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+  var ordemCascata = (minutosAgora >= 1351 || minutosAgora <= 359)
+    ? ['3º Turno']
+    : (minutosAgora <= 899 ? ['3º Turno', '1º Turno'] : ['3º Turno', '1º Turno', '2º Turno']);
+  var linhasPorTurno = {};
+  ordemCascata.forEach(function(t) {
+    var filaPropriaT = filaPropriaPorTurno[t] || 0;
+    var entrouDeT = entrouDepoisPorTurno[t] || 0;
     var filaInicialT = pendenteAnterior + filaPropriaT;
     var planoT = filaInicialT + entrouDeT;
     var execT = execTurno[t];
-    var faltaT = planoT - execT;
+    var faltaT = Math.max(0, planoT - execT);
     pendenteAnterior = faltaT;
     var pctT = plano ? Math.round(execT / plano * 100) : 0;
-    // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
     if (pctT === 0 && execT > 0) pctT = 1;
-    
-    return { 
-      turno: t, 
+    linhasPorTurno[t] = {
+      turno: t,
       filaInicial: filaInicialT,
       filaPropria: filaPropriaT,
+      filaHerdada: filaInicialT - filaPropriaT,
       entrouDepois: entrouDeT,
       filaFinal: faltaT,
-      executado: execT, 
+      executado: execT,
       pctExec: pctT
+    };
+  });
+  var linhas = ordem.map(function(t) {
+    return linhasPorTurno[t] || {
+      turno: t, filaInicial: 0, filaPropria: filaPropriaPorTurno[t] || 0,
+      filaHerdada: 0, entrouDepois: entrouDepoisPorTurno[t] || 0,
+      filaFinal: 0, executado: execTurno[t] || 0, pctExec: 0
     };
   });
 
@@ -16198,7 +16911,8 @@ function _gvFluxoFilaOUT() {
 // Fila Inicial  = peso OPL dos MACs únicos presentes no PRIMEIRO relatório do turno
 // Entrou Depois = peso OPL dos MACs únicos vistos pela primeira vez nos relatórios seguintes do turno
 // Executado     = MACs com Hora Fim no Acompanhamento (peso mais atual, mesma dedup do painel)
-// Fila Final    = Fila Inicial + Entrou Depois − Executado (identidade contábil por linha)
+// Início exibido      = Pendente do turno anterior + Fila Inicial própria
+// Fila Final          = Início exibido + Entrou Depois − Executado, sem duplicidades
 function _gvFluxoFilaIN() {
   var historico = (typeof _relatorioHistorico !== 'undefined') ? _relatorioHistorico : [];
   var acompData = (typeof _descAcompData !== 'undefined') ? _descAcompData : {};
@@ -16242,18 +16956,15 @@ function _gvFluxoFilaIN() {
     return unicos;
   }
 
-  // O dia operacional acompanha os turnos existentes no sistema: começa às 06h
-  // e termina às 05h59 do dia seguinte, mantendo o 3º turno (23h–06h) unido.
-  var inicioDiaOperacional = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 6, 0, 0, 0);
-  if (agora.getTime() < inicioDiaOperacional.getTime()) inicioDiaOperacional.setDate(inicioDiaOperacional.getDate() - 1);
-  var fimDiaOperacional = new Date(inicioDiaOperacional.getTime() + 24 * 60 * 60 * 1000);
+  // O dia operacional do Dashboard começa às 22:31 do dia anterior e
+  // permanece aberto até o momento atual, respeitando a virada do 3º Turno.
+  var janela = (typeof _gvJanelaOperacionalAtual === 'function')
+    ? _gvJanelaOperacionalAtual(agora) : null;
 
   // Ordenação cronológica: o primeiro item de cada grupo é, de fato, o primeiro input do turno.
   var snapsHoje = historico.filter(function(h) {
     var dataImport = new Date(h.dataHoraISO);
-    return !isNaN(dataImport.getTime()) &&
-      dataImport.getTime() >= inicioDiaOperacional.getTime() &&
-      dataImport.getTime() < fimDiaOperacional.getTime();
+    return janela ? _gvDataDentroDaJanela(dataImport, janela) : !isNaN(dataImport.getTime());
   }).slice().sort(function(a, b) {
     return new Date(a.dataHoraISO).getTime() - new Date(b.dataHoraISO).getTime();
   });
@@ -16266,24 +16977,33 @@ function _gvFluxoFilaIN() {
     snapsPorTurno[turnoImport].push(h);
   });
 
-  // Em cada turno, fixa o primeiro relatório como início e só soma, uma vez,
-  // os MACs inéditos encontrados nos relatórios posteriores daquele mesmo turno.
+  // Cada MAC entra uma única vez na janela operacional inteira. Se ele aparece
+  // pela primeira vez no primeiro relatório do turno, vira "Início de Turno";
+  // se aparece em um relatório posterior, vira "Entrou Depois". O conjunto
+  // global evita duplicar a mesma carga quando ela atravessa a meia-noite ou
+  // reaparece no 1º Turno após o 3º.
+  var vistosNaJanela = {};
+  var primeiroSnapshotPorTurno = {};
   ordem.forEach(function(t) {
-    var vistosNoTurno = {};
-    snapsPorTurno[t].forEach(function(h, indiceRelatorio) {
-      var unicosDoRelatorio = macsUnicosDoRelatorio(h);
-      Object.keys(unicosDoRelatorio).forEach(function(chave) {
-        if (vistosNoTurno[chave]) return;
-        vistosNoTurno[chave] = true;
-        var peso = unicosDoRelatorio[chave].pesoOpl;
-        if (indiceRelatorio === 0) linhas[t].filaInicial += peso;
-        else linhas[t].entrouDepois += peso;
-      });
+    primeiroSnapshotPorTurno[t] = snapsPorTurno[t].length ? snapsPorTurno[t][0] : null;
+  });
+  snapsHoje.forEach(function(h) {
+    var dataImport = new Date(h.dataHoraISO);
+    var horaImport = ('0' + dataImport.getHours()).slice(-2) + ':' + ('0' + dataImport.getMinutes()).slice(-2);
+    var turnoImport = turnoDe(horaImport);
+    var unicosDoRelatorio = macsUnicosDoRelatorio(h);
+    Object.keys(unicosDoRelatorio).forEach(function(chave) {
+      if (vistosNaJanela[chave]) return;
+      vistosNaJanela[chave] = true;
+      var peso = unicosDoRelatorio[chave].pesoOpl;
+      if (primeiroSnapshotPorTurno[turnoImport] === h) linhas[turnoImport].filaInicial += peso;
+      else linhas[turnoImport].entrouDepois += peso;
     });
   });
 
-  // Mantém a regra já existente do Executado: MAC único no período, com o peso
-  // mais atual, distribuído pelo turno da Hora Início registrada no acompanhamento.
+  // Cada MAC continua único no período, com o peso mais atual. O Executado é
+  // distribuído pelo turno da Hora Fim, pois o turno responsável é o que concluiu
+  // a operação; cargas abertas usam a Hora Início.
   var macsUnicos = {};
   snapsHoje.forEach(function(h) {
     var unicosDoRelatorio = macsUnicosDoRelatorio(h);
@@ -16298,19 +17018,43 @@ function _gvFluxoFilaIN() {
     var rec = acompData[macOriginal] || acompData[mac] || {};
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
-    var t = turnoDe(temInicio ? rec.horaInicio : agoraHora);
+    var t = turnoDe(temFim ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHora));
     if (temFim) linhas[t].executado += peso;
   });
 
+  // Cascata operacional: o Pendente do turno anterior é incorporado ao
+  // Início do turno vigente. Assim, se o 3º Turno terminou com 312.558 kg,
+  // o 1º Turno começa com 312.558 kg + somente os MACs novos encontrados.
+  var pendenteAnterior = 0;
   var total = { turno: 'Total', filaInicial: 0, entrouDepois: 0, executado: 0 };
-  var lista = ordem.map(function(t) {
+  var minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+  var ordemCascata = (minutosAgora >= 1351 || minutosAgora <= 359)
+    ? ['3º Turno']
+    : (minutosAgora <= 899 ? ['3º Turno', '1º Turno'] : ['3º Turno', '1º Turno', '2º Turno']);
+  var processados = {};
+  ordemCascata.forEach(function(t) {
     var l = linhas[t];
-    l.filaFinal = l.filaInicial + l.entrouDepois - l.executado;
+    var filaPropria = l.filaInicial;
+    var filaHerdada = pendenteAnterior;
+    l.filaPropria = filaPropria;
+    l.filaHerdada = filaHerdada;
+    l.filaInicial = filaHerdada + filaPropria;
+    l.filaFinal = Math.max(0, l.filaInicial + l.entrouDepois - l.executado);
     l.pctExec = (l.filaInicial + l.entrouDepois) ? Math.round(l.executado / (l.filaInicial + l.entrouDepois) * 100) : 0;
-    total.filaInicial += l.filaInicial; total.entrouDepois += l.entrouDepois; total.executado += l.executado;
-    return l;
+    pendenteAnterior = l.filaFinal;
+    processados[t] = true;
+    total.filaInicial += filaPropria; total.entrouDepois += l.entrouDepois; total.executado += l.executado;
   });
-  total.filaFinal = total.filaInicial + total.entrouDepois - total.executado;
+  ordem.forEach(function(t) {
+    if (processados[t]) return;
+    var l = linhas[t];
+    l.filaPropria = l.filaInicial;
+    l.filaHerdada = 0;
+    l.filaFinal = Math.max(0, l.filaInicial + l.entrouDepois - l.executado);
+    l.pctExec = (l.filaInicial + l.entrouDepois) ? Math.round(l.executado / (l.filaInicial + l.entrouDepois) * 100) : 0;
+  });
+  var lista = ordem.map(function(t) { return linhas[t]; });
+  total.filaFinal = pendenteAnterior;
   total.pctExec = (total.filaInicial + total.entrouDepois) ? Math.round(total.executado / (total.filaInicial + total.entrouDepois) * 100) : 0;
 
   var primeiroImport = snapsHoje.length ? snapsHoje[0] : null;
@@ -16382,7 +17126,8 @@ function gestaoVistaRenderizar() {
   // ── Executado / Programado / Plano — leitura sobre a fila total do dia ──
   //   Plano      = fila TOTAL do dia: tudo que há para descarregar/carregar
   //                (no IN vem do Histórico de Relatório: MACs únicos de hoje, peso OPL mais atual)
-  //   Programado = em andamento (tem Hora Início MAS AINDA NÃO tem Hora Fim)
+  //   Programado = no IN, peso do card do turno vigente no Histórico de Relatório;
+  //                no OUT, peso dos relatórios impressos do turno vigente
   //   Executado  = descarregado/carregado (tem Hora Fim preenchida)
   // Executado e Programado são FATIAS do Plano — a barra branca representa o Plano inteiro (100%).
   var pesoTotalHoje = 0, pesoProgramado = 0, pesoExecutado = 0, pesoNaoIniciado = 0;
@@ -16460,10 +17205,13 @@ function gestaoVistaRenderizar() {
       pesoProgramado = _histRelOutPesoHoje();
     }
   } else {
-    // IN: reaproveita os valores já calculados em _gvColetarDadosIN (deduplicados via Histórico de Relatório)
+    // IN: Plano e Executado seguem o fluxo deduplicado; Programado vem dos cards
+    // persistidos no Histórico de Relatório do grupo IN, por turno vigente.
     pesoTotalHoje = dados.pesoPlano || 0;
     pesoExecutado = dados.pesoExecutado || 0;
-    pesoProgramado = dados.pesoProgramado || 0;
+    pesoProgramado = (dados.pesoProgramadoHistoricoIN != null)
+      ? dados.pesoProgramadoHistoricoIN
+      : (dados.pesoProgramado || 0);
     pesoNaoIniciado = dados.pesoSemProgramacao || 0;
   }
 
@@ -16658,7 +17406,10 @@ function gestaoVistaRenderizar() {
       var selecionado = (_gvFiltroTurno === l.turno);
       var zebra = (i % 2 === 0) ? '#121212' : '#161616';
       var totalCarga = l.filaInicial + l.entrouDepois;
-      var tip = '<b>'+l.turno+'</b><br>Início de turno: '+fmtKg(l.filaInicial)+' kg<br>Entrou depois: '+fmtKg(l.entrouDepois)+' kg<br>Executado: '+fmtKg(l.executado)+' kg ('+l.pctExec+'%)<br>Pendente: '+fmtKg(l.filaFinal)+' kg';
+      var herdadoIn = Math.max(0, (l.filaInicial || 0) - (l.filaPropria || 0));
+      var tip = '<b>'+l.turno+'</b><br>Início de turno: '+fmtKg(l.filaInicial)+' kg' +
+        (herdadoIn > 0 ? '<br>(inclui '+fmtKg(herdadoIn)+' kg pendentes do turno anterior)' : '') +
+        '<br>Entrou depois: '+fmtKg(l.entrouDepois)+' kg<br>Executado: '+fmtKg(l.executado)+' kg ('+l.pctExec+'%)<br>Pendente: '+fmtKg(l.filaFinal)+' kg';
       return '<tr onclick="gestaoVistaFiltrarTurno(\''+l.turno+'\')" ' +
         'onmousemove="_gvTooltipMostrar(event, \''+tip.replace(/'/g,"\\'")+'\')" onmouseout="_gvTooltipEsconder()" ' +
         'style="cursor:pointer;background:'+(selecionado?'rgba(232,179,57,.12)':zebra)+'" ' +
@@ -16688,8 +17439,8 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfo = fluxo.horaPrimeiroImport
-      ? 'Importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
-      : 'Sem importação registrada hoje';
+      ? 'Dia operacional · 3º Turno: 22:31–05:59 · primeiro importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
+      : 'Sem importação registrada na janela operacional atual';
 
     var corpoTabela = fluxo.horaPrimeiroImport
       ? '<div style="overflow-x:auto">' +
@@ -16700,7 +17451,7 @@ function gestaoVistaRenderizar() {
                 '<th colspan="6" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Extrato do Dia — Peso OPL (kg)</th>' +
               '</tr>' +
               '<tr style="background:#000">' +
-                '<th style="'+thNum+'">Início de Turno (kg)</th>' +
+                '<th style="'+thNum+'">Início de Turno + Pendente Anterior (kg)</th>' +
                 '<th style="'+thNum+'">Entrou Depois (kg)</th>' +
                 '<th style="'+thNum+'">Total de Carga (kg)</th>' +
                 '<th style="'+thNum+';color:#4ade80">Executado (kg)</th>' +
@@ -16767,8 +17518,8 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfoO = fo.temTms
-      ? 'CARREGAMENTO · KG · Hoje · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) no dia'
-      : 'CARREGAMENTO · KG · Hoje · sem import TMS hoje — Plano = soma da lista do Acompanhamento';
+      ? 'CARREGAMENTO · KG · Dia operacional · 3º Turno: 22:31–05:59 · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) na janela'
+      : 'CARREGAMENTO · KG · Dia operacional · sem import TMS na janela — Plano = soma da lista do Acompanhamento';
 
     entregaDiv.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 18px;height:100%;box-sizing:border-box">' +
@@ -16785,7 +17536,7 @@ function gestaoVistaRenderizar() {
                 '<th colspan="6" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Extrato do Dia — Peso Disponível TMS (kg)</th>' +
               '</tr>' +
               '<tr style="background:#000">' +
-                '<th style="'+thNumO+'">Início de Turno (kg)</th>' +
+                '<th style="'+thNumO+'">Início de Turno + Pendente Anterior (kg)</th>' +
                 '<th style="'+thNumO+'">Entrou Depois (kg)</th>' +
                 '<th style="'+thNumO+'">Total de Carga (kg)</th>' +
                 '<th style="'+thNumO+';color:#4ade80">Executado (kg)</th>' +
@@ -16863,6 +17614,43 @@ function gestaoVistaRenderizar() {
   }
 
   // ── Em Trânsito: peso vindo da aba Trânsito, com destino GRU ──
+  function _gvPesoPrazoEmbarqueOUT() {
+    var total = { atrasado: 0, hoje: 0, noprazo: 0, agendamento: 0 };
+    var relatorio = (typeof relData !== 'undefined' && Array.isArray(relData)) ? relData : [];
+    // O relatório OUT é a fonte principal: peso já está em kg e contém sitAH
+    // (prazo de embarque) e cliente (incluindo o marcador de Agendamento).
+    if (relatorio.length) {
+      relatorio.forEach(function(r) {
+        var peso = Math.max(0, Number(r.peso) || 0);
+        if (!peso) return;
+        var cliente = String(r.cliente || '').toUpperCase();
+        var agendamento = String(r.agend || '').toUpperCase();
+        if (cliente.indexOf('AGENDAMENTO') !== -1 || agendamento.indexOf('AGENDAMENTO') !== -1) {
+          total.agendamento += peso;
+          return;
+        }
+        var situacao = (typeof _cargaCriticaSituacaoDe === 'function')
+          ? _cargaCriticaSituacaoDe(r) : 'No Prazo';
+        if (situacao === 'Atrasado') total.atrasado += peso;
+        else if (situacao === 'Hoje') total.hoje += peso;
+        else total.noprazo += peso;
+      });
+      return total;
+    }
+
+    // Compatibilidade com dados antigos salvos somente na aba Trânsito.
+    var lista = (typeof _transitoData !== 'undefined' && Array.isArray(_transitoData)) ? _transitoData : [];
+    lista.forEach(function(m) {
+      if (String(m.filialDestino || '').trim().toUpperCase() !== 'GRU') return;
+      var fatorKg = 1000;
+      total.atrasado += (Number(m.pesoAtrasado) || 0) * fatorKg;
+      total.hoje += (Number(m.pesoHoje) || 0) * fatorKg;
+      total.noprazo += (Number(m.pesoNoPrazo) || 0) * fatorKg;
+      total.agendamento += (Number(m.pesoAgendamento) || 0) * fatorKg;
+    });
+    return total;
+  }
+
   var transitoDiv = document.getElementById('gv-card-transito');
   if (transitoDiv) {
     if (_gvVisaoAtual === 'in') {
@@ -16946,12 +17734,37 @@ function gestaoVistaRenderizar() {
           '</div>' +
         '</div>';
     } else {
-      var pesoTransito = 0;
+      var pesosStatusTransito = _gvPesoPrazoEmbarqueOUT();
+      var barrasStatusTransito = [
+        { chave:'atrasado', label:'Atrasado', cor:'#ef4444' },
+        { chave:'hoje', label:'Hoje', cor:'#f0b429' },
+        { chave:'noprazo', label:'No prazo', cor:'#3fb950' },
+        { chave:'agendamento', label:'Agendamento', cor:'#94a3b8' }
+      ];
+      var maiorPesoStatus = Math.max.apply(null, barrasStatusTransito.map(function(s){ return pesosStatusTransito[s.chave] || 0; }).concat([1]));
+      var totalPesoStatus = barrasStatusTransito.reduce(function(s, item){ return s + (pesosStatusTransito[item.chave] || 0); }, 0);
+      var barrasStatusHtml = barrasStatusTransito.map(function(item) {
+        var pesoItem = Math.max(0, Number(pesosStatusTransito[item.chave]) || 0);
+        var largura = maiorPesoStatus ? Math.round((pesoItem / maiorPesoStatus) * 100) : 0;
+        var textoPeso = Math.round(pesoItem).toLocaleString('pt-BR') + ' kg';
+        return '<div style="display:grid;grid-template-columns:92px minmax(90px,1fr) 92px;align-items:center;gap:10px;margin:9px 0" title="' + item.label + ': ' + textoPeso + '">' +
+          '<span style="font-size:11px;color:#b9b9b9;white-space:nowrap">' + item.label + '</span>' +
+          '<div style="height:14px;background:#262626;border-radius:4px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.25)">' +
+            '<div class="gv-fill" data-w="' + largura + '" style="width:' + largura + '%;height:100%;background:' + item.cor + ';border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div>' +
+          '</div>' +
+          '<span style="font-size:12px;font-weight:800;color:' + item.cor + ';text-align:right;white-space:nowrap">' + textoPeso + '</span>' +
+        '</div>';
+      }).join('');
+
       transitoDiv.innerHTML =
-        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
-          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Em Trânsito (chegando para GRU)</div>' +
-          '<div style="font-size:26px;font-weight:800;color:#fff">' + Math.round(pesoTransito).toLocaleString('pt-BR') + ' kg</div>' +
-          '<div style="font-size:11px;color:#9a9a9a;margin-top:4px">Fonte: aba Trânsito (mostrado somente na visão IN por enquanto)</div>' +
+        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box;display:flex;flex-direction:column">' +
+          '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:2px">' +
+            '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em">Prazo de Embarque</div>' +
+            '<div style="font-size:10px;color:#9a9a9a;white-space:nowrap">Total: ' + Math.round(totalPesoStatus).toLocaleString('pt-BR') + ' kg</div>' +
+          '</div>' +
+          '<div style="font-size:10px;color:#6b6b6b;margin:1px 0 11px">Distribuição por prazo de embarque</div>' +
+          '<div style="flex:1;display:flex;flex-direction:column;justify-content:center">' + barrasStatusHtml + '</div>' +
+          '<div style="font-size:10px;color:#6b6b6b;margin-top:8px;padding-top:8px;border-top:1px solid #262626">Fonte: Relatório OUT · prazo de embarque · pesos em kg</div>' +
         '</div>';
     }
   }
