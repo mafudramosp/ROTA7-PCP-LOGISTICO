@@ -16614,9 +16614,17 @@ function _gvItensOutHoje() {
   if (typeof _acompOutLinhasAdiantadas === 'function') base = base.concat(_acompOutLinhasAdiantadas());
   return base.filter(function(r) {
     if (!(r._adiantado || r.frota || r.ocup || r.motorista || r.cavalinho)) return false;
-    if (!String(r.gerado || '').trim()) return true;
-    var geradoDate = new Date(r.gerado);
-    return janela ? _gvDataDentroDaJanela(geradoDate, janela) : !isNaN(geradoDate.getTime());
+    var geradoTxt = String(r.gerado || '').trim();
+    if (!geradoTxt) return true;
+    // "Gerado em" é gravado por now() no formato BR (DD/MM/AAAA HH:MM:SS). new Date()
+    // não interpreta esse formato e devolvia Invalid Date, o que descartava TODAS as
+    // linhas da janela operacional — era isso que zerava Executado, gauges e a coluna
+    // Executado do Extrato do Dia (OUT). Mesmo padrão já usado em dataDoRegistro().
+    var geradoDate = (typeof parseDateTimeBR === 'function') ? parseDateTimeBR(geradoTxt) : null;
+    if (!geradoDate && typeof _acompOutParseBRDate === 'function') geradoDate = _acompOutParseBRDate(geradoTxt);
+    if (!geradoDate || isNaN(geradoDate.getTime())) geradoDate = new Date(geradoTxt);
+    if (!geradoDate || isNaN(geradoDate.getTime())) return true;
+    return janela ? _gvDataDentroDaJanela(geradoDate, janela) : true;
   });
 }
 
@@ -16654,7 +16662,10 @@ function _gvColetarDadosOUT() {
 
     // A fila usa a Hora Início; o Executado fica no turno da Hora Fim.
     // Em ambos os casos, o corte do 3º Turno é 22:31–05:59.
-    var t = _gvTurnoDoHorario(temFim ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHoraOut));
+    // Atenção: aqui a variável é "finalizado" — a referência a "temFim" (inexistente
+    // neste escopo) lançava ReferenceError e derrubava todo o render do painel OUT
+    // assim que houvesse qualquer linha na janela operacional.
+    var t = _gvTurnoDoHorario(finalizado ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHoraOut));
     if (!t) return;
     // Turno que EXECUTOU: coluna Turno do Acompanhamento OUT; sem ela, a Hora Fim.
     var tFeito = (typeof _acompOutTurnoEfetivo === 'function') ? _acompOutTurnoEfetivo(rec, 'fim') : t;
