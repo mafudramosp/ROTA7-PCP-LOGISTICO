@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <!-- PWA Meta Tags -->
-<meta name="application-name" content="Prog. Veículos GRU">
+<meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Prog. Veículos">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#111111">
-<meta name="description" content="Programação de Veículos OPL — GRU Tragetta Transportes">
+<meta name="description" content="ROTA7 - PCP Logistico">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="manifest" href="manifest.json">
@@ -4863,7 +4863,7 @@ function _histRelOutPesoTurno(turnoAlvo) {
 // é DIFERENTE das outras 3 regras de turno já existentes no app, então ganhou nome e
 // funções próprias para não colidir com nenhuma delas:
 //   • calcTurnoCorte / _resumoMalhaClassificarTurno → 06h–15h / 15h–23h / 23h–06h
-//   • _gvTurnoCustomOut (Painel Executivo)          → 07:00–14:48 / 14:48–22:15 / 22:15–06:00
+//   • _gvTurnoCustomOut (Painel Executivo)          → 06:00–14:59 / 15:00–22:30 / 22:31–05:59
 //   • _hroTurnoClassificar (ESTA, só para os 3 cards abaixo):
 //       1º Turno 06:00–14:59 | 2º Turno 15:00–22:30 | 3º Turno 22:31–05:59 (vira o dia)
 function _hroTurnoClassificar(horaStr) {
@@ -16706,9 +16706,14 @@ function _gvFluxoFilaOUT() {
   var primeiroImport = temTms ? snapsHoje[snapsHoje.length - 1] : null;
   var ultimoImport = temTms ? snapsHoje[0] : null;
 
+  // Base do Plano/Extrato OUT = SOMENTE o Disponível do TMS (coluna AC > 0 +
+  // coluna AE em branco) — é exatamente o filtro "disponível para carregar".
+  // Antes somava também o Planejado (AE preenchida), que é o que já foi
+  // programado: o Plano do Dia vinha inflado e o mesmo peso aparecia duas vezes,
+  // uma no Plano e outra no card Programado.
   function pipelineDe(e) {
     var m = (e && e.macro) || {};
-    return (((m.disp || {}).kg) || 0) + (((m.plani || {}).kg) || 0);
+    return ((m.disp || {}).kg) || 0;
   }
 
   function turnoDe(horaStr) {
@@ -17162,7 +17167,8 @@ function gestaoVistaRenderizar() {
     // (ex.: mostrando o 3º Turno da madrugada enquanto a equipe já está no 1º Turno).
     // O turno de cada veículo vem da coluna "Turno" do Acompanhamento OUT quando
     // preenchida; sem ela, é deduzido pela Hora Fim (Executado) / Hora Início
-    // (Programado), usando o mesmo corte de horário do card Plano do dia.
+    // (Programado), usando o mesmo corte de horário do card Plano do dia
+    // (1º 06:00–14:59 · 2º 15:00–22:30 · 3º 22:31–05:59).
     var turnoVigenteGV = _gvTurnoCustomOut(new Date().toTimeString().substring(0, 5));
     function turnoDeGV(rec, modo) {
       if (typeof _acompOutTurnoEfetivo === 'function') return _acompOutTurnoEfetivo(rec, modo);
@@ -17185,20 +17191,22 @@ function gestaoVistaRenderizar() {
         if (!turnoVigenteGV || turnoDeGV(rec, 'inicio') === turnoVigenteGV) pesoProgramado += peso;
       } else pesoNaoIniciado += peso;
     });
-    // Plano do dia OUT = "Início de Turno" da linha do turno vigente na tabela Extrato do
-    // Dia — que, pelo próprio modelo em cascata da tabela, já é Pendente do turno anterior
-    // + peso que entrou no início deste turno. Antes o card somava o dia inteiro
-    // (Fila Inicial + Entrou Depois de todos os turnos), inflando o valor.
+    // Plano do dia OUT = coluna "Total de Carga" da linha do turno vigente no Extrato do
+    // Dia, ou seja: Início de Turno (Pendente do turno anterior + fila própria deste turno)
+    // + Entrou Depois. É o mesmo número que a tabela exibe, para os dois baterem sempre.
+    // Continua restrito ao turno vigente — não soma os demais turnos do dia.
     var turnoVigenteOut = _gvTurnoCustomOut(new Date().toTimeString().substring(0, 5));
     if (fluxoOut && fluxoOut.temTms && fluxoOut.linhas) {
       var linhaVigente = fluxoOut.linhas.filter(function(l){ return l.turno === turnoVigenteOut; })[0];
-      pesoTotalHoje = linhaVigente ? linhaVigente.filaInicial : fluxoOut.plano;
+      pesoTotalHoje = linhaVigente
+        ? (linhaVigente.filaInicial + linhaVigente.entrouDepois)
+        : fluxoOut.plano;
     } else {
       pesoTotalHoje = pesoExecutado + pesoProgramado + pesoNaoIniciado;
     }
     // Programado no OUT = soma dos relatórios impressos no Histórico de Relatório OUT,
-    // filtrados pelo horário de geração dentro do turno vigente (corte customizado:
-    // 1º 07:00–14:48 · 2º 14:48–22:15 · 3º 22:15–06:00).
+    // filtrados pelo horário de geração dentro do turno vigente, pelo corte oficial do
+    // Painel (_gvTurnoCustomOut): 1º 06:00–14:59 · 2º 15:00–22:30 · 3º 22:31–05:59.
     if (typeof _histRelOutPesoTurnoCustom === 'function') {
       pesoProgramado = _histRelOutPesoTurnoCustom(turnoVigenteOut);
     } else if (typeof _histRelOutPesoHoje === 'function') {
