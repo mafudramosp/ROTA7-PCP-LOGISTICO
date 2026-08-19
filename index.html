@@ -10880,6 +10880,10 @@ function planPollAlertas() {
 }
 
 function verificarMsgsPlataforma(alertas) {
+  // getLastSeen/setLastSeen/getAlertId não existem neste arquivo: sem esta trava
+  // a função lançava ReferenceError sempre que houvesse mensagem de plataforma,
+  // e em planPollAlertas isso impedia verificarAlertasPlanejamento de rodar.
+  if (typeof getLastSeen !== 'function' || typeof setLastSeen !== 'function' || typeof getAlertId !== 'function') return;
   var platMsgs = alertas.filter(function(a) { return a.de === 'plataforma'; });
   if (!platMsgs.length) return;
 
@@ -14984,7 +14988,10 @@ function abrirModalCargaCritica(tipo) {
   }
 
   // Guarda os dados do modal atual para permitir exportação em Excel
-  _cargaCriticaModalAtual = { titulo: titulo, extraLabel: extraLabel, temNota: temNota, linhas: linhas };
+  // "extraLabel" não existia neste escopo (a lista é "extras") e lançava
+  // ReferenceError toda vez que um card da Carga Crítica era aberto.
+  var _extraLabels = extras.map(function(e) { return e.label; }).join(' · ');
+  _cargaCriticaModalAtual = { titulo: titulo, extraLabel: _extraLabels, temNota: temNota, linhas: linhas };
 }
 
 // Exporta a tabela do modal atualmente aberto para um arquivo Excel
@@ -16895,7 +16902,13 @@ function _gvFluxoFilaOUT() {
     var execT = execTurno[t];
     var faltaT = Math.max(0, planoT - execT);
     pendenteAnterior = faltaT;
-    var pctT = plano ? Math.round(execT / plano * 100) : 0;
+    // % Executado da linha = Executado ÷ Total de Carga DA PRÓPRIA LINHA
+    // (Início de Turno + Entrou Depois), igual ao Extrato do Dia — Descarga (IN).
+    // Antes dividia pelo "plano" global do dia, que ainda soma o executado de volta
+    // dentro de entrouDepois: o percentual de cada turno saía diluído
+    // (ex.: 146.375 de 458.315 aparecia como 23% em vez de 32%).
+    var baseT = filaInicialT + entrouDeT;
+    var pctT = baseT ? Math.round(execT / baseT * 100) : 0;
     if (pctT === 0 && execT > 0) pctT = 1;
     linhasPorTurno[t] = {
       turno: t,
@@ -16909,10 +16922,16 @@ function _gvFluxoFilaOUT() {
     };
   });
   var linhas = ordem.map(function(t) {
-    return linhasPorTurno[t] || {
+    if (linhasPorTurno[t]) return linhasPorTurno[t];
+    // Turno ainda não alcançado pela cascata: mesmo critério de percentual da linha.
+    var entrouFora = entrouDepoisPorTurno[t] || 0;
+    var execFora = execTurno[t] || 0;
+    var pctFora = entrouFora ? Math.round(execFora / entrouFora * 100) : 0;
+    if (pctFora === 0 && execFora > 0) pctFora = 1;
+    return {
       turno: t, filaInicial: 0, filaPropria: filaPropriaPorTurno[t] || 0,
-      filaHerdada: 0, entrouDepois: entrouDepoisPorTurno[t] || 0,
-      filaFinal: 0, executado: execTurno[t] || 0, pctExec: 0
+      filaHerdada: 0, entrouDepois: entrouFora,
+      filaFinal: 0, executado: execFora, pctExec: pctFora
     };
   });
 
@@ -17341,8 +17360,15 @@ function gestaoVistaRenderizar() {
     var gaugesHtml = ordemTurnos.map(function(t) {
       var totalPeso = dados.turnoTotalPeso[t] || 0;
       var feitoPeso = dados.turnoFeitoPeso[t] || 0;
-      // Usar plano total (TMS) para calcular percentuais, não apenas acompanhamento
+      // OUT: cada relógio usa o Total de Carga DA PRÓPRIA LINHA do Extrato do Dia
+      // (Início de Turno + Entrou Depois). Antes os três dividiam pelo total do turno
+      // vigente, então o percentual do relógio não batia com a tabela logo abaixo.
+      // IN: comportamento inalterado — segue usando o plano do dia.
       var pesoPlanoTotal = pesoTotalHoje;
+      if (fluxoOut && fluxoOut.linhas) {
+        var linhaTurnoGauge = fluxoOut.linhas.filter(function(l){ return l.turno === t; })[0];
+        if (linhaTurnoGauge) pesoPlanoTotal = linhaTurnoGauge.filaInicial + linhaTurnoGauge.entrouDepois;
+      }
       var pct = pesoPlanoTotal ? Math.round((feitoPeso / pesoPlanoTotal) * 100) : 0;
       // Se percentual é muito pequeno (< 1% mas > 0), mostrar como 1%
       if (pct === 0 && feitoPeso > 0) pct = 1;
