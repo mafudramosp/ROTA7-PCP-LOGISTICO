@@ -1759,9 +1759,6 @@
   </div>
 </div>
 
-
-</div>
-
 <!-- MOBILE ROLE SELECTOR -->
 <div class="role-screen" id="role-screen" style="display:none">
   <div class="role-logo">
@@ -11726,22 +11723,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-var _deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', function(e) {
-  e.preventDefault();
-  _deferredPrompt = e;
-  console.log('Install prompt ready');
-});
-window.addEventListener('appinstalled', function() {
-  _deferredPrompt = null;
-  showToast('✅ App instalado com sucesso!', 'success');
-});
+// (Listeners de beforeinstallprompt/appinstalled já registrados acima, junto com
+// showInstallBtn/hideInstallBtn — removida a duplicata que fazia o toast de
+// instalação concluída aparecer duas vezes.)
 
-
-// ============================================================
-
-
-// ============================================================
 function autoFormatDT(input, isDatetime) {
   var raw = input.value.replace(/[^0-9]/g, '');
   var max = isDatetime ? 12 : 8;
