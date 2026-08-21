@@ -2356,7 +2356,7 @@ function _gradeAtualizarComMalha(rows) {
       </div>
 
       <!-- Linha 3: visão do que está Sem Programação + Em Trânsito -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch">
         <div id="gv-card-sem-programacao"></div>
         <div id="gv-card-transito"></div>
       </div>
@@ -18127,46 +18127,82 @@ function gestaoVistaRenderizar() {
   var semProgDiv = document.getElementById('gv-card-sem-programacao');
   if (semProgDiv) {
     if (_gvVisaoAtual === 'out') {
-      // Destinos com CTRCs já Disponíveis p/ carregamento, mas cujo prazo de embarque (sitAH) já
-      // venceu (Atrasado) ou vence hoje (Hoje) — ou seja, já poderiam ter embarcado e ainda não embarcaram.
-      var DEST_EXCL_OUT = new Set(['GR2', 'GRU', 'SAO2']); // filial local não é "destino a embarcar"
-      var sitPrioOut = { 'Atrasado': 2, 'Hoje': 1 };
-      var destMapOut = {};
+      // Status por Etapa (Carregamento/OUT) — mesmo espírito do quadro "STATUS ETAPA" do IN,
+      // mas com Posição (mesma nomenclatura de r.posicao já usada na Carga Crítica: Carregando/
+      // Descarregado/Disponível/Fila de descarga) nas linhas, e nas colunas a contagem de CTRCs
+      // por Atrasado/Hoje/No Prazo/Agendamento — mesmos critérios já usados no card de ICD
+      // (_cargaCriticaSituacaoDe, baseado em r.sitAH) e na aba Trânsito (r.agend === 'SIM' tem
+      // prioridade sobre a data, mesma regra de _transitoProcessar). O ICD por linha usa a
+      // mesma fórmula já usada no card "Índice de Criticidade de Demanda": (Atrasado+Hoje)/Total.
+      var POSICOES_OUT = ['Carregando', 'Descarregado', 'Disponível', 'Fila de descarga'];
+      var POSICAO_LABEL_OUT = { 'Carregando':'Carregando', 'Descarregado':'Intermediário', 'Disponível':'Disponível', 'Fila de descarga':'Fila de Descarga' };
+      var statusEtapaOut = {};
+      POSICOES_OUT.forEach(function(p){ statusEtapaOut[p] = { atrasado:0, hoje:0, noPrazo:0, agendamento:0 }; });
       relData.forEach(function(r) {
-        var disp = String(r.disp || '').trim().toLowerCase();
-        if (disp !== 'disponível') return; // só o que já está pronto p/ carregar, ainda não embarcado
-        var dest = String(r.destino || '').trim().toUpperCase();
-        if (!dest || DEST_EXCL_OUT.has(dest)) return;
+        var pos = String(r.posicao || '').trim();
+        var c = statusEtapaOut[pos];
+        if (!c) return; // posição "—" (sem classificação) fica fora da tabela
+        if (String(r.agend || '').trim().toUpperCase() === 'SIM') { c.agendamento++; return; }
         var sit = (typeof _cargaCriticaSituacaoDe === 'function') ? _cargaCriticaSituacaoDe(r) : 'No Prazo';
-        if (sit !== 'Atrasado' && sit !== 'Hoje') return;
-        if (!destMapOut[dest]) destMapOut[dest] = { dest: dest, peso: 0, sit: sit };
-        destMapOut[dest].peso += r.peso || 0;
-        if ((sitPrioOut[sit] || 0) > (sitPrioOut[destMapOut[dest].sit] || 0)) destMapOut[dest].sit = sit;
+        if (sit === 'Atrasado') c.atrasado++;
+        else if (sit === 'Hoje') c.hoje++;
+        else c.noPrazo++;
       });
-      var listaDestOut = Object.values(destMapOut).sort(function(a, b) {
-        var pa = sitPrioOut[a.sit] || 0, pb = sitPrioOut[b.sit] || 0;
-        return pb !== pa ? pb - pa : b.peso - a.peso;
-      });
-      var atrasadosDestOut = listaDestOut.filter(function(d) { return d.sit === 'Atrasado'; }).length;
-      var hojeDestOut = listaDestOut.filter(function(d) { return d.sit === 'Hoje'; }).length;
 
-      var linhasDestOut = listaDestOut.length ? listaDestOut.slice(0, 8).map(function(d) {
-        var cor = d.sit === 'Atrasado' ? '#ef4444' : '#f59e0b';
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #262626;font-size:12px">' +
-          '<span style="color:#e5e9f0">' + d.dest + ' <span style="color:'+cor+';font-weight:700;font-size:10px;text-transform:uppercase;margin-left:6px">'+d.sit+'</span></span>' +
-          '<span style="color:#9a9a9a;font-weight:700">' + Math.round(d.peso).toLocaleString('pt-BR') + ' kg</span>' +
+      function _icdEtapaOut(c) {
+        var tot = c.atrasado + c.hoje + c.noPrazo + c.agendamento;
+        return tot ? Math.round(((c.atrasado + c.hoje) / tot) * 100) : 0;
+      }
+      function _icdCorOut(icd) { return icd >= 50 ? '#ef4444' : (icd >= 25 ? '#f59e0b' : '#3fb950'); }
+
+      var totalEtapaOut = { atrasado:0, hoje:0, noPrazo:0, agendamento:0 };
+      POSICOES_OUT.forEach(function(p) {
+        var c = statusEtapaOut[p];
+        totalEtapaOut.atrasado += c.atrasado; totalEtapaOut.hoje += c.hoje;
+        totalEtapaOut.noPrazo += c.noPrazo; totalEtapaOut.agendamento += c.agendamento;
+      });
+
+      var gridColsEtapaOut = 'minmax(0,2.1fr) minmax(0,1.15fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,1.2fr) minmax(0,.9fr)';
+      var thEtapaOut = 'padding:4px 3px;text-align:center;font-size:8px;font-weight:700;color:#9a9a9a;text-transform:uppercase;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      var tdEtapaOut = 'padding:5px 3px;text-align:center;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      var linhasEtapaOut = POSICOES_OUT.map(function(p) {
+        var c = statusEtapaOut[p];
+        var icd = _icdEtapaOut(c);
+        return '<div style="display:grid;grid-template-columns:'+gridColsEtapaOut+';gap:2px;border-bottom:1px solid #232323">' +
+          '<div style="padding:5px 4px;font-size:10px;color:#e5e5e5;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + POSICAO_LABEL_OUT[p] + '</div>' +
+          '<div style="'+tdEtapaOut+';color:#ef4444;font-weight:700">' + c.atrasado.toLocaleString('pt-BR') + '</div>' +
+          '<div style="'+tdEtapaOut+';color:#f59e0b;font-weight:700">' + c.hoje.toLocaleString('pt-BR') + '</div>' +
+          '<div style="'+tdEtapaOut+';color:#9a9a9a;font-weight:600">' + c.noPrazo.toLocaleString('pt-BR') + '</div>' +
+          '<div style="'+tdEtapaOut+';color:#d97706;font-weight:700">' + c.agendamento.toLocaleString('pt-BR') + '</div>' +
+          '<div style="'+tdEtapaOut+';color:'+_icdCorOut(icd)+';font-weight:800">' + icd + '%</div>' +
         '</div>';
-      }).join('') : '<div style="color:#9a9a9a;font-size:12px;padding:8px 0">Nenhum destino disponível pendente de embarque ✅</div>';
+      }).join('');
+
+      var icdTotalOut = _icdEtapaOut(totalEtapaOut);
+      var linhaTotalEtapaOut =
+        '<div style="display:grid;grid-template-columns:'+gridColsEtapaOut+';gap:2px;border-top:2px solid #3fb950;background:rgba(63,185,80,.06)">' +
+          '<div style="padding:6px 4px;font-size:10px;color:#e5e5e5;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Total Geral</div>' +
+          '<div style="'+tdEtapaOut+';padding-top:6px;padding-bottom:6px;color:#ef4444;font-weight:800">' + totalEtapaOut.atrasado.toLocaleString('pt-BR') + '</div>' +
+          '<div style="'+tdEtapaOut+';padding-top:6px;padding-bottom:6px;color:#f59e0b;font-weight:800">' + totalEtapaOut.hoje.toLocaleString('pt-BR') + '</div>' +
+          '<div style="'+tdEtapaOut+';padding-top:6px;padding-bottom:6px;color:#9a9a9a;font-weight:800">' + totalEtapaOut.noPrazo.toLocaleString('pt-BR') + '</div>' +
+          '<div style="'+tdEtapaOut+';padding-top:6px;padding-bottom:6px;color:#d97706;font-weight:800">' + totalEtapaOut.agendamento.toLocaleString('pt-BR') + '</div>' +
+          '<div style="'+tdEtapaOut+';padding-top:6px;padding-bottom:6px;color:'+_icdCorOut(icdTotalOut)+';font-weight:800">' + icdTotalOut + '%</div>' +
+        '</div>';
 
       semProgDiv.innerHTML =
-        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:18px;height:100%;box-sizing:border-box">' +
-          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Disponível — Ainda Falta Embarcar</div>' +
-          '<div style="font-size:10px;color:#6b6b6b;margin-bottom:10px">Destinos com carga pronta p/ carregamento, prazo vencido ou vencendo hoje</div>' +
-          '<div style="display:flex;gap:22px;margin-bottom:10px">' +
-            '<div><div class="gv-count" data-val="'+atrasadosDestOut+'" data-suf="" style="font-size:22px;font-weight:800;color:#ef4444">'+atrasadosDestOut.toLocaleString('pt-BR')+'</div><div style="font-size:10px;color:#9a9a9a">Destinos atrasados</div></div>' +
-            '<div><div class="gv-count" data-val="'+hojeDestOut+'" data-suf="" style="font-size:22px;font-weight:800;color:#f59e0b">'+hojeDestOut.toLocaleString('pt-BR')+'</div><div style="font-size:10px;color:#9a9a9a">Vencendo hoje</div></div>' +
+        '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 14px;height:100%;box-sizing:border-box;overflow:hidden;min-width:0">' +
+          '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;padding-left:4px">Status por Etapa — Carregamento (OUT)</div>' +
+          '<div style="min-width:0">' +
+            '<div style="display:grid;grid-template-columns:'+gridColsEtapaOut+';gap:2px;border-bottom:1px solid #2b2b2b">' +
+              '<div style="padding:4px 4px;text-align:left;font-size:8px;font-weight:700;color:#9a9a9a;text-transform:uppercase;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Posição</div>' +
+              '<div style="'+thEtapaOut+'">Atrasado</div>' +
+              '<div style="'+thEtapaOut+'">Hoje</div>' +
+              '<div style="'+thEtapaOut+'">Prazo</div>' +
+              '<div style="'+thEtapaOut+'">Agend</div>' +
+              '<div style="'+thEtapaOut+'">ICD</div>' +
+            '</div>' +
+            linhasEtapaOut + linhaTotalEtapaOut +
           '</div>' +
-          linhasDestOut +
         '</div>';
     } else {
       var listaSemProg = dados.semProgramacaoLista || [];
