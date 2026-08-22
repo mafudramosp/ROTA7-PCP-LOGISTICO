@@ -6499,7 +6499,19 @@ function _deleteReenviarPendentes() {
 // Buscar todos os registros
 async function fbGetAll() {
   try {
-    var res = await fetch(SB_URL + '/programados?select=*&or=(deletado.eq.false,deletado.is.null)&limit=1000', { headers: SB_HEADERS });
+    // Tempo limite: sem isso, se o banco estivesse lento/sobrecarregado a requisição
+    // ficava pendurada para sempre e o app travava na mensagem "Conectando ao
+    // Supabase...", sem avisar nada nem liberar o uso dos dados locais.
+    var _ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var _timeoutId = setTimeout(function(){ if (_ctrl) _ctrl.abort(); }, 20000);
+    var _opts = { headers: SB_HEADERS };
+    if (_ctrl) _opts.signal = _ctrl.signal;
+    var res;
+    try {
+      res = await fetch(SB_URL + '/programados?select=*&or=(deletado.eq.false,deletado.is.null)&limit=1000', _opts);
+    } finally {
+      clearTimeout(_timeoutId);
+    }
     if (!res.ok) {
       var errText = await res.text();
       console.warn('Supabase GET status:', res.status, errText);
@@ -6514,6 +6526,12 @@ async function fbGetAll() {
     return ativos.map(sbToRec).filter(function(r){ return r._id > 0; });
   } catch(e) {
     console.warn('sbGetAll erro:', e.message);
+    var ehTimeout = (e && (e.name === 'AbortError' || String(e.message).indexOf('abort') !== -1));
+    if (typeof showToast === 'function') {
+      showToast(ehTimeout
+        ? '⚠️ O servidor demorou demais para responder. Mostrando os últimos dados salvos neste aparelho — atualize a página para tentar de novo.'
+        : '⚠️ Sem conexão com o servidor. Mostrando os últimos dados salvos neste aparelho.', 'error');
+    }
     return [];
   }
 }
@@ -13481,7 +13499,18 @@ document.addEventListener('focusout', function(e) {
 // Confirmado com um teste isolado antes desta correção. Com uma linha por MAC, os
 // dois problemas somem juntos: não existe mais "o resto do blob" para se perder, e
 // atualizações de outros MACs chegam na hora, mesmo com esta aba em edição contínua.
+// Guarda o último valor de cada MAC já gravado no servidor, para _descAcompSalvar()
+// saber quais mudaram de fato. IMPORTANTE: é inicializado com o que veio do
+// localStorage — sem isso, o primeiro clique em QUALQUER campo disparava uma gravação
+// para TODOS os MACs de uma vez (47+ requisições simultâneas), e cada uma dessas
+// gravações ainda disparava um evento de tempo real para todas as outras máquinas,
+// virando uma avalanche de requisições que derrubava o banco (erro 57014, timeout).
 var _descAcompUltimoSalvo = {};
+try {
+  Object.keys(_descAcompData).forEach(function(mac) {
+    _descAcompUltimoSalvo[mac] = JSON.stringify(_descAcompData[mac]);
+  });
+} catch(ex) {}
 
 function _descAcompSalvar() {
   try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(ex) {}
@@ -14873,6 +14902,14 @@ function _acompOutPesoOficial(r, rec, mapaTms) {
 var _acompOutData = {};
 try { _acompOutData = JSON.parse(localStorage.getItem('acomp_out_v1') || '{}'); } catch(ex) { _acompOutData = {}; }
 var _acompOutUltimoSalvo = {};
+// Inicializa com o que veio do localStorage — sem isso, o primeiro clique em qualquer
+// campo disparava uma gravação para TODOS os veículos de uma vez (ver comentário
+// equivalente no Acompanhamento IN: causava avalanche de requisições e timeout no banco).
+try {
+  Object.keys(_acompOutData).forEach(function(id) {
+    _acompOutUltimoSalvo[id] = JSON.stringify(_acompOutData[id]);
+  });
+} catch(ex) {}
 
 function _acompOutSalvar() {
   try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(ex) {}
