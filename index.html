@@ -7630,7 +7630,21 @@ function updateClock() {
 // ═══════════ LISTA DE PRESENÇA — HC Produtivo Peso Mov. ═══════════
 // Capacidade = QTD × Meta da função × Atuação Turno  (conferido contra a planilha de referência)
 // Terceiros usa a mesma meta do Ajudante.
-var LP_CHAVE = 'lista_presenca';
+//
+// PERSISTÊNCIA: cada célula (dia + fluxo + turno + função) é gravada como uma linha
+// PRÓPRIA no Supabase (chave = 'lp_cel:dia:fluxo:turno:função'), em vez de um único
+// blob JSON com todos os dias e turnos juntos. Isso corrige uma perda de dados real:
+// com um blob único, TODA gravação reenviava o objeto inteiro por cima do que já
+// estava salvo. Se o Conferente do 1º Turno fosse preenchido por uma pessoa e, pouco
+// depois, outra pessoa (outra aba/PC, ex. o supervisor do 2º Turno) preenchesse o
+// Ajudante do 2º Turno, a segunda gravação apagava o que a primeira tinha acabado de
+// salvar — porque cada gravação só conhecia o estado da SUA própria tela no momento em
+// que foi disparada. Isso foi reproduzido e confirmado num teste isolado antes desta
+// correção. Com uma linha por célula, cada campo é gravado de forma independente:
+// duas pessoas editando campos diferentes nunca mais conseguem se atropelar.
+var LP_CHAVE = 'lista_presenca';        // chave antiga (blob único) — mantida só para migrar dados já salvos antes desta correção
+var LP_PREFIXO_CELULA = 'lp_cel:';      // nova chave por célula: lp_cel:<dia>:<fluxo>:<turno>:<função>
+var LP_PREFIXO_META = 'lp_meta:';       // nova chave por meta: lp_meta:<ajudante|conferente|atuacao>
 var LP_FUNCOES = ['Conferente', 'Ajudante', 'Terceiros'];
 var LP_TURNOS = ['1º Turno', '2º Turno', '3º Turno'];
 var LP_METAS_PADRAO = { ajudante: '1,09', conferente: '2,15', atuacao: '7,33' };
@@ -7648,6 +7662,7 @@ function _lpHojeISO() {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 var _lpDataSel = _lpHojeISO();
+var _lpDataManual = false; // true assim que o usuário escolhe uma data no calendário — para de seguir "hoje" automaticamente
 
 function _lpDiaAtual() {
   if (!_lpDados.dias[_lpDataSel]) {
@@ -7677,40 +7692,95 @@ function _lpMetaDe(funcao) {
   return _lpNum(m.ajudante);
 }
 
-function lpSalvar() {
-  try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
+function _lpChaveCelula(dia, fluxo, turno, funcao) {
+  return LP_PREFIXO_CELULA + dia + ':' + fluxo + ':' + turno + ':' + funcao;
+}
+
+// Grava uma célula (ou uma meta) de forma independente e imediata — upsert direto,
+// sem precisar ler o resto do estado primeiro, porque cada célula tem sua própria
+// linha no banco e não pode mais ser atropelada por outra gravação.
+function _lpGravarChave(chave, valor) {
   try {
     fetch(SB_URL + '/configuracoes', {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: LP_CHAVE, valor: JSON.stringify(_lpDados) })
+      body: JSON.stringify({ chave: chave, valor: String(valor == null ? '' : valor) })
     }).catch(function(){});
   } catch (e) {}
 }
 
+// Guarda uma cópia local completa (abre a tela na hora, funciona sem rede); a
+// gravação real e compartilhada acontece célula a célula em lpQtdAlterada/lpMetaAlterada.
+function lpSalvar() {
+  try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
+}
+
 function lpCarregarSupabase() {
   try {
-    fetch(SB_URL + '/configuracoes?chave=eq.' + LP_CHAVE + '&select=valor', {
+    // 1) Migração: traz o que existir no blob antigo (formato usado antes desta
+    //    correção), para não perder o histórico já salvo.
+    var pMigracao = fetch(SB_URL + '/configuracoes?chave=eq.' + LP_CHAVE + '&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
       if (!data || !data.length || !data[0].valor) return;
       var remoto = null;
       try { remoto = JSON.parse(data[0].valor); } catch (e) { return; }
-      if (!remoto || !remoto.dias) return;
+      if (!remoto) return;
       if (remoto.metas && !localStorage.getItem('lista_presenca_v2')) _lpDados.metas = remoto.metas;
-      Object.keys(remoto.dias).forEach(function(dia) {
+      Object.keys(remoto.dias || {}).forEach(function(dia) {
         if (!_lpDados.dias[dia]) _lpDados.dias[dia] = remoto.dias[dia];
       });
+    }).catch(function(){});
+
+    // 2) Estado atual, célula a célula — fonte de verdade para tudo já salvo no
+    //    formato novo. Busca todas as linhas de configuracoes e filtra no JS (evita
+    //    depender de um operador de filtro do PostgREST ainda não usado em nenhum
+    //    outro ponto do app).
+    var pCelulas = fetch(SB_URL + '/configuracoes?select=chave,valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(rows) {
+      (rows || []).forEach(function(row) {
+        var chave = String(row.chave || '');
+        if (chave.indexOf(LP_PREFIXO_CELULA) === 0) {
+          var partes = chave.slice(LP_PREFIXO_CELULA.length).split(':');
+          if (partes.length !== 4) return;
+          var dia = partes[0], fluxo = partes[1], turno = partes[2], funcao = partes[3];
+          if (!_lpDados.dias[dia]) _lpDados.dias[dia] = { inbound: {}, outbound: {} };
+          if (!_lpDados.dias[dia][fluxo]) _lpDados.dias[dia][fluxo] = {};
+          if (!_lpDados.dias[dia][fluxo][turno]) _lpDados.dias[dia][fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
+          _lpDados.dias[dia][fluxo][turno][funcao] = row.valor;
+        } else if (chave.indexOf(LP_PREFIXO_META) === 0) {
+          var campo = chave.slice(LP_PREFIXO_META.length);
+          if (['ajudante','conferente','atuacao'].indexOf(campo) !== -1) _lpDados.metas[campo] = row.valor;
+        }
+      });
+    }).catch(function(){});
+
+    Promise.all([pMigracao, pCelulas]).then(function() {
       try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
       var el = document.getElementById('tab-listaPresenca-content');
       if (el && el.classList.contains('active')) lpRenderizar();
-    }).catch(function(){});
+    });
   } catch (e) {}
 }
 
+// O 3º Turno atravessa a meia-noite. Se a aba ficar aberta de um dia para o outro
+// (comum num terminal ligado o turno todo), _lpDataSel foi fixado no carregamento da
+// página e nunca mais mudava — quem lançasse dados de madrugada gravaria sob a data
+// errada. Este relógio realinha "hoje" automaticamente, mas só enquanto o usuário não
+// tiver escolhido manualmente outra data no calendário (lpTrocarData liga _lpDataManual).
+setInterval(function() {
+  if (_lpDataManual) return;
+  var hojeAgora = _lpHojeISO();
+  if (hojeAgora === _lpDataSel) return;
+  _lpDataSel = hojeAgora;
+  var el = document.getElementById('tab-listaPresenca-content');
+  if (el && el.classList.contains('active')) lpRenderizar();
+}, 60000);
+
 function lpTrocarData() {
   var el = document.getElementById('lp-data');
-  if (el && el.value) _lpDataSel = el.value;
+  if (el && el.value) { _lpDataSel = el.value; _lpDataManual = (el.value !== _lpHojeISO()); }
   lpRenderizar();
 }
 function lpMetaAlterada() {
@@ -7719,15 +7789,22 @@ function lpMetaAlterada() {
     conferente: (document.getElementById('lp-meta-conferente') || {}).value || '',
     atuacao: (document.getElementById('lp-meta-atuacao') || {}).value || ''
   };
-  lpSalvar(); lpRenderizar();
+  lpRenderizar();
+  lpSalvar();
+  _lpGravarChave(LP_PREFIXO_META + 'ajudante', _lpDados.metas.ajudante);
+  _lpGravarChave(LP_PREFIXO_META + 'conferente', _lpDados.metas.conferente);
+  _lpGravarChave(LP_PREFIXO_META + 'atuacao', _lpDados.metas.atuacao);
 }
 function lpQtdAlterada(fluxo, turno, funcao, valor) {
   var dia = _lpDiaAtual();
   if (!dia[fluxo]) return;
   if (!dia[fluxo][turno]) dia[fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
   dia[fluxo][turno][funcao] = valor;
-  lpSalvar(); lpRenderizar();
+  lpRenderizar();
+  lpSalvar();
+  _lpGravarChave(_lpChaveCelula(_lpDataSel, fluxo, turno, funcao), valor);
 }
+
 
 // Peso realizado (toneladas) por turno, na mesma fonte do Painel Executivo
 function _lpRealizadoPorTurno(fluxo) {
