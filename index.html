@@ -7842,10 +7842,11 @@ function lpCarregarSupabase() {
     }).catch(function(){});
 
     // 2) Estado atual, célula a célula — fonte de verdade para tudo já salvo no
-    //    formato novo. Busca todas as linhas de configuracoes e filtra no JS (evita
-    //    depender de um operador de filtro do PostgREST ainda não usado em nenhum
-    //    outro ponto do app).
-    var pCelulas = fetch(SB_URL + '/configuracoes?select=chave,valor', {
+    //    formato novo. Busca só as linhas desta funcionalidade (prefixo lp_cel:/
+    //    lp_meta:), não a tabela configuracoes inteira — com o Acompanhamento IN/OUT
+    //    e o Relatório TMS também gravando por célula agora, a tabela ficou grande
+    //    demais para buscar tudo de uma vez em toda carga (causava timeout no banco).
+    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(LP_PREFIXO_CELULA) + '*&select=chave,valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(rows) {
       (rows || []).forEach(function(row) {
@@ -7858,14 +7859,23 @@ function lpCarregarSupabase() {
           if (!_lpDados.dias[dia][fluxo]) _lpDados.dias[dia][fluxo] = {};
           if (!_lpDados.dias[dia][fluxo][turno]) _lpDados.dias[dia][fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
           _lpDados.dias[dia][fluxo][turno][funcao] = row.valor;
-        } else if (chave.indexOf(LP_PREFIXO_META) === 0) {
+        }
+      });
+    }).catch(function(){});
+
+    var pMetas2 = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(LP_PREFIXO_META) + '*&select=chave,valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(rows) {
+      (rows || []).forEach(function(row) {
+        var chave = String(row.chave || '');
+        if (chave.indexOf(LP_PREFIXO_META) === 0) {
           var campo = chave.slice(LP_PREFIXO_META.length);
           if (['ajudante','conferente','atuacao'].indexOf(campo) !== -1) _lpDados.metas[campo] = row.valor;
         }
       });
     }).catch(function(){});
 
-    Promise.all([pMigracao, pCelulas]).then(function() {
+    Promise.all([pMigracao, pCelulas, pMetas2]).then(function() {
       try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
       var el = document.getElementById('tab-listaPresenca-content');
       if (el && el.classList.contains('active')) lpRenderizar();
@@ -13525,7 +13535,7 @@ function _descAcompCarregarSupabase() {
       });
     }).catch(function(){});
 
-    var pCelulas = fetch(SB_URL + '/configuracoes?select=chave,valor', {
+    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent('desc_acomp_cel:') + '*&select=chave,valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(rows) {
       (rows || []).forEach(function(row) {
@@ -14915,7 +14925,7 @@ function _acompOutCarregarSupabase() {
       });
     }).catch(function(){});
 
-    var pCelulas = fetch(SB_URL + '/configuracoes?select=chave,valor', {
+    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent('acomp_out_cel:') + '*&select=chave,valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(rows) {
       (rows || []).forEach(function(row) {
