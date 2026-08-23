@@ -4169,6 +4169,18 @@ function relLetterIdx(l) {
   return n-1;
 }
 
+// ── Regra oficial Ocor.Aberta — Motivo (coluna S) x Agendamento (coluna AQ) ──
+// Uma linha com Motivo "Ocor.Aberta" só é desconsiderada quando o Agendamento
+// for diferente de "SIM"; com AQ = "SIM" a carga continua valendo. É o mesmo
+// filtro que a operação aplica na planilha do TMS e que a Consolidação de
+// Carregamento já usava isolada — agora centralizado aqui para o Planejamento
+// OUT e o Painel Executivo baterem com o Excel.
+function _relOcorIgnorar(r) {
+  if (!r) return false;
+  if (String(r.motivo || '').trim() !== 'Ocor.Aberta') return false;
+  return String(r.agend || '').trim().toUpperCase() !== 'SIM';
+}
+
 var REL_CNPJ_PRIORIDADE = new Set([
   '56998701003301','60659463000191','7863523001778','60318797000100',
   '60831658001220','6147451002186','77388007000157','11137051078614',
@@ -4461,6 +4473,22 @@ self.onmessage = function(e) {
 };
 `;
 
+// Traduz erros técnicos de leitura do Excel (o arquivo .xlsx é um ZIP por baixo) para uma
+// mensagem que diz o que fazer, em vez de mostrar o texto técnico em inglês direto (ex.:
+// "Bad compressed size: 0 != 280") — esses erros específicos praticamente sempre significam
+// que o arquivo chegou incompleto/corrompido no aparelho (download pela metade, sincronização
+// de nuvem incompleta etc.), não um bug do app; reimportar o mesmo Excel de novo resolve.
+function _relMensagemErroImport(msgTecnico) {
+  var m = String(msgTecnico || '').toLowerCase();
+  var pareceCorrompido = m.indexOf('compressed size') !== -1 || m.indexOf('central directory') !== -1 ||
+    m.indexOf('end of data') !== -1 || m.indexOf('bad zip') !== -1 || m.indexOf('corrupted') !== -1 ||
+    m.indexOf('unexpected end') !== -1 || m.indexOf('bad crc') !== -1;
+  if (pareceCorrompido) {
+    return 'O arquivo Excel parece incompleto ou corrompido (comum quando o download/sincronização não termina). Baixe/exporte o arquivo de novo do TMS e importe outra vez.';
+  }
+  return 'Erro ao ler o arquivo Excel: ' + msgTecnico;
+}
+
 function relFmtNum(n, dec) {
   if(!n) return '0';
   return n.toFixed(dec||0).replace(/\B(?=(\d{3})+(?!\d))/g,'.');
@@ -4482,7 +4510,12 @@ function relProcessarArrayBuffer(buffer) {
       worker.onmessage = function(e) {
         URL.revokeObjectURL(workerUrl);
         worker.terminate();
-        if (e.data.type === 'error') { if(relUpd) relUpd.textContent = 'Erro: '+e.data.msg; return; }
+        if (e.data.type === 'error') {
+          var msgAmigavel = _relMensagemErroImport(e.data.msg);
+          if(relUpd) relUpd.textContent = msgAmigavel;
+          if (typeof showToast === 'function') showToast('⚠️ ' + msgAmigavel, 'error');
+          return;
+        }
         relProcessarRows(e.data.rows);
       };
       worker.onerror = function(){ worker.terminate(); URL.revokeObjectURL(workerUrl); relProcessarRowsFallback(buffer); };
@@ -4500,7 +4533,13 @@ function relProcessarRowsFallback(buffer) {
       var wb = XLSX.read(buffer, {type:'array', cellDates:false});
       var ws = wb.Sheets[Object.keys(wb.Sheets)[0]];
       relProcessarRows(XLSX.utils.sheet_to_json(ws, {header:1, defval:null}));
-    } catch(ex){ console.error(ex); }
+    } catch(ex){
+      console.error(ex);
+      var msgAmigavel = _relMensagemErroImport(ex.message);
+      var relUpdFallback = document.getElementById('rel-updated');
+      if (relUpdFallback) relUpdFallback.textContent = msgAmigavel;
+      if (typeof showToast === 'function') showToast('⚠️ ' + msgAmigavel, 'error');
+    }
   }, 20);
 }
 
@@ -4698,6 +4737,11 @@ function relProcessarRows(rows) {
       if (typeof cargaCriticaRenderizar === 'function') setTimeout(cargaCriticaRenderizar, 200);
       if (typeof consolidacaoRenderizar === 'function') setTimeout(consolidacaoRenderizar, 220);
       if (typeof _cargaCriticaHistoricoRegistrar === 'function') setTimeout(_cargaCriticaHistoricoRegistrar, 250);
+      // Salva localmente JÁ (não depende do Supabase) — antes, o relatório só existia
+      // na memória da aba: um F5 ou fechar a aba apagava o import mesmo no aparelho
+      // de quem tinha acabado de importar, se a sincronização (mais lenta, em partes)
+      // ainda não tivesse terminado.
+      if (typeof _relSalvarLocal === 'function') _relSalvarLocal();
       // Salva no Supabase para outros usuários
       setTimeout(sbSalvarRelatorio, 500);
     }
@@ -5309,6 +5353,10 @@ function relGetDestsProgramados() {
 function relFiltrar() {
   var search=(document.getElementById('rel-search').value||'').toLowerCase();
   _relFilt=_relData.filter(function(r){
+    // Ocor.Aberta sem Agendamento = SIM não entra no Planejamento OUT. Sai da
+    // tabela e, por consequência, dos totalizadores, do Exportar Excel e da
+    // Impressão — todos derivam de _relFilt.
+    if (_relOcorIgnorar(r)) return false;
     // Filtro do card clicado
     if (_relCardFilter === 'crit' && r.cliente !== '⚠ Cliente critico') return false;
     if (_relCardFilter === 'plan' && r.disp !== 'Planejado') return false;
@@ -6112,9 +6160,19 @@ function sbInicializarRealtime() {
         if (chave === 'tms_planejamento') {
           // Recarrega planejamento imediatamente
           if (typeof sbCarregarPlanejamento === 'function') sbCarregarPlanejamento();
-        } else if (chave.indexOf('tms_relatorio') === 0) {
-          // Recarrega relatório imediatamente
+        } else if (chave === 'tms_relatorio_meta') {
+          // Recarrega relatório — só neste gatilho (não em cada parte isolada:
+          // tms_relatorio_0, tms_relatorio_1, etc.). O metadado é sempre gravado por
+          // último, depois que TODAS as partes já foram confirmadas no servidor, então
+          // esperar por ele garante que as partes buscadas em seguida already estão
+          // completas e consistentes entre si — antes, cada parte chegando isolada
+          // disparava uma recarga usando o metadado ainda ANTIGO (a nova contagem de
+          // partes só é gravada no fim), podendo aplicar uma mistura de partes velhas
+          // e novas em quem estivesse recebendo em tempo real.
           if (typeof sbCarregarRelatorio === 'function') sbCarregarRelatorio(true);
+        } else if (chave === 'tms_relatorio' || chave.indexOf('tms_relatorio_') === 0) {
+          // Parte isolada (tms_relatorio_N) ou chave legada de chunk único — sem
+          // metadado ainda mais recente confirmado, não recarrega sozinha (ver acima).
         } else if (chave.indexOf('cg_baseline_') === 0) {
           // Baseline de turno mudou em outra máquina — dispara o mesmo
           // polling que já existe (90s), garantindo merge correto e
@@ -6126,15 +6184,16 @@ function sbInicializarRealtime() {
         } else if (chave === 'descarga_historico_relatorio') {
           // Histórico de Relatório mudou em outra máquina (nova importação ou exclusão) — recarrega
           if (typeof _relatorioHistoricoCarregarSupabase === 'function') _relatorioHistoricoCarregarSupabase();
-        } else if (chave === 'descarga_acomp_data') {
-          // Dados do Acompanhamento de Produção (horas/conferente/impressões) mudaram em outra máquina.
-          // Usa o valor já entregue no payload do realtime — evita um novo GET que podia ler um
-          // snapshot desatualizado (anterior ao commit) e apagar dados recém-salvos localmente.
-          if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompAplicarDadosRemotos === 'function') {
-            _descAcompAplicarDadosRemotos(payload.new.valor);
-          } else if (typeof _descAcompCarregarSupabase === 'function') {
-            _descAcompCarregarSupabase();
+        } else if (chave.indexOf('desc_acomp_cel:') === 0) {
+          // Um MAC do Acompanhamento de Produção mudou em outra máquina — aplica só
+          // esse registro (nunca recarrega/substitui a tabela inteira).
+          var _macAcomp = chave.slice('desc_acomp_cel:'.length);
+          if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompAplicarCelulaRemota === 'function') {
+            try { _descAcompAplicarCelulaRemota(_macAcomp, JSON.parse(payload.new.valor)); } catch(e) {}
           }
+        } else if (chave === 'descarga_acomp_data') {
+          // Formato antigo (antes da correção por célula) — mantido só de fallback.
+          if (typeof _descAcompCarregarSupabase === 'function') _descAcompCarregarSupabase();
         } else if (chave === 'descarga_programacao_in') {
           // Programações impressas são permanentes por MAC/MEC e não devem ser
           // substituídas pelo estado atual dos checkboxes ou por novo import.
@@ -6150,8 +6209,15 @@ function sbInicializarRealtime() {
           } else if (typeof _descAcompListaCarregarSupabase === 'function') {
             _descAcompListaCarregarSupabase();
           }
+        } else if (chave.indexOf('acomp_out_cel:') === 0) {
+          // Um veículo do Acompanhamento OUT mudou em outra máquina — aplica só esse
+          // registro (nunca recarrega/substitui a tabela inteira).
+          var _idAcompOut = chave.slice('acomp_out_cel:'.length);
+          if (payload.new && typeof payload.new.valor === 'string' && typeof _acompOutAplicarCelulaRemota === 'function') {
+            try { _acompOutAplicarCelulaRemota(_idAcompOut, JSON.parse(payload.new.valor)); } catch(e) {}
+          }
         } else if (chave === 'acomp_out_data') {
-          // Dados do Acompanhamento OUT (horas/peso/conferente) mudaram em outra máquina
+          // Formato antigo (antes da correção por célula) — mantido só de fallback.
           if (typeof _acompOutCarregarSupabase === 'function') _acompOutCarregarSupabase();
         } else if (chave === 'carga_critica_historico') {
           // Histórico de Relatório da Carga Crítica mudou em outra máquina
@@ -6449,7 +6515,19 @@ function _deleteReenviarPendentes() {
 // Buscar todos os registros
 async function fbGetAll() {
   try {
-    var res = await fetch(SB_URL + '/programados?select=*&or=(deletado.eq.false,deletado.is.null)&limit=1000', { headers: SB_HEADERS });
+    // Tempo limite: sem isso, se o banco estivesse lento/sobrecarregado a requisição
+    // ficava pendurada para sempre e o app travava na mensagem "Conectando ao
+    // Supabase...", sem avisar nada nem liberar o uso dos dados locais.
+    var _ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var _timeoutId = setTimeout(function(){ if (_ctrl) _ctrl.abort(); }, 20000);
+    var _opts = { headers: SB_HEADERS };
+    if (_ctrl) _opts.signal = _ctrl.signal;
+    var res;
+    try {
+      res = await fetch(SB_URL + '/programados?select=*&or=(deletado.eq.false,deletado.is.null)&limit=1000', _opts);
+    } finally {
+      clearTimeout(_timeoutId);
+    }
     if (!res.ok) {
       var errText = await res.text();
       console.warn('Supabase GET status:', res.status, errText);
@@ -6464,6 +6542,12 @@ async function fbGetAll() {
     return ativos.map(sbToRec).filter(function(r){ return r._id > 0; });
   } catch(e) {
     console.warn('sbGetAll erro:', e.message);
+    var ehTimeout = (e && (e.name === 'AbortError' || String(e.message).indexOf('abort') !== -1));
+    if (typeof showToast === 'function') {
+      showToast(ehTimeout
+        ? '⚠️ O servidor demorou demais para responder. Mostrando os últimos dados salvos neste aparelho — atualize a página para tentar de novo.'
+        : '⚠️ Sem conexão com o servidor. Mostrando os últimos dados salvos neste aparelho.', 'error');
+    }
     return [];
   }
 }
@@ -6473,7 +6557,7 @@ function loadData() {
   loadLocal();
   renderProg();
   renderHist();
-  showSyncStatus('&#8635; Conectando ao Supabase...');
+  showSyncStatus('↻ Conectando ao Supabase...');
   fbGetAll().then(function(records) {
     hideSyncStatus();
     if (records && records.length > 0) {
@@ -6708,6 +6792,38 @@ function _relDescomprimir(o) {
   };
 }
 
+// Cache local do relatório importado — independente do Supabase. Guarda no MESMO
+// aparelho que importou, comprimido (mesmo formato usado na sincronização), para
+// sobreviver a um F5/fechar aba mesmo se a rede estiver fora ou a sincronização com
+// os outros usuários ainda não tiver terminado (ela é mais lenta, feita em partes).
+function _relSalvarLocal() {
+  try {
+    if (!_relData || !_relData.length) return;
+    var comprimidos = _relData.map(_relComprimir);
+    localStorage.setItem('rel_data_v1', JSON.stringify({
+      ts: _relDataTs ? _relDataTs.toISOString() : null,
+      dados: comprimidos
+    }));
+  } catch(e) {}
+}
+
+function _relCarregarLocal() {
+  try {
+    if (_relData && _relData.length) return; // já tem algo (ex.: Supabase respondeu mais rápido) — não sobrescreve
+    var raw = JSON.parse(localStorage.getItem('rel_data_v1') || 'null');
+    if (!raw || !raw.dados || !raw.dados.length) return;
+    _relData = raw.dados.map(_relDescomprimir);
+    _relDataTs = raw.ts ? new Date(raw.ts) : null;
+    var u = document.getElementById('rel-updated');
+    if (u && _relDataTs) u.textContent = 'Sincronizado: '+_relDataTs.toLocaleString('pt-BR')+' · '+_relData.length+' registros (cache local)';
+    if (typeof relFiltrar === 'function') relFiltrar();
+    if (typeof descargaRenderizar === 'function') descargaRenderizar();
+  } catch(e) {}
+}
+_relCarregarLocal(); // roda já, assim que este bloco termina de carregar — não espera a rede
+
+
+
 function sbSalvarRelatorio() {
   if (!_relData || !_relData.length) return;
   try {
@@ -6718,8 +6834,10 @@ function sbSalvarRelatorio() {
     var comprimidos = _relData.map(_relComprimir);
     var payload = JSON.stringify(comprimidos);
 
-    // Dividir em chunks de ~800KB
-    var CHUNK_SIZE = 600000;
+    // Dividir em chunks de ~250KB — antes eram ~600KB; em rede móvel mais lenta/
+    // instável, um POST/PATCH desse tamanho tem mais chance de cair no meio.
+    // Partes menores terminam mais rápido cada uma, o que reduz a chance de queda.
+    var CHUNK_SIZE = 250000;
     var chunks = [];
     if (payload.length <= CHUNK_SIZE) {
       chunks.push(payload);
@@ -6734,8 +6852,36 @@ function sbSalvarRelatorio() {
     var totalChunks = chunks.length;
     var salvos = 0;
     var erros = 0;
+    var ultimoErro = '';
+    var MAX_TENTATIVAS = 3; // tentativa original + 2 novas tentativas
 
-    function salvarChunk(idx) {
+    function finalizarSeCompleto() {
+      if (salvos + erros !== totalChunks) return;
+      if (erros === 0) {
+        // Salvar metadado com total de chunks e timestamp
+        var meta = JSON.stringify({ total: totalChunks, ts: agora, n: _relData.length });
+        fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio_meta', {
+          method: 'PATCH', headers: SB_HEADERS,
+          body: JSON.stringify({ valor: meta, atualizado_em: agora })
+        }).then(function(r){ return r.text(); }).then(function(t){
+          if (t === '[]' || t === '') {
+            fetch(SB_URL + '/configuracoes', {
+              method: 'POST',
+              headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+              body: JSON.stringify({ chave: 'tms_relatorio_meta', valor: meta, atualizado_em: agora })
+            });
+          }
+        });
+        showToast('☁️ Relatório sincronizado (' + _relData.length + ' registros, ' + totalChunks + ' parte(s))!', 'success');
+      } else if (salvos === 0) {
+        showToast('⚠️ Erro na sincronização' + (ultimoErro ? ' (' + ultimoErro + ')' : '') + '. O relatório já está salvo neste aparelho, mas seus colegas ainda não vão vê-lo — tente sincronizar de novo quando a conexão melhorar.', 'error');
+      } else {
+        showToast('⚠️ Sincronização parcial: ' + erros + ' de ' + totalChunks + ' parte(s) falharam' + (ultimoErro ? ' (' + ultimoErro + ')' : '') + '. Tente de novo.', 'error');
+      }
+    }
+
+    function salvarChunk(idx, tentativa) {
+      tentativa = tentativa || 1;
       var chave = totalChunks === 1 ? 'tms_relatorio' : 'tms_relatorio_' + idx;
       var body = { chave: chave, valor: chunks[idx], atualizado_em: agora };
       // PATCH primeiro (atualiza timestamp), depois POST se não existir
@@ -6756,34 +6902,22 @@ function sbSalvarRelatorio() {
         });
       }).then(function() {
         salvos++;
-        if (salvos + erros === totalChunks) {
-          if (erros === 0) {
-            // Salvar metadado com total de chunks e timestamp
-            var meta = JSON.stringify({ total: totalChunks, ts: agora, n: _relData.length });
-            fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio_meta', {
-              method: 'PATCH', headers: SB_HEADERS,
-              body: JSON.stringify({ valor: meta, atualizado_em: agora })
-            }).then(function(r){ return r.text(); }).then(function(t){
-              if (t === '[]' || t === '') {
-                fetch(SB_URL + '/configuracoes', {
-                  method: 'POST',
-                  headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-                  body: JSON.stringify({ chave: 'tms_relatorio_meta', valor: meta, atualizado_em: agora })
-                });
-              }
-            });
-            showToast('☁️ Relatório sincronizado (' + _relData.length + ' registros, ' + totalChunks + ' parte(s))!', 'success');
-          } else {
-            showToast('⚠️ Sincronização parcial: ' + erros + ' erro(s)', 'error');
-          }
+        finalizarSeCompleto();
+      }).catch(function(err) {
+        // Queda passageira de conexão é comum em rede móvel — tenta de novo antes
+        // de desistir, em vez de falhar na primeira tentativa e obrigar a reimportar
+        // o Excel inteiro.
+        if (tentativa < MAX_TENTATIVAS) {
+          setTimeout(function(){ salvarChunk(idx, tentativa + 1); }, 1200 * tentativa);
+          return;
         }
-      }).catch(function() {
         erros++;
-        if (salvos + erros === totalChunks) showToast('⚠️ Erro na sincronização', 'error');
+        ultimoErro = (err && err.message) ? err.message : 'sem resposta do servidor';
+        finalizarSeCompleto();
       });
     }
 
-    for (var ci = 0; ci < totalChunks; ci++) salvarChunk(ci);
+    for (var ci = 0; ci < totalChunks; ci++) salvarChunk(ci, 1);
   } catch(e) { showToast('⚠️ Erro: ' + e.message, 'error'); }
 }
 
@@ -6803,6 +6937,7 @@ function _relAplicarDados(registros, ts, forcar) {
   if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
   if (typeof cgRenderizar === 'function' && _cgData) setTimeout(function(){ cgRenderizar(_cgData); }, 400);
   if (forcar !== true) showToast('🔄 Relatório atualizado automaticamente (' + ts.toLocaleString('pt-BR') + ')', 'info');
+  if (typeof _relSalvarLocal === 'function') _relSalvarLocal();
 }
 
 function sbCarregarRelatorio(forcar) {
@@ -6862,6 +6997,7 @@ function sbCarregarRelatorio(forcar) {
               showToast('⚠️ Relatório incompleto (' + parsed.length + ' registros). Reimporte o Excel TMS nesta máquina para sincronizar todos os dados.', 'error');
             }, 2500);
           }
+          if (typeof _relSalvarLocal === 'function') _relSalvarLocal();
         }
       } else {
         // Múltiplos chunks — buscar todos em paralelo
@@ -6874,6 +7010,13 @@ function sbCarregarRelatorio(forcar) {
           data.sort(function(a,b){ return a.chave < b.chave ? -1 : 1; });
           var todos = [];
           data.forEach(function(d){ try { todos = todos.concat(JSON.parse(d.valor)); } catch(e){} });
+          // Confere o total combinado contra o que foi gravado no metadado (meta.n) —
+          // pegava chunk com conteúdo truncado/corrompido sem avisar, mesmo com a
+          // quantidade de PARTES certa (a checagem acima só conta partes, não registros).
+          if (meta && typeof meta.n === 'number' && todos.length < meta.n) {
+            showToast('⚠️ Relatório sincronizado incompleto (' + todos.length + ' de ' + meta.n + ' registros). Peça para reimportar o Excel TMS.', 'error');
+            return;
+          }
           _relAplicarDados(todos, ts, forcar);
         }).catch(function(){});
       }
@@ -7092,7 +7235,7 @@ function autoPreencherDataCrit() {
 }
 
 function syncManual() {
-  showSyncStatus('&#8635; Buscando dados...');
+  showSyncStatus('↻ Buscando dados...');
   _sbLastHash = ''; // limpa o cache de hash para forçar atualização completa
   fbGetAll().then(function(recs) {
     if (recs && recs.length > 0) {
@@ -7123,7 +7266,7 @@ async function salvarTudoFirebase() {
   // Bug fix 3: pausar auto-sync durante o loop para evitar sobrescrita parcial
   _sbPollPaused = true;
   _sbLastHash = ''; // forçar re-fetch após as saves
-  showSyncStatus('&#8635; Salvando ' + lista.length + ' registros...');
+  showSyncStatus('↻ Salvando ' + lista.length + ' registros...');
   var erros = 0;
   try {
     for (var i = 0; i < lista.length; i++) {
@@ -7733,10 +7876,11 @@ function lpCarregarSupabase() {
     }).catch(function(){});
 
     // 2) Estado atual, célula a célula — fonte de verdade para tudo já salvo no
-    //    formato novo. Busca todas as linhas de configuracoes e filtra no JS (evita
-    //    depender de um operador de filtro do PostgREST ainda não usado em nenhum
-    //    outro ponto do app).
-    var pCelulas = fetch(SB_URL + '/configuracoes?select=chave,valor', {
+    //    formato novo. Busca só as linhas desta funcionalidade (prefixo lp_cel:/
+    //    lp_meta:), não a tabela configuracoes inteira — com o Acompanhamento IN/OUT
+    //    e o Relatório TMS também gravando por célula agora, a tabela ficou grande
+    //    demais para buscar tudo de uma vez em toda carga (causava timeout no banco).
+    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(LP_PREFIXO_CELULA) + '*&select=chave,valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(rows) {
       (rows || []).forEach(function(row) {
@@ -7749,14 +7893,23 @@ function lpCarregarSupabase() {
           if (!_lpDados.dias[dia][fluxo]) _lpDados.dias[dia][fluxo] = {};
           if (!_lpDados.dias[dia][fluxo][turno]) _lpDados.dias[dia][fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
           _lpDados.dias[dia][fluxo][turno][funcao] = row.valor;
-        } else if (chave.indexOf(LP_PREFIXO_META) === 0) {
+        }
+      });
+    }).catch(function(){});
+
+    var pMetas2 = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(LP_PREFIXO_META) + '*&select=chave,valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(rows) {
+      (rows || []).forEach(function(row) {
+        var chave = String(row.chave || '');
+        if (chave.indexOf(LP_PREFIXO_META) === 0) {
           var campo = chave.slice(LP_PREFIXO_META.length);
           if (['ajudante','conferente','atuacao'].indexOf(campo) !== -1) _lpDados.metas[campo] = row.valor;
         }
       });
     }).catch(function(){});
 
-    Promise.all([pMigracao, pCelulas]).then(function() {
+    Promise.all([pMigracao, pCelulas, pMetas2]).then(function() {
       try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
       var el = document.getElementById('tab-listaPresenca-content');
       if (el && el.classList.contains('active')) lpRenderizar();
@@ -13186,7 +13339,8 @@ function _descAcompResetarImpressoes() {
   }
 }
 
-// Mesma proteção contra eco do realtime usada em _descAcompSalvandoLocal, aplicada à lista.
+// Proteção contra eco do realtime para a lista/fila (mecanismo próprio, separado do
+// _descAcompData por célula acima — a lista é um array, não um mapa por chave).
 var _descAcompListaSalvandoLocal = false;
 var _descAcompListaSalvandoLocalTimer = null;
 function _descAcompListaMarcarSalvandoLocal() {
@@ -13325,18 +13479,6 @@ function _descAcompListaMerge() {
 }
 
 
-// Janela de proteção: enquanto true, ignora atualizações remotas (realtime) para
-// não sobrescrever uma edição local recém-feita com um eco desatualizado do próprio
-// salvamento (causa da perda de dados: o GET do realtime podia ler um snapshot
-// anterior ao commit e substituir o valor recém-digitado).
-var _descAcompSalvandoLocal = false;
-var _descAcompSalvandoLocalTimer = null;
-function _descAcompMarcarSalvandoLocal() {
-  _descAcompSalvandoLocal = true;
-  clearTimeout(_descAcompSalvandoLocalTimer);
-  _descAcompSalvandoLocalTimer = setTimeout(function(){ _descAcompSalvandoLocal = false; }, 4000);
-}
-
 // Mesma proteção de foco usada no Acompanhamento OUT: enquanto houver um campo
 // em foco nesta aba, a tabela não é reconstruída (o cursor sairia do campo).
 var _descAcompRenderPendente = false;
@@ -13361,50 +13503,104 @@ document.addEventListener('focusout', function(e) {
   }, 150);
 }, true);
 
+// PERSISTÊNCIA: cada MAC é gravado como sua PRÓPRIA linha no Supabase (chave =
+// 'desc_acomp_cel:<mac>'), em vez de um único blob com todos os MACs juntos. Antes,
+// havia uma janela de 4s que ignorava QUALQUER atualização remota após uma gravação
+// local, para tentar evitar que um eco do realtime apagasse o que acabara de ser
+// digitado — mas enquanto o usuário seguisse editando (cada edição renovava os 4s),
+// as atualizações de QUALQUER outro MAC, feitas por QUALQUER outro usuário, ficavam
+// permanentemente invisíveis nesta aba. E mesmo assim não resolvia a causa raiz: a
+// PRÓPRIA gravação local continuava reenviando o blob inteiro por cima do servidor,
+// então o que outro usuário tivesse acabado de salvar era apagado de qualquer jeito.
+// Confirmado com um teste isolado antes desta correção. Com uma linha por MAC, os
+// dois problemas somem juntos: não existe mais "o resto do blob" para se perder, e
+// atualizações de outros MACs chegam na hora, mesmo com esta aba em edição contínua.
+// Guarda o último valor de cada MAC já gravado no servidor, para _descAcompSalvar()
+// saber quais mudaram de fato. IMPORTANTE: é inicializado com o que veio do
+// localStorage — sem isso, o primeiro clique em QUALQUER campo disparava uma gravação
+// para TODOS os MACs de uma vez (47+ requisições simultâneas), e cada uma dessas
+// gravações ainda disparava um evento de tempo real para todas as outras máquinas,
+// virando uma avalanche de requisições que derrubava o banco (erro 57014, timeout).
+var _descAcompUltimoSalvo = {};
+try {
+  Object.keys(_descAcompData).forEach(function(mac) {
+    _descAcompUltimoSalvo[mac] = JSON.stringify(_descAcompData[mac]);
+  });
+} catch(ex) {}
+
 function _descAcompSalvar() {
   try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(ex) {}
-  _descAcompMarcarSalvandoLocal();
-  _descAcompSalvarSupabase(); // compartilha com todos os usuários
+  Object.keys(_descAcompData).forEach(function(mac) {
+    var atual = JSON.stringify(_descAcompData[mac]);
+    if (_descAcompUltimoSalvo[mac] === atual) return; // este MAC não mudou desde a última gravação
+    _descAcompUltimoSalvo[mac] = atual;
+    _descAcompSalvarCelulaSupabase(mac, _descAcompData[mac]);
+  });
 }
 
-// Salva os dados de cada MAC (horaInicio/horaFim/conferente/doca/impressões) no Supabase
-function _descAcompSalvarSupabase() {
+function _descAcompSalvarCelulaSupabase(mac, registro) {
   try {
     fetch(SB_URL + '/configuracoes', {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: 'descarga_acomp_data', valor: JSON.stringify(_descAcompData) })
+      body: JSON.stringify({ chave: 'desc_acomp_cel:' + mac, valor: JSON.stringify(registro) })
     }).catch(function(){});
   } catch(e) {}
 }
 
-// Aplica um valor (string JSON) de _descAcompData vindo do servidor — usado tanto
-// pelo carregamento inicial/polling quanto pelo payload do realtime (evita um 2º
-// fetch que poderia ler um snapshot desatualizado e apagar dados recém-salvos).
-function _descAcompAplicarDadosRemotos(valorStr) {
-  if (!valorStr) return;
-  if (_descAcompSalvandoLocal) return; // edição local em andamento — não sobrescrever
-  try {
-    _descAcompData = JSON.parse(valorStr);
-  } catch(e) { return; }
+// Aplica o registro de UM MAC vindo do servidor (carga inicial, polling ou o payload
+// direto do realtime) — nunca mais precisa recarregar/substituir a tabela inteira,
+// então a edição de um MAC por um usuário nunca interfere na de outro, mesmo que
+// esta aba esteja com um campo em edição contínua no momento.
+function _descAcompAplicarCelulaRemota(mac, registro) {
+  if (!mac) return;
+  _descAcompData[mac] = registro || {};
+  _descAcompUltimoSalvo[mac] = JSON.stringify(_descAcompData[mac]);
   try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
   if (typeof descargaAcompRenderizar === 'function') {
     var tab = document.getElementById('tab-descargaAcomp-content');
-    if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
+    if (tab && tab.classList.contains('active')) descargaAcompRenderizar(); // já adia sozinho se houver campo em foco
   }
 }
 
-// Carrega os dados de cada MAC do Supabase (chamado no início do app; via realtime
-// usa-se o payload direto, ver _descAcompAplicarDadosRemotos)
+// Carrega os dados de cada MAC do Supabase: primeiro migra o que existir no blob
+// antigo (formato usado antes desta correção, para não perder histórico), depois lê
+// cada linha já no formato novo (uma por MAC).
 function _descAcompCarregarSupabase() {
   try {
-    fetch(SB_URL + '/configuracoes?chave=eq.descarga_acomp_data&select=valor', {
+    var pMigracao = fetch(SB_URL + '/configuracoes?chave=eq.descarga_acomp_data&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
-      if (data && data.length && data[0].valor) {
-        _descAcompAplicarDadosRemotos(data[0].valor);
-      }
+      if (!data || !data.length || !data[0].valor) return;
+      var remoto = null;
+      try { remoto = JSON.parse(data[0].valor); } catch(e) { return; }
+      if (!remoto) return;
+      Object.keys(remoto).forEach(function(mac) {
+        if (!_descAcompData[mac]) _descAcompData[mac] = remoto[mac];
+      });
     }).catch(function(){});
+
+    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent('desc_acomp_cel:') + '*&select=chave,valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(rows) {
+      (rows || []).forEach(function(row) {
+        var chave = String(row.chave || '');
+        if (chave.indexOf('desc_acomp_cel:') !== 0) return;
+        var mac = chave.slice('desc_acomp_cel:'.length);
+        try {
+          _descAcompData[mac] = JSON.parse(row.valor);
+          _descAcompUltimoSalvo[mac] = row.valor;
+        } catch(e) {}
+      });
+    }).catch(function(){});
+
+    Promise.all([pMigracao, pCelulas]).then(function() {
+      try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
+      if (typeof descargaAcompRenderizar === 'function') {
+        var tab = document.getElementById('tab-descargaAcomp-content');
+        if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
+      }
+    });
   } catch(e) {}
 }
 
@@ -14709,40 +14905,100 @@ function _acompOutPesoOficial(r, rec, mapaTms) {
   return pesoTms > 0 ? pesoTms : pesoManual;
 }
 
+// PERSISTÊNCIA: cada veículo (id) é gravado como sua PRÓPRIA linha no Supabase
+// (chave = 'acomp_out_cel:<id>'), em vez de um único blob com todos os veículos
+// juntos. Antes, QUALQUER gravação reenviava _acompOutData inteiro por cima do que
+// já estava salvo — se o conferente do veículo A tivesse acabado de preencher os
+// dados dele e, segundos depois, o conferente do veículo B salvasse os dele (outra
+// aba/PC), a segunda gravação apagava o veículo A inteiro, porque a tela de B nunca
+// tinha visto aquele registro. Confirmado com um teste isolado antes desta correção.
+// _acompOutUltimoSalvo guarda o último valor de cada veículo que já foi persistido,
+// para _acompOutSalvar() saber (por comparação, sem precisar mudar as ~3 chamadas
+// espalhadas pelo código) QUAL veículo mudou e gravar só ele.
 var _acompOutData = {};
 try { _acompOutData = JSON.parse(localStorage.getItem('acomp_out_v1') || '{}'); } catch(ex) { _acompOutData = {}; }
+var _acompOutUltimoSalvo = {};
+// Inicializa com o que veio do localStorage — sem isso, o primeiro clique em qualquer
+// campo disparava uma gravação para TODOS os veículos de uma vez (ver comentário
+// equivalente no Acompanhamento IN: causava avalanche de requisições e timeout no banco).
+try {
+  Object.keys(_acompOutData).forEach(function(id) {
+    _acompOutUltimoSalvo[id] = JSON.stringify(_acompOutData[id]);
+  });
+} catch(ex) {}
 
 function _acompOutSalvar() {
   try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(ex) {}
-  _acompOutSalvarSupabase(); // compartilha com todos os usuários
+  Object.keys(_acompOutData).forEach(function(id) {
+    var atual = JSON.stringify(_acompOutData[id]);
+    if (_acompOutUltimoSalvo[id] === atual) return; // este veículo não mudou desde a última gravação
+    _acompOutUltimoSalvo[id] = atual;
+    _acompOutSalvarCelulaSupabase(id, _acompOutData[id]);
+  });
 }
 
-// Salva os dados de Acompanhamento OUT (horaInicio/horaFim/pesoOpl/conferente/qtdConf/qtdAjud) no Supabase
-function _acompOutSalvarSupabase() {
+function _acompOutSalvarCelulaSupabase(id, registro) {
   try {
     fetch(SB_URL + '/configuracoes', {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: 'acomp_out_data', valor: JSON.stringify(_acompOutData) })
+      body: JSON.stringify({ chave: 'acomp_out_cel:' + id, valor: JSON.stringify(registro) })
     }).catch(function(){});
   } catch(e) {}
 }
 
-// Carrega os dados de Acompanhamento OUT do Supabase (chamado no início do app e via realtime)
+// Aplica o registro de UM veículo vindo do servidor (carga inicial, polling ou o
+// payload direto do realtime) — nunca mais precisa recarregar/substituir a tabela
+// inteira, então a edição de um veículo por um usuário nunca interfere na de outro.
+function _acompOutAplicarCelulaRemota(id, registro) {
+  if (!id) return;
+  _acompOutData[id] = registro || { pesoOpl: '', horaInicio: '', horaFim: '', conferente: '' };
+  _acompOutUltimoSalvo[id] = JSON.stringify(_acompOutData[id]);
+  try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(e){}
+  if (typeof acompOutRenderizar === 'function') {
+    var tab = document.getElementById('tab-acompOut-content');
+    if (tab && tab.classList.contains('active')) acompOutRenderizar(); // já adia sozinho se houver campo em foco (_acompOutFocoNaTabela)
+  }
+}
+
+// Carrega os dados de Acompanhamento OUT do Supabase: primeiro migra o que existir
+// no blob antigo (formato usado antes desta correção, para não perder histórico),
+// depois lê cada linha já no formato novo (uma por veículo).
 function _acompOutCarregarSupabase() {
   try {
-    fetch(SB_URL + '/configuracoes?chave=eq.acomp_out_data&select=valor', {
+    var pMigracao = fetch(SB_URL + '/configuracoes?chave=eq.acomp_out_data&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
-      if (data && data.length && data[0].valor) {
-        _acompOutData = JSON.parse(data[0].valor);
-        try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(e){}
-        if (typeof acompOutRenderizar === 'function') {
-          var tab = document.getElementById('tab-acompOut-content');
-          if (tab && tab.classList.contains('active')) acompOutRenderizar();
-        }
-      }
+      if (!data || !data.length || !data[0].valor) return;
+      var remoto = null;
+      try { remoto = JSON.parse(data[0].valor); } catch(e) { return; }
+      if (!remoto) return;
+      Object.keys(remoto).forEach(function(id) {
+        if (!_acompOutData[id]) _acompOutData[id] = remoto[id];
+      });
     }).catch(function(){});
+
+    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent('acomp_out_cel:') + '*&select=chave,valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(rows) {
+      (rows || []).forEach(function(row) {
+        var chave = String(row.chave || '');
+        if (chave.indexOf('acomp_out_cel:') !== 0) return;
+        var id = chave.slice('acomp_out_cel:'.length);
+        try {
+          _acompOutData[id] = JSON.parse(row.valor);
+          _acompOutUltimoSalvo[id] = row.valor;
+        } catch(e) {}
+      });
+    }).catch(function(){});
+
+    Promise.all([pMigracao, pCelulas]).then(function() {
+      try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(e){}
+      if (typeof acompOutRenderizar === 'function') {
+        var tab = document.getElementById('tab-acompOut-content');
+        if (tab && tab.classList.contains('active')) acompOutRenderizar();
+      }
+    });
   } catch(e) {}
 }
 
@@ -15664,7 +15920,12 @@ function _cargaCriticaCalcularMacro() {
     geral:  { ctrcSet: new Set(), peso: 0, vols: 0 },
     fila:   { ctrcSet: new Set(), peso: 0, vols: 0 },
     disp:   { ctrcSet: new Set(), peso: 0, vols: 0 },
-    plani:  { ctrcSet: new Set(), peso: 0, vols: 0 }
+    plani:  { ctrcSet: new Set(), peso: 0, vols: 0 },
+    // Disponível já sem Ocor.Aberta (AQ != SIM). Campo NOVO e adicional: o
+    // "disp" acima segue idêntico, para a Carga Crítica e seu Histórico não
+    // mudarem. Quem consome esse recorte é o Extrato do Dia do Painel
+    // Executivo (OUT), via pipelineDe().
+    dispSemOcor: { ctrcSet: new Set(), peso: 0, vols: 0 }
   };
 
   _relData.forEach(function(r) {
@@ -15682,6 +15943,10 @@ function _cargaCriticaCalcularMacro() {
     } else if (disp === 'disponível') {
       macro.disp.peso += peso; macro.disp.vols += vols;
       if (ctrc) macro.disp.ctrcSet.add(ctrc);
+      if (!_relOcorIgnorar(r)) {
+        macro.dispSemOcor.peso += peso; macro.dispSemOcor.vols += vols;
+        if (ctrc) macro.dispSemOcor.ctrcSet.add(ctrc);
+      }
     } else if (disp === 'planejado') {
       macro.plani.peso += peso; macro.plani.vols += vols;
       if (ctrc) macro.plani.ctrcSet.add(ctrc);
@@ -15698,14 +15963,16 @@ function _cargaCriticaCalcularMacro() {
     geral: 100,
     fila:  totalPeso > 0 ? Math.round((macro.fila.peso  / totalPeso) * 100) : 0,
     disp:  totalPeso > 0 ? Math.round((macro.disp.peso  / totalPeso) * 100) : 0,
-    plani: totalPeso > 0 ? Math.round((macro.plani.peso / totalPeso) * 100) : 0
+    plani: totalPeso > 0 ? Math.round((macro.plani.peso / totalPeso) * 100) : 0,
+    dispSemOcor: totalPeso > 0 ? Math.round((macro.dispSemOcor.peso / totalPeso) * 100) : 0
   };
 
   return {
     geral: Object.assign(fmt(macro.geral), { pct: pct.geral }),
     fila:  Object.assign(fmt(macro.fila),  { pct: pct.fila }),
     disp:  Object.assign(fmt(macro.disp),  { pct: pct.disp }),
-    plani: Object.assign(fmt(macro.plani), { pct: pct.plani })
+    plani: Object.assign(fmt(macro.plani), { pct: pct.plani }),
+    dispSemOcor: Object.assign(fmt(macro.dispSemOcor), { pct: pct.dispSemOcor })
   };
 }
 
@@ -17335,7 +17602,12 @@ function _gvFluxoFilaOUT() {
   // uma no Plano e outra no card Programado.
   function pipelineDe(e) {
     var m = (e && e.macro) || {};
-    return ((m.disp || {}).kg) || 0;
+    // Base do Extrato do Dia (OUT) = Disponível já sem Ocor.Aberta. Snapshots
+    // gravados antes da V149 não têm "dispSemOcor" — nesses, cai no "disp"
+    // antigo em vez de zerar a cascata. A série se corrige sozinha a partir da
+    // primeira importação feita nesta versão.
+    var d = m.dispSemOcor || m.disp || {};
+    return d.kg || 0;
   }
 
   function turnoDe(horaStr) {
@@ -17982,7 +18254,10 @@ function gestaoVistaRenderizar() {
     var _icdAtrasado = 0, _icdHoje = 0, _icdNoPrazo = 0;
     // No OUT (Carregamento), o cálculo considera só o que está Disponível para carregamento
     var _icdBase = (_gvVisaoAtual === 'out')
-      ? relData.filter(function(r){ return String(r.disp||'').trim().toLowerCase() === 'disponível'; })
+      ? relData.filter(function(r){
+          if (_relOcorIgnorar(r)) return false;
+          return String(r.disp||'').trim().toLowerCase() === 'disponível';
+        })
       : relData;
     _icdBase.forEach(function(r) {
       var sit = (typeof _cargaCriticaSituacaoDe === 'function') ? _cargaCriticaSituacaoDe(r) : 'No Prazo';
@@ -18216,6 +18491,9 @@ function gestaoVistaRenderizar() {
       var statusEtapaOut = {};
       POSICOES_OUT.forEach(function(p){ statusEtapaOut[p] = { atrasado:0, hoje:0, noPrazo:0, agendamento:0 }; });
       relData.forEach(function(r) {
+        // Mesma exclusão do Planejamento OUT: a linha sai do quadro inteiro,
+        // não só da Posição Disponível.
+        if (_relOcorIgnorar(r)) return;
         var pos = String(r.posicao || '').trim();
         var c = statusEtapaOut[pos];
         if (!c) return; // posição "—" (sem classificação) fica fora da tabela
