@@ -3905,6 +3905,15 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof _histRelOutCarregarSupabase === 'function') setInterval(_histRelOutCarregarSupabase, 120000);
   // Carregar Acompanhamento de Produção do Supabase (horas/conferente/impressões + fila/"Finalizado Anteriormente")
   if (typeof _descAcompCarregarSupabase === 'function') setTimeout(_descAcompCarregarSupabase, 1400);
+  // ── Reforço periódico das fontes do Painel Executivo ──────────────────────
+  // Até a V149, Acompanhamento IN, Acompanhamento OUT e Histórico de Relatório IN
+  // eram lidos UMA ÚNICA VEZ, na abertura da página, e daí em diante dependiam
+  // exclusivamente do WebSocket do Realtime. Só o Histórico OUT tinha rede de
+  // segurança (setInterval logo acima). Bastava o canal cair para a sessão
+  // congelar em silêncio nos números antigos, sem nenhuma forma de convergir de
+  // volta. Este ciclo de 60s repõe o que o tempo real deixar escapar; é somente
+  // leitura (GET), então não gera gravação nem risco de avalanche de escrita.
+  if (typeof _sbResincronizarFontesPainel === 'function') setInterval(_sbResincronizarFontesPainel, 60000);
   if (typeof _descProgramacaoCarregarSupabase === 'function') setTimeout(_descProgramacaoCarregarSupabase, 1425);
   if (typeof _descAcompListaCarregarSupabase === 'function') setTimeout(_descAcompListaCarregarSupabase, 1450);
   if (typeof _cargaCriticaHistoricoCarregarSupabase === 'function') setTimeout(_cargaCriticaHistoricoCarregarSupabase, 1500);
@@ -6135,12 +6144,45 @@ var SB_HEADERS = {
 };
 
 // ══════════════════════════════════════════════════════════════════════
+// REDESENHO DO PAINEL EXECUTIVO SOB DEMANDA
+// O Painel Executivo lê _descAcompData (Executado IN), _acompOutData
+// (Executado OUT) e _relatorioHistorico (Plano do dia IN) no instante em que
+// renderiza — mas NÃO era avisado quando qualquer uma dessas fontes mudava
+// vindo de outra máquina. O dado chegava na memória pelo Realtime e ficava lá,
+// invisível: a tela só se redesenhava ao trocar de aba, trocar de visão,
+// filtrar turno, ou de carona no reforço de 120s do Histórico OUT (que existe
+// para outra finalidade). Resultado: dois usuários no mesmo painel viam pesos
+// diferentes por tempo indeterminado. Esta função é chamada por todos os
+// pontos que atualizam essas fontes; se a aba não estiver aberta não faz nada,
+// porque o showTab já renderiza na entrada.
+// ══════════════════════════════════════════════════════════════════════
+function _gvRedesenharSeAtivo() {
+  try {
+    var tab = document.getElementById('tab-gestaoVista-content');
+    if (!tab || !tab.classList.contains('active')) return;
+    if (typeof gestaoVistaRenderizar === 'function') gestaoVistaRenderizar();
+  } catch (e) {}
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // SUPABASE REALTIME — sincronização instantânea via WebSocket
 // Fallback automático: se a lib não carregar ou a conexão cair, o sistema
 // continua funcionando normalmente via polling (REST), só que mais devagar.
 // ══════════════════════════════════════════════════════════════════════
 var _sbClient = null;
 var _sbRealtimeOk = false;
+var _sbRealtimeCaiu = false;
+
+// Relê do Supabase todas as fontes que alimentam o Painel Executivo. Usada em
+// dois momentos: no reforço periódico (rede de segurança) e logo após o Realtime
+// reconectar de uma queda, para repor o que deixou de chegar enquanto esteve fora.
+function _sbResincronizarFontesPainel() {
+  try {
+    if (typeof _descAcompCarregarSupabase === 'function') _descAcompCarregarSupabase();
+    if (typeof _acompOutCarregarSupabase === 'function') _acompOutCarregarSupabase();
+    if (typeof _relatorioHistoricoCarregarSupabase === 'function') _relatorioHistoricoCarregarSupabase();
+  } catch (e) {}
+}
 
 function sbInicializarRealtime() {
   try {
@@ -6231,9 +6273,26 @@ function sbInicializarRealtime() {
         }
       })
       .subscribe(function(status) {
+        // Antes, só o SUBSCRIBED era tratado: _sbRealtimeOk virava true e nunca
+        // mais era consultado. Se o WebSocket caísse (rede da empresa, proxy,
+        // máquina suspensa, aba muito tempo em segundo plano), a sessão parava de
+        // receber atualizações PARA SEMPRE, em silêncio — e o Acompanhamento IN/OUT
+        // não tinha nenhum polling de reforço para compensar. Agora a queda é
+        // registrada e, ao reconectar, tudo que depende deste canal é relido do
+        // servidor de uma vez, para recuperar o que foi perdido enquanto esteve fora.
         if (status === 'SUBSCRIBED') {
+          var reconectou = (_sbRealtimeOk === false && _sbRealtimeCaiu);
           _sbRealtimeOk = true;
+          _sbRealtimeCaiu = false;
           console.log('[realtime] Canal configuracoes conectado ✅');
+          if (reconectou) {
+            console.warn('[realtime] Reconectado após queda — re-sincronizando fontes do painel.');
+            _sbResincronizarFontesPainel();
+          }
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          _sbRealtimeOk = false;
+          _sbRealtimeCaiu = true;
+          console.warn('[realtime] Canal configuracoes fora do ar (' + status + ') — reforço periódico assume até reconectar.');
         }
       });
 
@@ -13528,14 +13587,33 @@ try {
   });
 } catch(ex) {}
 
+// Instante da última edição de CADA MAC nesta máquina. O reforço periódico
+// introduzido nesta versão lê o servidor de tempos em tempos; sem esta marca,
+// uma leitura que tivesse saído do banco ANTES da gravação local chegar lá
+// voltaria por cima do que o usuário acabou de digitar. Dentro da janela abaixo
+// o valor local vence; passada ela, o servidor volta a ser a fonte da verdade,
+// exatamente como sempre foi. Não vale para o Realtime: ali o payload é o
+// próprio registro recém-gravado, então nunca é mais velho que o local.
+var _descAcompEditadoLocalEm = {};
+var _DESC_ACOMP_JANELA_LOCAL_MS = 20000;
+function _descAcompLocalMaisNovo(mac) {
+  var t = _descAcompEditadoLocalEm[mac];
+  return !!(t && (Date.now() - t) < _DESC_ACOMP_JANELA_LOCAL_MS);
+}
+
 function _descAcompSalvar() {
   try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(ex) {}
   Object.keys(_descAcompData).forEach(function(mac) {
     var atual = JSON.stringify(_descAcompData[mac]);
     if (_descAcompUltimoSalvo[mac] === atual) return; // este MAC não mudou desde a última gravação
     _descAcompUltimoSalvo[mac] = atual;
+    _descAcompEditadoLocalEm[mac] = Date.now();
     _descAcompSalvarCelulaSupabase(mac, _descAcompData[mac]);
   });
+  // O Executado do Painel Executivo (IN) sai daqui: quando a hora de fim é
+  // lançada nesta máquina, o painel precisa refletir na hora, e não só na
+  // próxima troca de aba.
+  _gvRedesenharSeAtivo();
 }
 
 function _descAcompSalvarCelulaSupabase(mac, registro) {
@@ -13561,16 +13639,94 @@ function _descAcompAplicarCelulaRemota(mac, registro) {
     var tab = document.getElementById('tab-descargaAcomp-content');
     if (tab && tab.classList.contains('active')) descargaAcompRenderizar(); // já adia sozinho se houver campo em foco
   }
+  // Era exatamente aqui que a atualização morria: o registro do outro usuário
+  // chegava e entrava em _descAcompData, mas só a aba Acompanhamento IN era
+  // redesenhada. Quem estivesse com o Painel Executivo aberto continuava vendo
+  // o Executado antigo até trocar de aba.
+  _gvRedesenharSeAtivo();
 }
 
 // Carrega os dados de cada MAC do Supabase: primeiro migra o que existir no blob
 // antigo (formato usado antes desta correção, para não perder histórico), depois lê
 // cada linha já no formato novo (uma por MAC).
+// ══════════════════════════════════════════════════════════════════════
+// LEITURA PAGINADA DAS CHAVES POR CÉLULA
+// As chaves 'desc_acomp_cel:<mac>' e 'acomp_out_cel:<id>' nunca são apagadas do
+// Supabase — a limpeza de 3 dias só remove da memória local. A tabela
+// 'configuracoes' cresce indefinidamente, e as leituras eram feitas SEM limit,
+// SEM order e SEM paginação: o PostgREST corta a resposta no teto de linhas do
+// servidor e devolve uma fatia ARBITRÁRIA, porque sem ORDER BY não existe ordem
+// garantida. E como o Postgres reescreve a linha em nova posição física a cada
+// UPDATE, justamente os registros recém-editados (a hora de fim que outro
+// usuário acabou de lançar) eram os primeiros a cair para fora do corte.
+// Sintoma exato: o valor subia durante a sessão (o Realtime entregava) e
+// despencava no recarregamento, com cada máquina parando num número diferente.
+// Aqui a leitura passa a ser ordenada por chave e paginada até o fim, então o
+// conjunto lido é sempre completo e idêntico em todas as máquinas.
+// ══════════════════════════════════════════════════════════════════════
+var _SB_PAGINA_TAM = 1000;
+var _SB_MAX_PAGINAS = 60; // trava de segurança: 60 mil registros
+
+function _sbLerCelulasPaginado(prefixo, aplicarLinha) {
+  return new Promise(function(resolve) {
+    var offset = 0, total = 0, pagina = 0;
+    function proxima() {
+      if (pagina++ >= _SB_MAX_PAGINAS) {
+        console.warn('[supabase] Leitura de "' + prefixo + '" interrompida na trava de segurança após ' + total + ' registros.');
+        return resolve(total);
+      }
+      fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(prefixo) + '*&select=chave,valor' +
+            '&order=chave.asc&limit=' + _SB_PAGINA_TAM + '&offset=' + offset, {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+      }).then(function(r){ return r.json(); }).then(function(rows) {
+        if (!rows || !rows.length) return resolve(total);
+        rows.forEach(function(row) { try { aplicarLinha(row); } catch(e) {} });
+        total += rows.length;
+        // Avança pelo tamanho REAL devolvido: se o servidor tiver um teto menor
+        // que _SB_PAGINA_TAM, a paginação continua correta mesmo assim.
+        offset += rows.length;
+        proxima();
+      }).catch(function() { resolve(total); });
+    }
+    proxima();
+  });
+}
+
+// Diagnóstico manual: digite ROTA7Diag() no Console (F12) para ver de onde sai
+// cada número do Painel Executivo — quantos registros vieram do servidor, quantos
+// MACs a janela operacional considera, e quais deles somam o Executado.
+function ROTA7Diag() {
+  var total = 0, comFim = 0;
+  Object.keys(_descAcompData || {}).forEach(function(m) {
+    total++;
+    var r = _descAcompData[m] || {};
+    if (r.horaFim && String(r.horaFim).trim()) comFim++;
+  });
+  var d = (typeof _gvColetarDadosIN === 'function') ? _gvColetarDadosIN() : {};
+  console.log('── ROTA7 · diagnóstico Descarga (IN) ─────────────────────');
+  console.log('Registros de Acompanhamento IN em memória:', total, '| com Hora Fim:', comFim);
+  console.log('Plano do dia:', Math.round(d.pesoPlano || 0), 'kg');
+  console.log('Executado   :', Math.round(d.pesoExecutado || 0), 'kg');
+  console.log('Programado  :', Math.round(d.pesoProgramado || 0), 'kg');
+  console.log('Realtime conectado:', _sbRealtimeOk, '| já caiu nesta sessão:', _sbRealtimeCaiu);
+  _sbLerCelulasPaginado('desc_acomp_cel:', function(){}).then(function(n) {
+    console.log('Linhas desc_acomp_cel no Supabase (leitura paginada completa):', n);
+    console.log('Se este número for maior que o de registros em memória, a leitura antiga estava sendo cortada.');
+  });
+  return 'diagnóstico enviado ao Console';
+}
+
+var _descAcompMigracaoFeita = false;
 function _descAcompCarregarSupabase() {
   try {
-    var pMigracao = fetch(SB_URL + '/configuracoes?chave=eq.descarga_acomp_data&select=valor', {
+    // A migração do blob antigo só faz sentido uma vez por sessão. Como esta
+    // função agora também roda em reforço periódico, repeti-la seria uma
+    // requisição inútil a cada ciclo.
+    var pMigracao = _descAcompMigracaoFeita ? Promise.resolve() :
+    fetch(SB_URL + '/configuracoes?chave=eq.descarga_acomp_data&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
+      _descAcompMigracaoFeita = true;
       if (!data || !data.length || !data[0].valor) return;
       var remoto = null;
       try { remoto = JSON.parse(data[0].valor); } catch(e) { return; }
@@ -13580,19 +13736,18 @@ function _descAcompCarregarSupabase() {
       });
     }).catch(function(){});
 
-    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent('desc_acomp_cel:') + '*&select=chave,valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(rows) {
-      (rows || []).forEach(function(row) {
-        var chave = String(row.chave || '');
-        if (chave.indexOf('desc_acomp_cel:') !== 0) return;
-        var mac = chave.slice('desc_acomp_cel:'.length);
-        try {
-          _descAcompData[mac] = JSON.parse(row.valor);
-          _descAcompUltimoSalvo[mac] = row.valor;
-        } catch(e) {}
-      });
-    }).catch(function(){});
+    var pCelulas = _sbLerCelulasPaginado('desc_acomp_cel:', function(row) {
+      var chave = String(row.chave || '');
+      if (chave.indexOf('desc_acomp_cel:') !== 0) return;
+      var mac = chave.slice('desc_acomp_cel:'.length);
+      // Não deixa uma leitura em trânsito apagar o que acabou de ser digitado
+      // aqui (ver _descAcompLocalMaisNovo).
+      if (_descAcompLocalMaisNovo(mac)) return;
+      try {
+        _descAcompData[mac] = JSON.parse(row.valor);
+        _descAcompUltimoSalvo[mac] = row.valor;
+      } catch(e) {}
+    });
 
     Promise.all([pMigracao, pCelulas]).then(function() {
       try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
@@ -13600,6 +13755,7 @@ function _descAcompCarregarSupabase() {
         var tab = document.getElementById('tab-descargaAcomp-content');
         if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
       }
+      _gvRedesenharSeAtivo();
     });
   } catch(e) {}
 }
@@ -14298,6 +14454,10 @@ function _relatorioHistoricoCarregarSupabase() {
         try { localStorage.setItem('relatorio_historico_v1', JSON.stringify(_relatorioHistorico)); } catch(e){}
         var tab = document.getElementById('tab-descargaHistorico-content');
         if (tab && tab.classList.contains('active') && typeof descargaHistoricoRenderizar === 'function') descargaHistoricoRenderizar();
+        // O Plano do dia e o Programado (IN) do Painel Executivo saem daqui: sem
+        // este redesenho, uma importação feita em outra máquina não aparecia no
+        // painel de quem já estava com ele aberto.
+        _gvRedesenharSeAtivo();
       }
     }).catch(function(){});
   } catch(e) {}
@@ -14927,14 +15087,24 @@ try {
   });
 } catch(ex) {}
 
+// Mesma proteção do lado IN — ver comentário em _descAcompLocalMaisNovo.
+var _acompOutEditadoLocalEm = {};
+var _ACOMP_OUT_JANELA_LOCAL_MS = 20000;
+function _acompOutLocalMaisNovo(id) {
+  var t = _acompOutEditadoLocalEm[id];
+  return !!(t && (Date.now() - t) < _ACOMP_OUT_JANELA_LOCAL_MS);
+}
+
 function _acompOutSalvar() {
   try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(ex) {}
   Object.keys(_acompOutData).forEach(function(id) {
     var atual = JSON.stringify(_acompOutData[id]);
     if (_acompOutUltimoSalvo[id] === atual) return; // este veículo não mudou desde a última gravação
     _acompOutUltimoSalvo[id] = atual;
+    _acompOutEditadoLocalEm[id] = Date.now();
     _acompOutSalvarCelulaSupabase(id, _acompOutData[id]);
   });
+  _gvRedesenharSeAtivo();
 }
 
 function _acompOutSalvarCelulaSupabase(id, registro) {
@@ -14959,16 +15129,23 @@ function _acompOutAplicarCelulaRemota(id, registro) {
     var tab = document.getElementById('tab-acompOut-content');
     if (tab && tab.classList.contains('active')) acompOutRenderizar(); // já adia sozinho se houver campo em foco (_acompOutFocoNaTabela)
   }
+  // Mesmo motivo do lado IN: sem isto o Executado (OUT) do Painel Executivo
+  // ficava parado no valor antigo até o usuário trocar de aba.
+  _gvRedesenharSeAtivo();
 }
 
 // Carrega os dados de Acompanhamento OUT do Supabase: primeiro migra o que existir
 // no blob antigo (formato usado antes desta correção, para não perder histórico),
 // depois lê cada linha já no formato novo (uma por veículo).
+var _acompOutMigracaoFeita = false;
 function _acompOutCarregarSupabase() {
   try {
-    var pMigracao = fetch(SB_URL + '/configuracoes?chave=eq.acomp_out_data&select=valor', {
+    // Migração do blob antigo: uma vez por sessão (ver equivalente no IN).
+    var pMigracao = _acompOutMigracaoFeita ? Promise.resolve() :
+    fetch(SB_URL + '/configuracoes?chave=eq.acomp_out_data&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
+      _acompOutMigracaoFeita = true;
       if (!data || !data.length || !data[0].valor) return;
       var remoto = null;
       try { remoto = JSON.parse(data[0].valor); } catch(e) { return; }
@@ -14978,19 +15155,16 @@ function _acompOutCarregarSupabase() {
       });
     }).catch(function(){});
 
-    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent('acomp_out_cel:') + '*&select=chave,valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(rows) {
-      (rows || []).forEach(function(row) {
-        var chave = String(row.chave || '');
-        if (chave.indexOf('acomp_out_cel:') !== 0) return;
-        var id = chave.slice('acomp_out_cel:'.length);
-        try {
-          _acompOutData[id] = JSON.parse(row.valor);
-          _acompOutUltimoSalvo[id] = row.valor;
-        } catch(e) {}
-      });
-    }).catch(function(){});
+    var pCelulas = _sbLerCelulasPaginado('acomp_out_cel:', function(row) {
+      var chave = String(row.chave || '');
+      if (chave.indexOf('acomp_out_cel:') !== 0) return;
+      var id = chave.slice('acomp_out_cel:'.length);
+      if (_acompOutLocalMaisNovo(id)) return; // edição local recente vence a leitura em trânsito
+      try {
+        _acompOutData[id] = JSON.parse(row.valor);
+        _acompOutUltimoSalvo[id] = row.valor;
+      } catch(e) {}
+    });
 
     Promise.all([pMigracao, pCelulas]).then(function() {
       try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(e){}
@@ -14998,6 +15172,7 @@ function _acompOutCarregarSupabase() {
         var tab = document.getElementById('tab-acompOut-content');
         if (tab && tab.classList.contains('active')) acompOutRenderizar();
       }
+      _gvRedesenharSeAtivo();
     });
   } catch(e) {}
 }
