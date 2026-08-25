@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<!--ROTA7_BUILD:V153--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6248,12 +6249,13 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V152';
+var ROTA7_VERSAO = 'V153';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
 var _verAssinaturaInicial = null;
 var _verNovaDetectada = false;
+var _verLoopDetectado = false;   // recarga anterior não trouxe o arquivo novo
 var _verAdiadoAte = 0;
 var _verUltimaInteracao = Date.now();
 var _verTimerContagem = null;
@@ -6266,34 +6268,105 @@ function _verAssinaturaDe(resp) {
          (h.get('Content-Length') && 'len:' + h.get('Content-Length')) || null;
 }
 
+// Modo de comparação em uso: 'marca' (preferido) ou 'assinatura' (reserva).
+var _verModo = 'marca';
+
+// Lê os primeiros bytes do arquivo publicado e extrai a marca de build.
+//
+// Por que não comparar cabeçalhos (ETag/Last-Modified) como referência: essa
+// comparação é sempre "assinatura de agora" contra "assinatura do boot", e a
+// do boot é a do SERVIDOR, não a do HTML que esta aba está de fato rodando.
+// Se a aba tivesse subido com bytes velhos do cache enquanto o servidor já
+// tinha o arquivo novo, as duas seriam iguais e a tela ficaria desatualizada
+// para sempre, convencida de estar em dia. Comparar a marca publicada com a
+// constante ROTA7_VERSAO desta aba responde exatamente a pergunta certa:
+// "o que está no ar é o que estou rodando?"
 function _verConsultar() {
   // O parâmetro descartável é obrigatório: sem ele o service worker devolve a
-  // resposta que guardou e a máquina nunca descobre que existe versão nova —
-  // que é justamente o problema que este mecanismo veio resolver.
+  // resposta que guardou e a máquina nunca descobre que existe versão nova.
   var url = location.pathname + '?_v=' + Date.now();
+  if (_verModo === 'marca') {
+    return fetch(url, { cache: 'no-store', headers: { 'Range': 'bytes=0-1500' } })
+      .then(function(r) {
+        if (!r.ok) return null;
+        // 206 = servidor respeitou o Range e mandou só o pedaço. Se vier 200 ele
+        // ignorou e mandaria o arquivo inteiro a cada consulta — caro demais
+        // para repetir, então passa a usar o modo de reserva daqui em diante.
+        if (r.status !== 206) {
+          _verModo = 'assinatura';
+          console.warn('[versao] Servidor ignorou Range — usando comparação por cabeçalho.');
+          return _verAssinaturaDe(r);
+        }
+        return r.text().then(function(txt) {
+          // Sem o hífen na classe: ele é ganancioso e engoliria o "--" do
+          // fechamento do comentário, devolvendo "V153--" em vez de "V153".
+          var m = /ROTA7_BUILD:([A-Za-z0-9._]+)/.exec(txt);
+          if (m) return 'build:' + m[1];
+          _verModo = 'assinatura';
+          console.warn('[versao] Marca de build não encontrada — usando comparação por cabeçalho.');
+          return _verAssinaturaDe(r);
+        });
+      })
+      .catch(function(){ return null; });
+  }
   return fetch(url, { method: 'HEAD', cache: 'no-store' })
     .then(function(r){ return r.ok ? _verAssinaturaDe(r) : null; })
     .catch(function(){ return null; });
+}
+
+// Existe versão diferente da que esta aba está rodando?
+function _verDivergente(atual) {
+  if (!atual) return false;
+  if (atual.indexOf('build:') === 0) return atual.slice(6) !== ROTA7_VERSAO;
+  return _verAssinaturaInicial && atual !== _verAssinaturaInicial;
+}
+
+// Visibilidade real. Não dá para usar offsetParent aqui: ele é sempre null em
+// elementos "position:fixed", que é justamente o caso de todos os modais e do
+// gate de login deste app — a verificação passaria batido em todos eles.
+function _verVisivel(el) {
+  if (!el) return false;
+  try {
+    var cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
+    return el.getBoundingClientRect().width > 0;
+  } catch (e) { return false; }
 }
 
 // A tela só pode ser recarregada se não houver nada em andamento.
 function _verPodeRecarregar() {
   try {
     if (Date.now() - _verUltimaInteracao < _VER_OCIOSIDADE_MS) return false;
-    var ae = document.activeElement;
-    if (ae) {
-      var tag = (ae.tagName || '').toUpperCase();
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || ae.isContentEditable) return false;
-    }
-    if (window.getSelection && String(window.getSelection()).length > 0) return false;
+
     // Gravações que ainda não chegaram ao banco não podem ser perdidas
     if (typeof _syncPendentes !== 'undefined' && _syncPendentes && _syncPendentes.size) return false;
     if (typeof _deletePendentes !== 'undefined' && _deletePendentes && _deletePendentes.size) return false;
+
+    var login = document.getElementById('r7lg-overlay');
+    var noLogin = _verVisivel(login);
+
+    var ae = document.activeElement;
+    if (ae) {
+      // Campo em foco bloqueia — exceto os do próprio gate de login. O campo de
+      // usuário já nasce focado, então sem esta exceção uma máquina parada na
+      // tela de login jamais se atualizaria, apesar de ser o momento mais
+      // seguro possível: ninguém logado, nada digitado para perder. A janela de
+      // ociosidade acima já protege quem está de fato digitando a senha.
+      var doLogin = noLogin && login.contains(ae);
+      if (!doLogin) {
+        var tag = (ae.tagName || '').toUpperCase();
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || ae.isContentEditable) return false;
+      }
+    }
+    if (window.getSelection && String(window.getSelection()).length > 0) return false;
+
+    // Na tela de login não há operação em curso — pode atualizar.
+    if (noLogin) return true;
+
     // Qualquer modal aberto significa operação em curso
     var modais = ['modal-overlay', 'install-modal', 'rel-export-modal', 'rel-print-modal', 'cargaCritica-modal'];
     for (var i = 0; i < modais.length; i++) {
-      var el = document.getElementById(modais[i]);
-      if (el && el.offsetParent !== null) return false;
+      if (_verVisivel(document.getElementById(modais[i]))) return false;
     }
     return true;
   } catch (e) { return false; }
@@ -6314,6 +6387,15 @@ function _verAdiar() {
 function _verAtualizarAgora() {
   var c = document.getElementById('ver-contagem');
   if (c) c.textContent = 'Atualizando...';
+  // Deixa registrado com qual assinatura esta tela estava ANTES de recarregar.
+  // Se voltar com a mesma, a recarga não trouxe o arquivo novo (cache HTTP do
+  // navegador devolvendo a cópia velha) — e recarregar de novo entraria em
+  // loop. Ver a checagem em _verIniciar.
+  try {
+    localStorage.setItem('rota7_ver_tentativa', JSON.stringify({
+      assin: _verAssinaturaInicial, ts: Date.now()
+    }));
+  } catch (e) {}
   // Limpa os caches e o service worker antes de recarregar. Sem isso a máquina
   // recarrega e recebe de volta o HTML antigo que ficou guardado — o operador
   // acha que atualizou e não atualizou. O app registra o service worker de
@@ -6340,6 +6422,10 @@ function _verAvaliar() {
   if (!_verNovaDetectada) return;
   _verMostrarAviso();
   var c = document.getElementById('ver-contagem');
+  if (_verLoopDetectado) {
+    if (c) c.textContent = 'Atualize manualmente: Ctrl+Shift+R';
+    return;
+  }
   if (!VER_AUTO_RELOAD) { if (c) c.textContent = 'Recarga automática desligada.'; return; }
   if (Date.now() < _verAdiadoAte) { if (c) c.textContent = 'Adiado — atualize quando puder.'; return; }
   if (_verPodeRecarregar()) {
@@ -6358,11 +6444,44 @@ function _verIniciar() {
     _verConsultar().then(function(a) {
       _verAssinaturaInicial = a;
       if (!a) { console.warn('[versao] Servidor não devolveu assinatura — verificação desligada nesta sessão.'); return; }
-      console.log('[versao] ' + ROTA7_VERSAO + ' — assinatura: ' + a.slice(0, 40));
+
+      // Divergência já na primeira consulta significa que esta aba subiu com
+      // bytes antigos — acontece quando o cache do navegador entrega a cópia
+      // velha. Sem esta checagem a tela ficaria parada na versão errada.
+      var divergeNoBoot = _verDivergente(a);
+      if (divergeNoBoot) {
+        _verNovaDetectada = true;
+        console.warn('[versao] Esta aba está rodando ' + ROTA7_VERSAO + ', mas o publicado é ' + a + '.');
+      }
+
+      // A recarga anterior surtiu efeito? Se continua divergente depois de já
+      // termos recarregado por isso, o arquivo novo não chegou. Insistir
+      // colocaria a tela num ciclo de recarregar–detectar–recarregar. Nesse
+      // caso a automática é desligada e o operador é orientado a forçar.
+      try {
+        var bruto = localStorage.getItem('rota7_ver_tentativa');
+        if (bruto) {
+          var t = JSON.parse(bruto);
+          localStorage.removeItem('rota7_ver_tentativa');
+          if (t && t.ts && (Date.now() - t.ts) < 900000 && divergeNoBoot) {
+            _verLoopDetectado = true;
+            _verNovaDetectada = true;
+            console.warn('[versao] A recarga não trouxe o arquivo novo — automática desligada para evitar loop. Use Ctrl+Shift+R.');
+            var d = document.getElementById('ver-aviso');
+            var m = d && d.querySelector('div');
+            if (m) m.nextElementSibling.textContent =
+              'A atualização automática não funcionou nesta máquina (cache do navegador). Force com Ctrl+Shift+R.';
+            _verAvaliar();
+          }
+        }
+      } catch (e) {}
+
+      console.log('[versao] rodando ' + ROTA7_VERSAO + ' | publicado: ' + a.slice(0, 40) + ' | modo: ' + _verModo);
+      if (_verNovaDetectada) _verAvaliar();
       setInterval(function() {
         if (_verNovaDetectada) { _verAvaliar(); return; }
         _verConsultar().then(function(atual) {
-          if (!atual || atual === _verAssinaturaInicial) return;
+          if (!_verDivergente(atual)) return;
           _verNovaDetectada = true;
           console.warn('[versao] Versão nova publicada — esta tela está desatualizada.');
           if (typeof showToast === 'function') showToast('🔄 Nova versão do ROTA7 publicada.', 'info');
