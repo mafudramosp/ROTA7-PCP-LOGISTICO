@@ -1,4 +1,4 @@
-const CACHE = 'pvg-v8';
+const CACHE = 'pvg-v9';
 const STATIC = ['./manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -24,10 +24,22 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // HTML files: always network-first so updates are seen immediately
+  // HTML files: always network-first so updates are seen immediately.
+  //
+  // A mudança em relação ao pvg-v8: a requisição é remontada com
+  // cache:'reload'. Antes, "fetch(e.request)" ia à rede mas ainda passava pelo
+  // cache HTTP do navegador, que podia devolver a cópia anterior por alguns
+  // minutos depois de uma publicação. Com a verificação de versão do V153 isso
+  // virava um problema visível: o app enxergava a versão nova (consulta com
+  // ?_v= e no-store, que não passa por cache nenhum), recarregava, recebia o
+  // arquivo velho de volta e detectava a versão nova outra vez.
+  //
+  // "cache:'reload'" obriga a ida ao servidor e ignora qualquer cópia local.
+  // O cache continua sendo alimentado logo abaixo, então o funcionamento
+  // offline não muda.
   if (e.request.destination === 'document' || url.endsWith('.html') || url.endsWith('/')) {
     e.respondWith(
-      fetch(e.request).then(res => {
+      fetch(new Request(url, { cache: 'reload', credentials: 'same-origin' })).then(res => {
         const clone = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, clone));
         return res;
