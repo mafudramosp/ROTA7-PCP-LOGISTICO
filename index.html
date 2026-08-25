@@ -3924,6 +3924,9 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function() { if (typeof sbCarregarTransito === 'function') sbCarregarTransito(true); }, 1700);
   // Renderizar Acompanhamento OUT para alimentar os gauges de Frotas Programadas
   if (typeof acompOutRenderizar === 'function') setTimeout(acompOutRenderizar, 2000);
+  // V152 — verificação de versão publicada. Atrasada para não competir com as
+  // cargas iniciais; a primeira consulta define a assinatura de referência.
+  if (typeof _verIniciar === 'function') setTimeout(_verIniciar, 5000);
   // Limpar baselines de dias anteriores
   try {
     var hoje = new Date().toISOString().slice(0,10);
@@ -6153,6 +6156,16 @@ document.addEventListener('click',function(e){
 <div class="toast" id="toast"></div>
 <div id="sync-status" style="display:none;position:fixed;bottom:70px;right:24px;z-index:9000;background:#1a1a2e;color:#94a3b8;font-size:12px;font-family:Poppins,sans-serif;padding:8px 14px;border-radius:8px;border:1px solid #2d2d4e"></div>
 
+<div id="ver-aviso" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9500;background:#141414;border:1px solid #2b2b2b;border-left:3px solid #3fb950;border-radius:10px;padding:14px 16px;font-family:Poppins,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.55);max-width:320px">
+  <div style="color:#e6e6e6;font-size:13px;font-weight:600;margin-bottom:5px">Nova versão disponível</div>
+  <div style="color:#8b949e;font-size:11px;line-height:1.5;margin-bottom:11px">Esta tela está rodando uma versão antiga do ROTA7. Atualize para manter a sincronização correta.</div>
+  <div style="display:flex;gap:8px">
+    <button onclick="_verAtualizarAgora()" style="flex:1;background:#3fb950;color:#0d0d0d;border:0;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;font-family:Poppins,sans-serif;cursor:pointer">Atualizar agora</button>
+    <button onclick="_verAdiar()" style="background:transparent;color:#8b949e;border:1px solid #2b2b2b;border-radius:6px;padding:7px 12px;font-size:12px;font-family:Poppins,sans-serif;cursor:pointer">Depois</button>
+  </div>
+  <div id="ver-contagem" style="color:#f0b429;font-size:10px;margin-top:9px;min-height:13px"></div>
+</div>
+
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js" defer></script><script>
 // ============================================================
 // CONFIGURAÇÃO DO GOOGLE SHEETS (preencha após implantar o Apps Script)
@@ -6213,6 +6226,154 @@ var _sbIncrementalOk = {};
 var _sbBytesEconomizados = 0;
 var _sbLeiturasEvitadas = 0;
 
+// ══════════════════════════════════════════════════════════════════════
+// V152 — VERIFICAÇÃO DE VERSÃO PUBLICADA
+//
+// Motivo: a economia de banda do V151 só vale se TODAS as máquinas
+// estiverem na versão nova. Uma única tela esquecida na versão antiga
+// varre o banco inteiro a cada 60s e consome sozinha ~8,9 GB/mês — mais
+// que a cota mensal completa do plano gratuito. O caso típico é o monitor
+// do Painel Executivo, que fica ligado e ninguém recarrega.
+//
+// Como funciona: uma requisição HEAD ao próprio arquivo, a cada 5 minutos.
+// Compara a assinatura devolvida pelo servidor (ETag, ou Last-Modified, ou
+// Content-Length) com a do momento em que a página abriu. Se mudou, existe
+// versão nova publicada.
+//
+// Custo: HEAD não traz corpo, e a requisição vai para o GitHub Pages, não
+// para o Supabase — impacto ZERO na cota de 5 GB.
+//
+// A recarga automática só acontece com a tela ociosa (ver _verPodeRecarregar),
+// então nunca interrompe alguém digitando. Telas de painel, que ninguém toca,
+// se atualizam sozinhas — exatamente o caso que motivou tudo isto.
+// ══════════════════════════════════════════════════════════════════════
+
+var ROTA7_VERSAO = 'V152';
+var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
+var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
+var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
+var _verAssinaturaInicial = null;
+var _verNovaDetectada = false;
+var _verAdiadoAte = 0;
+var _verUltimaInteracao = Date.now();
+var _verTimerContagem = null;
+
+function _verAssinaturaDe(resp) {
+  if (!resp) return null;
+  var h = resp.headers;
+  return (h.get('ETag') && 'etag:' + h.get('ETag')) ||
+         (h.get('Last-Modified') && 'lm:' + h.get('Last-Modified')) ||
+         (h.get('Content-Length') && 'len:' + h.get('Content-Length')) || null;
+}
+
+function _verConsultar() {
+  // O parâmetro descartável é obrigatório: sem ele o service worker devolve a
+  // resposta que guardou e a máquina nunca descobre que existe versão nova —
+  // que é justamente o problema que este mecanismo veio resolver.
+  var url = location.pathname + '?_v=' + Date.now();
+  return fetch(url, { method: 'HEAD', cache: 'no-store' })
+    .then(function(r){ return r.ok ? _verAssinaturaDe(r) : null; })
+    .catch(function(){ return null; });
+}
+
+// A tela só pode ser recarregada se não houver nada em andamento.
+function _verPodeRecarregar() {
+  try {
+    if (Date.now() - _verUltimaInteracao < _VER_OCIOSIDADE_MS) return false;
+    var ae = document.activeElement;
+    if (ae) {
+      var tag = (ae.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || ae.isContentEditable) return false;
+    }
+    if (window.getSelection && String(window.getSelection()).length > 0) return false;
+    // Gravações que ainda não chegaram ao banco não podem ser perdidas
+    if (typeof _syncPendentes !== 'undefined' && _syncPendentes && _syncPendentes.size) return false;
+    if (typeof _deletePendentes !== 'undefined' && _deletePendentes && _deletePendentes.size) return false;
+    // Qualquer modal aberto significa operação em curso
+    var modais = ['modal-overlay', 'install-modal', 'rel-export-modal', 'rel-print-modal', 'cargaCritica-modal'];
+    for (var i = 0; i < modais.length; i++) {
+      var el = document.getElementById(modais[i]);
+      if (el && el.offsetParent !== null) return false;
+    }
+    return true;
+  } catch (e) { return false; }
+}
+
+function _verMostrarAviso() {
+  var el = document.getElementById('ver-aviso');
+  if (el) el.style.display = 'block';
+}
+
+function _verAdiar() {
+  _verAdiadoAte = Date.now() + 1800000; // 30 min
+  var el = document.getElementById('ver-aviso');
+  if (el) el.style.display = 'none';
+  if (typeof showToast === 'function') showToast('Atualização adiada por 30 minutos.', 'info');
+}
+
+function _verAtualizarAgora() {
+  var c = document.getElementById('ver-contagem');
+  if (c) c.textContent = 'Atualizando...';
+  // Limpa os caches e o service worker antes de recarregar. Sem isso a máquina
+  // recarrega e recebe de volta o HTML antigo que ficou guardado — o operador
+  // acha que atualizou e não atualizou. O app registra o service worker de
+  // novo sozinho no próximo carregamento.
+  var tarefas = [];
+  try {
+    if (window.caches && caches.keys) {
+      tarefas.push(caches.keys().then(function(ns) {
+        return Promise.all(ns.map(function(n){ return caches.delete(n); }));
+      }).catch(function(){}));
+    }
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      tarefas.push(navigator.serviceWorker.getRegistrations().then(function(rs) {
+        return Promise.all(rs.map(function(r){ return r.unregister(); }));
+      }).catch(function(){}));
+    }
+  } catch (e) {}
+  var recarregar = function(){ try { location.reload(); } catch(e) { location.href = location.pathname; } };
+  Promise.all(tarefas).then(recarregar).catch(recarregar);
+  setTimeout(recarregar, 4000); // rede travada não pode impedir a atualização
+}
+
+function _verAvaliar() {
+  if (!_verNovaDetectada) return;
+  _verMostrarAviso();
+  var c = document.getElementById('ver-contagem');
+  if (!VER_AUTO_RELOAD) { if (c) c.textContent = 'Recarga automática desligada.'; return; }
+  if (Date.now() < _verAdiadoAte) { if (c) c.textContent = 'Adiado — atualize quando puder.'; return; }
+  if (_verPodeRecarregar()) {
+    if (c) c.textContent = 'Tela ociosa — atualizando em 10s...';
+    setTimeout(function(){ if (_verPodeRecarregar()) _verAtualizarAgora(); }, 10000);
+  } else if (c) {
+    c.textContent = 'Aguardando a tela ficar livre para atualizar.';
+  }
+}
+
+function _verIniciar() {
+  try {
+    ['click','keydown','input','change','touchstart'].forEach(function(ev) {
+      document.addEventListener(ev, function(){ _verUltimaInteracao = Date.now(); }, true);
+    });
+    _verConsultar().then(function(a) {
+      _verAssinaturaInicial = a;
+      if (!a) { console.warn('[versao] Servidor não devolveu assinatura — verificação desligada nesta sessão.'); return; }
+      console.log('[versao] ' + ROTA7_VERSAO + ' — assinatura: ' + a.slice(0, 40));
+      setInterval(function() {
+        if (_verNovaDetectada) { _verAvaliar(); return; }
+        _verConsultar().then(function(atual) {
+          if (!atual || atual === _verAssinaturaInicial) return;
+          _verNovaDetectada = true;
+          console.warn('[versao] Versão nova publicada — esta tela está desatualizada.');
+          if (typeof showToast === 'function') showToast('🔄 Nova versão do ROTA7 publicada.', 'info');
+          _verAvaliar();
+        });
+      }, _VER_INTERVALO_MS);
+      _verTimerContagem = setInterval(function(){ if (_verNovaDetectada) _verAvaliar(); }, 30000);
+    });
+  } catch (e) {}
+}
+
 function _sbCabecalhoLeitura() {
   return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
 }
@@ -6245,6 +6406,7 @@ function _sbLerSeMudou(chave, cbAplicar, forcar) {
 // Diagnóstico manual: digite ROTA7Trafego() no Console (F12)
 function ROTA7Trafego() {
   console.log('── ROTA7 · economia de banda ──────────────────────────');
+  console.log('Versão desta tela:', ROTA7_VERSAO, '| nova disponível:', _verNovaDetectada ? 'SIM — atualize' : 'não');
   console.log('Leituras evitadas nesta sessão:', _sbLeiturasEvitadas);
   console.log('Modo incremental por prefixo:', JSON.stringify(_sbIncrementalOk));
   console.log('Marcas d\'água:', JSON.stringify(_sbMarcaDagua));
