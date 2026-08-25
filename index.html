@@ -4881,8 +4881,31 @@ function _histRelOutExcluidosMesclar(lista) {
 
 // Lê histórico e lápides numa única ida ao banco
 function _histRelOutLerRemoto() {
+  // V151 — sonda as duas chaves por atualizado_em antes de baixar o conteúdo.
+  // Devolve { naoMudou: true } quando nenhuma das duas mudou desde a última
+  // leitura, e o chamador encerra sem mesclar nada.
+  var _chavesHist = HIST_REL_OUT_CHAVE + ',' + HIST_REL_OUT_EXCL_CHAVE;
+  return fetch(SB_URL + '/configuracoes?chave=in.(' + _chavesHist + ')&select=chave,atualizado_em', {
+    headers: _sbCabecalhoLeitura()
+  }).then(function(r){ return r.json(); }).then(function(cab) {
+    var assinatura = '';
+    var todasComTs = !!(cab && cab.length);
+    (cab || []).forEach(function(c) {
+      if (!c || !c.atualizado_em) { todasComTs = false; return; }
+      assinatura += c.chave + '=' + c.atualizado_em + ';';
+    });
+    if (todasComTs && assinatura && _sbVersaoCache['__hist_rel_out__'] === assinatura) {
+      _sbLeiturasEvitadas++;
+      return { naoMudou: true, historico: [], excluidos: [] };
+    }
+    if (todasComTs && assinatura) _sbVersaoCache['__hist_rel_out__'] = assinatura;
+    return _histRelOutBaixarRemoto();
+  }).catch(function(){ return _histRelOutBaixarRemoto(); });
+}
+
+function _histRelOutBaixarRemoto() {
   return fetch(SB_URL + '/configuracoes?chave=in.(' + HIST_REL_OUT_CHAVE + ',' + HIST_REL_OUT_EXCL_CHAVE + ')&select=chave,valor', {
-    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    headers: _sbCabecalhoLeitura()
   }).then(function(r){ return r.json(); }).then(function(data) {
     var res = { historico: [], excluidos: [] };
     (data || []).forEach(function(linha) {
@@ -4924,7 +4947,12 @@ function _histRelOutSincronizarEEscrever(excluirChaves) {
   });
   if (registrouNova) _histRelOutExcluidosPersistir();
   return new Promise(function(resolve) {
-    _histRelOutLerRemoto().then(function(remotoDados) {
+    // V151 — leitura SEM guarda de versão de propósito: esta função mescla e
+    // regrava a lista no banco. Se ela partisse de um resultado vazio vindo do
+    // cache, devolveria ao banco só o que esta máquina tem e apagaria os
+    // registros das outras. É chamada por ação do usuário (impressão), não em
+    // laço, então o custo é irrelevante.
+    _histRelOutBaixarRemoto().then(function(remotoDados) {
       var remoto = remotoDados.historico;
       _histRelOutExcluidosMesclar(remotoDados.excluidos);
       var vistos = {};
@@ -4969,6 +4997,7 @@ function _histRelOutSalvarSupabase() {
 function _histRelOutCarregarSupabase() {
   try {
     _histRelOutLerRemoto().then(function(remotoDados) {
+      if (remotoDados && remotoDados.naoMudou) return; // V151 — nada novo no banco
       var remoto = remotoDados.historico;
       // Absorve as exclusões feitas por outros usuários ANTES de mesclar.
       // Era exatamente aqui que o registro apagado ressuscitava: a união
@@ -6144,6 +6173,93 @@ var SB_HEADERS = {
 };
 
 // ══════════════════════════════════════════════════════════════════════
+// V151 — ECONOMIA DE BANDA (plano gratuito do Supabase: 5 GB/mês)
+//
+// O problema: todo poll de segurança baixava o CONTEÚDO inteiro para só
+// então descobrir que nada tinha mudado. Com 12 máquinas em operação 24h
+// isso gerava ~15-20 GB/dia — os 5 GB do ciclo acabavam em menos de um dia
+// e o projeto parava de responder (no plano gratuito não há cobrança por
+// excesso: o banco simplesmente recusa as requisições).
+//
+// A correção tem duas peças:
+//
+//   1) GUARDA DE VERSÃO (_sbLerSeMudou) — para chaves únicas grandes.
+//      Pede só o "atualizado_em" (~80 bytes). Se for igual ao que já está
+//      em memória, não baixa o valor. Uma leitura de 95 KB vira 80 bytes
+//      nos ciclos em que nada mudou, que são a esmagadora maioria.
+//
+//   2) MARCA D'ÁGUA (_sbLerCelulasPaginado incremental) — para os prefixos
+//      de célula. A primeira leitura é completa; as seguintes pedem só o
+//      que mudou desde a última (atualizado_em=gt.<marca>).
+//
+// SEGURANÇA — as duas peças dependem de "atualizado_em" ser preenchido em
+// TODA escrita. Hoje várias gravações não preenchem (por isso há linhas com
+// NULL no banco). Enquanto o gatilho do item 1 do SQL não for aplicado, o
+// código detecta sozinho e volta ao comportamento do V150: gasta banda, mas
+// NUNCA deixa de sincronizar. Nenhum dado se perde em nenhum cenário.
+// ══════════════════════════════════════════════════════════════════════
+
+// Último "atualizado_em" conhecido de cada chave única
+var _sbVersaoCache = {};
+// Última marca d'água de cada prefixo de célula
+var _sbMarcaDagua = {};
+// Só liga o modo incremental de um prefixo depois de confirmar, na carga
+// completa, que todas as linhas têm "atualizado_em" preenchido. Sem isso,
+// uma linha com NULL ficaria de fora do filtro "gt." e a máquina nunca
+// receberia aquela atualização.
+var _sbIncrementalOk = {};
+
+// Contador de tráfego economizado — visível em ROTA7Trafego()
+var _sbBytesEconomizados = 0;
+var _sbLeiturasEvitadas = 0;
+
+function _sbCabecalhoLeitura() {
+  return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+}
+
+// Lê uma chave única só se ela mudou desde a última vez.
+// cbAplicar(valor, ts) só é chamado quando há versão nova.
+// Se "atualizado_em" vier vazio (gatilho ainda não aplicado), baixa sempre —
+// comportamento idêntico ao V150.
+function _sbLerSeMudou(chave, cbAplicar, forcar) {
+  return fetch(SB_URL + '/configuracoes?chave=eq.' + chave + '&select=atualizado_em', {
+    headers: _sbCabecalhoLeitura()
+  }).then(function(r){ return r.json(); }).then(function(rows) {
+    if (!rows || !rows.length) return null;
+    var ts = rows[0].atualizado_em || '';
+    if (!forcar && ts && _sbVersaoCache[chave] === ts) {
+      _sbLeiturasEvitadas++;
+      return null; // nada mudou — não gasta banda com o valor
+    }
+    return fetch(SB_URL + '/configuracoes?chave=eq.' + chave + '&select=valor', {
+      headers: _sbCabecalhoLeitura()
+    }).then(function(r2){ return r2.json(); }).then(function(rows2) {
+      if (ts) _sbVersaoCache[chave] = ts;
+      if (!rows2 || !rows2.length || !rows2[0].valor) return null;
+      if (typeof cbAplicar === 'function') cbAplicar(rows2[0].valor, ts);
+      return rows2[0].valor;
+    });
+  }).catch(function(){ return null; });
+}
+
+// Diagnóstico manual: digite ROTA7Trafego() no Console (F12)
+function ROTA7Trafego() {
+  console.log('── ROTA7 · economia de banda ──────────────────────────');
+  console.log('Leituras evitadas nesta sessão:', _sbLeiturasEvitadas);
+  console.log('Modo incremental por prefixo:', JSON.stringify(_sbIncrementalOk));
+  console.log('Marcas d\'água:', JSON.stringify(_sbMarcaDagua));
+  console.log('Chaves com versão em cache:', Object.keys(_sbVersaoCache).length);
+  var semTrigger = Object.keys(_sbIncrementalOk).filter(function(p){ return _sbIncrementalOk[p] === false; });
+  if (semTrigger.length) {
+    console.warn('ATENÇÃO: prefixos em modo COMPLETO (gasta banda):', semTrigger.join(', '));
+    console.warn('Rode o SQL do gatilho "atualizado_em" no Supabase e recarregue a página.');
+  } else {
+    console.log('Todos os prefixos em modo incremental ✅');
+  }
+  return 'diagnóstico enviado ao Console';
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // REDESENHO DO PAINEL EXECUTIVO SOB DEMANDA
 // O Painel Executivo lê _descAcompData (Executado IN), _acompOutData
 // (Executado OUT) e _relatorioHistorico (Plano do dia IN) no instante em que
@@ -6744,7 +6860,11 @@ function sbPollUmaVez() {
 
 function iniciarEscutaRealtime() {
   if (_sbPollTimer) clearInterval(_sbPollTimer);
-  _sbPollTimer = setInterval(sbPollUmaVez, 60000); // 60s (era 15s) — reduz consumo de banda; tempo real já cobre a parte instantânea
+  // V151 — 300s (era 60s). Esta leitura traz a tabela "programados" inteira e
+  // não tem como ser incremental sem reestruturar fbGetAll. Como é apenas rede
+  // de segurança (o Realtime entrega as mudanças no instante em que ocorrem),
+  // espaçá-la 5x corta a banda sem alterar o comportamento percebido.
+  _sbPollTimer = setInterval(sbPollUmaVez, 300000);
   setInterval(progLimparAntigos, 60 * 60 * 1000); // reforça a limpeza a cada hora em sessões longas
 
   // Mobile: quando app volta do background, verificar imediatamente
@@ -7001,10 +7121,27 @@ function _relAplicarDados(registros, ts, forcar) {
 
 function sbCarregarRelatorio(forcar) {
   try {
-    // Buscar meta E tms_relatorio juntos numa única query com in()
-    fetch(SB_URL + '/configuracoes?chave=in.(tms_relatorio_meta,tms_relatorio)&select=chave,valor,atualizado_em', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(rows) {
+    // V151 — a sondagem agora pede só chave+atualizado_em (~120 bytes). Antes
+    // vinha "valor" junto: quando o relatório cabia num único chunk, isso
+    // significava baixar até 2,4 MB a cada 120s apenas para ler a data e, na
+    // maioria das vezes, concluir que nada tinha mudado.
+    fetch(SB_URL + '/configuracoes?chave=in.(tms_relatorio_meta,tms_relatorio)&select=chave,atualizado_em', {
+      headers: _sbCabecalhoLeitura()
+    }).then(function(r){ return r.json(); }).then(function(cabecalhos) {
+      if (!cabecalhos || !cabecalhos.length) return null;
+      var cMeta = cabecalhos.find(function(r){ return r.chave === 'tms_relatorio_meta'; });
+      var cRel  = cabecalhos.find(function(r){ return r.chave === 'tms_relatorio'; });
+      var tsSonda = (cMeta && cMeta.atualizado_em) ? new Date(cMeta.atualizado_em) :
+                    ((cRel && cRel.atualizado_em) ? new Date(cRel.atualizado_em) : null);
+      // Mesma condição de corte usada mais abaixo — aplicada agora, antes do download.
+      if (!forcar && _relSupabaseTs && tsSonda && tsSonda.getTime() <= _relSupabaseTs.getTime()) {
+        _sbLeiturasEvitadas++;
+        return null;
+      }
+      return fetch(SB_URL + '/configuracoes?chave=in.(tms_relatorio_meta,tms_relatorio)&select=chave,valor,atualizado_em', {
+        headers: _sbCabecalhoLeitura()
+      }).then(function(r2){ return r2.json(); });
+    }).then(function(rows) {
       if (!rows || !rows.length) return;
 
       var metaRow = rows.find(function(r){ return r.chave === 'tms_relatorio_meta'; });
@@ -7192,21 +7329,35 @@ function cgSalvarBaselineSupabase(baseline, chave) {
 
 function cgCarregarBaselineSupabase(callback) {
   var chave = cgChaveTurno();
-  fetch(SB_URL + '/configuracoes?chave=eq.' + chave + '&select=valor', {
-    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-  }).then(function(r){ return r.json(); }).then(function(data) {
-    if (data && data.length && data[0].valor) {
-      try {
-        var obj = JSON.parse(data[0].valor);
-        cgBaselineMemoria = obj.destinos;
-        cgBaselineChave   = chave;
-        if (typeof callback === 'function') callback(cgBaselineMemoria);
-      } catch(e) { if (typeof callback === 'function') callback(null); }
-    } else {
-      cgBaselineMemoria = null;
-      cgBaselineChave   = null;
-      if (typeof callback === 'function') callback(null);
+  // V151 — ~100 KB a cada 90s. Se a baseline deste turno já está em memória e
+  // não mudou no banco, devolve a cópia local sem baixar nada de novo.
+  fetch(SB_URL + '/configuracoes?chave=eq.' + chave + '&select=atualizado_em', {
+    headers: _sbCabecalhoLeitura()
+  }).then(function(r){ return r.json(); }).then(function(cab) {
+    var ts = (cab && cab.length) ? (cab[0].atualizado_em || '') : '';
+    if (ts && cgBaselineChave === chave && _sbVersaoCache[chave] === ts) {
+      _sbLeiturasEvitadas++;
+      if (typeof callback === 'function') callback(cgBaselineMemoria);
+      return null;
     }
+    return fetch(SB_URL + '/configuracoes?chave=eq.' + chave + '&select=valor', {
+      headers: _sbCabecalhoLeitura()
+    }).then(function(r2){ return r2.json(); }).then(function(data) {
+      if (ts) _sbVersaoCache[chave] = ts;
+      if (data && data.length && data[0].valor) {
+        try {
+          var obj = JSON.parse(data[0].valor);
+          cgBaselineMemoria = obj.destinos;
+          cgBaselineChave   = chave;
+          if (typeof callback === 'function') callback(cgBaselineMemoria);
+        } catch(e) { if (typeof callback === 'function') callback(null); }
+      } else {
+        cgBaselineMemoria = null;
+        cgBaselineChave   = null;
+        if (typeof callback === 'function') callback(null);
+      }
+      return null;
+    });
   }).catch(function(){ if (typeof callback === 'function') callback(null); });
 }
 // ══════════════════════════════════════════════════════════════════════════
@@ -7238,9 +7389,22 @@ function cgGarantirCriticoRestante(cgData) {
 
 function sbCarregarPlanejamento() {
   try {
-    fetch(SB_URL + '/configuracoes?chave=eq.tms_planejamento&select=valor,atualizado_em', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(data) {
+    // V151 — ~100 KB a cada 90s. Confere a versão antes de baixar o conteúdo.
+    fetch(SB_URL + '/configuracoes?chave=eq.tms_planejamento&select=atualizado_em', {
+      headers: _sbCabecalhoLeitura()
+    }).then(function(r){ return r.json(); }).then(function(cab) {
+      var ts = (cab && cab.length) ? (cab[0].atualizado_em || '') : '';
+      if (ts && _sbVersaoCache['tms_planejamento'] === ts) {
+        _sbLeiturasEvitadas++;
+        return null;
+      }
+      return fetch(SB_URL + '/configuracoes?chave=eq.tms_planejamento&select=valor,atualizado_em', {
+        headers: _sbCabecalhoLeitura()
+      }).then(function(r2){ return r2.json(); }).then(function(d) {
+        if (ts) _sbVersaoCache['tms_planejamento'] = ts;
+        return d;
+      });
+    }).then(function(data) {
       if (data && data.length && data[0].valor) {
         // Só carrega se não tem dados locais mais recentes
         var remoto = JSON.parse(data[0].valor);
@@ -8574,9 +8738,22 @@ function _transitoSalvarSupabase() {
 
 function sbCarregarTransito(forcar) {
   try {
-    fetch(SB_URL + '/configuracoes?chave=eq.pbi_transito&select=valor,atualizado_em', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r) { return r.json(); }).then(function(rows) {
+    // V151 — a conferência de data agora vem ANTES do download. Antes o blob
+    // inteiro era baixado a cada 60s só para, na linha seguinte, descobrir que
+    // já se tinha a versão mais recente e descartá-lo.
+    fetch(SB_URL + '/configuracoes?chave=eq.pbi_transito&select=atualizado_em', {
+      headers: _sbCabecalhoLeitura()
+    }).then(function(r) { return r.json(); }).then(function(cab) {
+      if (!cab || !cab.length) return null;
+      var tsCab = cab[0].atualizado_em ? new Date(cab[0].atualizado_em) : null;
+      if (!forcar && _transitoSupabaseTs && tsCab && tsCab.getTime() <= _transitoSupabaseTs.getTime()) {
+        _sbLeiturasEvitadas++;
+        return null;
+      }
+      return fetch(SB_URL + '/configuracoes?chave=eq.pbi_transito&select=valor,atualizado_em', {
+        headers: _sbCabecalhoLeitura()
+      }).then(function(r2) { return r2.json(); });
+    }).then(function(rows) {
       if (!rows || !rows.length || !rows[0].valor) return;
       var tsRemoto = rows[0].atualizado_em ? new Date(rows[0].atualizado_em) : null;
       // Não reatualiza se já tem a versão mais recente
@@ -13667,26 +13844,82 @@ function _descAcompAplicarCelulaRemota(mac, registro) {
 var _SB_PAGINA_TAM = 1000;
 var _SB_MAX_PAGINAS = 60; // trava de segurança: 60 mil registros
 
-function _sbLerCelulasPaginado(prefixo, aplicarLinha) {
+// V151 — parâmetro "incremental": quando true e o prefixo já foi validado,
+// pede apenas as linhas alteradas desde a última marca d'água. A primeira
+// leitura de cada prefixo é sempre completa.
+function _sbLerCelulasPaginado(prefixo, aplicarLinha, incremental) {
   return new Promise(function(resolve) {
-    var offset = 0, total = 0, pagina = 0;
+    var offset = 0, total = 0, pagina = 0, nulos = 0, maiorTs = '', menorTsIgnorado = '';
+    // Só usa o filtro incremental se a carga completa anterior confirmou que
+    // todas as linhas têm "atualizado_em". Caso contrário, lê tudo (V150).
+    var usarFiltro = !!(incremental && _sbIncrementalOk[prefixo] && _sbMarcaDagua[prefixo]);
+    var filtroTs = usarFiltro ? '&atualizado_em=gt.' + encodeURIComponent(_sbMarcaDagua[prefixo]) : '';
+
+    function finalizar() {
+      if (!usarFiltro) {
+        // Carga completa: decide se o modo incremental pode ser ligado.
+        _sbIncrementalOk[prefixo] = (total > 0 && nulos === 0);
+        if (!_sbIncrementalOk[prefixo] && total > 0) {
+          console.warn('[supabase] "' + prefixo + '" tem ' + nulos + ' linha(s) sem atualizado_em — ' +
+                       'lendo tudo a cada ciclo. Aplique o gatilho no banco para economizar banda.');
+        }
+      }
+      // A marca d'água é EXATA, sem folga de tempo. Uma folga fixa parecia mais
+      // segura, mas tinha um efeito perverso: quando muitas linhas são gravadas
+      // no mesmo instante (é o caso de uma importação), todas ficam dentro da
+      // folga e voltam a ser lidas em todo ciclo — a economia caía a zero.
+      //
+      // A folga não é necessária: uma linha gravada DURANTE a leitura paginada
+      // recebe um "atualizado_em" maior que o maior já visto, então o filtro
+      // "gt." do ciclo seguinte a alcança de qualquer forma.
+      //
+      // O único caso que exige recuo é a linha que a guarda de edição local
+      // mandou ignorar. Aí a marca recua só até um instante antes dela — e
+      // apenas ela (e as mais novas) são relidas no ciclo seguinte.
+      var marca = maiorTs;
+      if (menorTsIgnorado) {
+        var ti = Date.parse(menorTsIgnorado);
+        if (!isNaN(ti) && (!marca || menorTsIgnorado <= marca)) marca = new Date(ti - 1).toISOString();
+      }
+      if (marca) {
+        _sbMarcaDagua[prefixo] = marca;
+      } else if (!usarFiltro && _sbIncrementalOk[prefixo]) {
+        _sbMarcaDagua[prefixo] = new Date(Date.now()).toISOString();
+      }
+      resolve(total);
+    }
+
     function proxima() {
       if (pagina++ >= _SB_MAX_PAGINAS) {
         console.warn('[supabase] Leitura de "' + prefixo + '" interrompida na trava de segurança após ' + total + ' registros.');
-        return resolve(total);
+        return finalizar();
       }
-      fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(prefixo) + '*&select=chave,valor' +
-            '&order=chave.asc&limit=' + _SB_PAGINA_TAM + '&offset=' + offset, {
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+      fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(prefixo) + '*&select=chave,valor,atualizado_em' +
+            filtroTs + '&order=chave.asc&limit=' + _SB_PAGINA_TAM + '&offset=' + offset, {
+        headers: _sbCabecalhoLeitura()
       }).then(function(r){ return r.json(); }).then(function(rows) {
-        if (!rows || !rows.length) return resolve(total);
-        rows.forEach(function(row) { try { aplicarLinha(row); } catch(e) {} });
+        if (!rows || !rows.length) {
+          if (usarFiltro && total === 0) _sbLeiturasEvitadas++;
+          return finalizar();
+        }
+        rows.forEach(function(row) {
+          if (row && row.atualizado_em) {
+            if (!maiorTs || row.atualizado_em > maiorTs) maiorTs = row.atualizado_em;
+          } else { nulos++; }
+          var aplicou = true;
+          try { aplicou = (aplicarLinha(row) !== false); } catch(e) {}
+          // Linha recusada pela guarda de edição local: segura a marca d'água
+          // antes dela para que seja reoferecida no próximo ciclo.
+          if (!aplicou && row && row.atualizado_em) {
+            if (!menorTsIgnorado || row.atualizado_em < menorTsIgnorado) menorTsIgnorado = row.atualizado_em;
+          }
+        });
         total += rows.length;
         // Avança pelo tamanho REAL devolvido: se o servidor tiver um teto menor
         // que _SB_PAGINA_TAM, a paginação continua correta mesmo assim.
         offset += rows.length;
         proxima();
-      }).catch(function() { resolve(total); });
+      }).catch(function() { finalizar(); });
     }
     proxima();
   });
@@ -13709,7 +13942,15 @@ function ROTA7Diag() {
   console.log('Executado   :', Math.round(d.pesoExecutado || 0), 'kg');
   console.log('Programado  :', Math.round(d.pesoProgramado || 0), 'kg');
   console.log('Realtime conectado:', _sbRealtimeOk, '| já caiu nesta sessão:', _sbRealtimeCaiu);
+  // V151 — o diagnóstico faz leitura COMPLETA com callback vazio: não aplica
+  // nada em _descAcompData. Se deixasse a marca d'água avançar, as linhas
+  // gravadas entre o último ciclo de sync e este comando ficariam para trás e
+  // nunca seriam aplicadas. Por isso o estado incremental é salvo e reposto.
+  var _diagMarca = _sbMarcaDagua['desc_acomp_cel:'];
+  var _diagOk    = _sbIncrementalOk['desc_acomp_cel:'];
   _sbLerCelulasPaginado('desc_acomp_cel:', function(){}).then(function(n) {
+    _sbMarcaDagua['desc_acomp_cel:']    = _diagMarca;
+    _sbIncrementalOk['desc_acomp_cel:'] = _diagOk;
     console.log('Linhas desc_acomp_cel no Supabase (leitura paginada completa):', n);
     console.log('Se este número for maior que o de registros em memória, a leitura antiga estava sendo cortada.');
   });
@@ -13717,6 +13958,8 @@ function ROTA7Diag() {
 }
 
 var _descAcompMigracaoFeita = false;
+// V151 — true depois da primeira leitura completa das células nesta sessão.
+var _descAcompCargaFeita = false;
 function _descAcompCarregarSupabase() {
   try {
     // A migração do blob antigo só faz sentido uma vez por sessão. Como esta
@@ -13736,20 +13979,26 @@ function _descAcompCarregarSupabase() {
       });
     }).catch(function(){});
 
+    // V151 — a primeira carga da sessão é completa; os reforços de 60s passam
+    // a pedir só o que mudou. _descAcompMigracaoFeita já marca que a carga
+    // inicial ocorreu, então serve de sinalizador para o modo incremental.
     var pCelulas = _sbLerCelulasPaginado('desc_acomp_cel:', function(row) {
       var chave = String(row.chave || '');
       if (chave.indexOf('desc_acomp_cel:') !== 0) return;
       var mac = chave.slice('desc_acomp_cel:'.length);
       // Não deixa uma leitura em trânsito apagar o que acabou de ser digitado
-      // aqui (ver _descAcompLocalMaisNovo).
-      if (_descAcompLocalMaisNovo(mac)) return;
+      // aqui (ver _descAcompLocalMaisNovo). O "false" avisa a leitura paginada
+      // de que esta linha foi recusada, para que ela seja reoferecida depois
+      // que a janela de edição local (20s) expirar.
+      if (_descAcompLocalMaisNovo(mac)) return false;
       try {
         _descAcompData[mac] = JSON.parse(row.valor);
         _descAcompUltimoSalvo[mac] = row.valor;
       } catch(e) {}
-    });
+    }, _descAcompCargaFeita);
 
     Promise.all([pMigracao, pCelulas]).then(function() {
+      _descAcompCargaFeita = true;
       try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
       if (typeof descargaAcompRenderizar === 'function') {
         var tab = document.getElementById('tab-descargaAcomp-content');
@@ -14433,9 +14682,10 @@ function _relatorioHistoricoSalvarSupabase() {
 // Carrega o Histórico de Relatório do Supabase (chamado no início do app e via realtime)
 function _relatorioHistoricoCarregarSupabase() {
   try {
-    fetch(SB_URL + '/configuracoes?chave=eq.descarga_historico_relatorio&select=valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(data) {
+    // V151 — era a leitura mais cara do ciclo de 60s: 95 KB baixados sempre,
+    // mesmo sem nenhuma mudança. Agora confere a versão antes (~80 bytes).
+    _sbLerSeMudou('descarga_historico_relatorio', function(valor) {
+      var data = [{ valor: valor }];
       if (data && data.length && data[0].valor) {
         _relatorioHistorico = JSON.parse(data[0].valor);
         
@@ -15138,6 +15388,8 @@ function _acompOutAplicarCelulaRemota(id, registro) {
 // no blob antigo (formato usado antes desta correção, para não perder histórico),
 // depois lê cada linha já no formato novo (uma por veículo).
 var _acompOutMigracaoFeita = false;
+// V151 — true depois da primeira leitura completa das células nesta sessão.
+var _acompOutCargaFeita = false;
 function _acompOutCarregarSupabase() {
   try {
     // Migração do blob antigo: uma vez por sessão (ver equivalente no IN).
@@ -15159,14 +15411,17 @@ function _acompOutCarregarSupabase() {
       var chave = String(row.chave || '');
       if (chave.indexOf('acomp_out_cel:') !== 0) return;
       var id = chave.slice('acomp_out_cel:'.length);
-      if (_acompOutLocalMaisNovo(id)) return; // edição local recente vence a leitura em trânsito
+      // edição local recente vence a leitura em trânsito; o "false" segura a
+      // marca d'água para que a linha volte a ser oferecida no ciclo seguinte
+      if (_acompOutLocalMaisNovo(id)) return false;
       try {
         _acompOutData[id] = JSON.parse(row.valor);
         _acompOutUltimoSalvo[id] = row.valor;
       } catch(e) {}
-    });
+    }, _acompOutCargaFeita);
 
     Promise.all([pMigracao, pCelulas]).then(function() {
+      _acompOutCargaFeita = true;
       try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(e){}
       if (typeof acompOutRenderizar === 'function') {
         var tab = document.getElementById('tab-acompOut-content');
