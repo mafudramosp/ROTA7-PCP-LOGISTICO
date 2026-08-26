@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V156--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V161--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -494,31 +494,40 @@
   #tab-listaPresenca-content table { min-width: 0 !important; }
 
   /* ── HC Produtivo: quadros de turno em formato de card (referência: cartões de plano) ──
-     Cada turno é um card com faixa branca de identificação no topo, a capacidade lida
-     como "preço" (inteiro grande + decimais sobrescritos), as funções em linhas separadas
-     por filetes translúcidos e uma tarja branca de rodapé com o efetivo escalado.
+     Cada turno é um card com faixa branca de identificação no topo e as funções em linhas
+     separadas por filetes translúcidos. Os cards de Inbound/Outbound mostram apenas as
+     funções; só os cards de Capacidade por turno (IN+OUT, no fim da tela) exibem a
+     capacidade lida como "preço" (inteiro grande + decimais sobrescritos).
      A cor identifica o turno e se repete em Inbound e Outbound. */
-  .lp-grid { display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch; }
+  .lp-grid { display: flex; gap: 14px; flex-wrap: wrap; align-items: stretch; }
   .lp-card {
-    flex: 1 1 250px; min-width: 240px; max-width: 340px;
-    border-radius: 14px 14px 10px 10px; overflow: hidden;
+    flex: 1 1 240px; min-width: 232px; max-width: 292px;
+    border-radius: 12px 12px 10px 10px; overflow: hidden;
     display: flex; flex-direction: column;
     box-shadow: 0 10px 26px rgba(15,23,42,.18);
     font-family: 'Poppins', sans-serif;
   }
   .lp-card--destaque { box-shadow: 0 18px 40px rgba(15,23,42,.3); margin-top: -12px; }
-  .lp-tab { background: #fff; padding: 14px 18px 12px; text-align: center; }
-  .lp-tab-nome { font-size: 15px; font-weight: 800; color: #1e293b; letter-spacing: .1em; text-transform: uppercase; line-height: 1.1; }
+  .lp-tab { background: #fff; padding: 11px 16px 9px; text-align: center; }
+  .lp-tab-nome { font-size: 14px; font-weight: 800; color: #1e293b; letter-spacing: .1em; text-transform: uppercase; line-height: 1.1; }
   .lp-tab-sub  { font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; margin-top: 3px; }
-  .lp-body { flex: 1; padding: 18px 18px 14px; text-align: center; }
+  .lp-body { flex: 1; padding: 14px 16px 16px; text-align: center; }
   .lp-preco { color: #fff; line-height: 1; display: inline-flex; align-items: flex-start; }
   .lp-preco-int { font-size: 38px; font-weight: 800; letter-spacing: -.02em; }
   .lp-preco-dec { font-size: 17px; font-weight: 800; margin-top: 3px; }
   .lp-preco-cap { font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.78); margin-top: 5px; }
   .lp-linhas { margin-top: 16px; }
+  /* Cards de turno (sem o bloco de capacidade no topo): as linhas começam coladas na tarja */
+  .lp-linhas--solo { margin-top: 0; }
+  /* Cards de Capacidade por turno (IN+OUT): só o total, sem linhas de função — bloco menor */
+  .lp-card--cap { flex: 0 1 232px; min-width: 190px; max-width: 232px; }
+  .lp-card--cap .lp-tab { padding: 10px 14px 8px; }
+  .lp-card--cap .lp-body { padding: 14px 14px 16px; display: flex; flex-direction: column; justify-content: center; }
+  .lp-card--cap .lp-preco-int { font-size: 34px; }
+  .lp-card--cap .lp-preco-dec { font-size: 15px; }
   .lp-linha {
     display: flex; align-items: center; gap: 9px;
-    padding: 9px 2px; border-top: 1px solid rgba(255,255,255,.3);
+    padding: 8px 2px; border-top: 1px solid rgba(255,255,255,.3);
   }
   .lp-linha:last-child { border-bottom: 1px solid rgba(255,255,255,.3); }
   .lp-marca {
@@ -532,12 +541,6 @@
   .lp-fn { flex: 1; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: rgba(255,255,255,.95); }
   .lp-cap { font-size: 12px; font-weight: 800; color: #fff; min-width: 52px; text-align: right; }
   .lp-cap.off { color: rgba(255,255,255,.45); }
-  .lp-foot {
-    background: #fff; margin: 4px 18px 16px; border-radius: 6px;
-    padding: 9px 14px; display: flex; align-items: center; justify-content: space-between;
-  }
-  .lp-foot-lb { font-size: 9.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #94a3b8; }
-  .lp-foot-vl { font-size: 15px; font-weight: 800; }
   /* Campo de QTD: chip translúcido sobre o gradiente — precisa vencer o tema escuro global */
   #tab-listaPresenca-content .lp-card input.lp-qtd,
   body.dark #tab-listaPresenca-content .lp-card input.lp-qtd {
@@ -558,6 +561,7 @@
   @media (max-width: 640px) {
     .lp-card { max-width: none; }
     .lp-card--destaque { margin-top: 0; }
+    .lp-card--cap { flex: 1 1 auto; max-width: none; }
   }
 
   /* Tela Programar Malha do dia: coluna 2 (Tipo) oculta apenas visualmente — o <select>
@@ -630,87 +634,6 @@
     border: 1.5px solid;
   }
 
-
-  /* NOTIFICATION TOAST CUSTOM */
-  .notif-item {
-    padding: 12px 16px;
-    border-bottom: 1px solid #1e2035;
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    cursor: default;
-    transition: background 0.1s;
-  }
-  .notif-item:hover { background: rgba(255,255,255,0.03); }
-  .notif-item:last-child { border-bottom: none; }
-  .notif-icon {
-    font-size: 22px;
-    flex-shrink: 0;
-    margin-top: 1px;
-  }
-  .notif-body { flex: 1; }
-  .notif-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: #f1f5f9;
-    margin-bottom: 2px;
-  }
-  .notif-sub {
-    font-size: 11px;
-    color: #64748b;
-    line-height: 1.4;
-  }
-  .notif-time-badge {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 20px;
-    white-space: nowrap;
-    flex-shrink: 0;
-    margin-top: 2px;
-  }
-  .badge-urgent { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
-  .badge-warning { background: rgba(234,179,8,0.2); color: #fbbf24; border: 1px solid rgba(234,179,8,0.3); }
-  .badge-info { background: rgba(0,178,0,0.15); color: #4ade80; border: 1px solid rgba(0,178,0,0.3); }
-
-  /* PULSE ANIMATION for bell */
-  @keyframes bellPulse {
-    0%,100% { transform: rotate(0deg); }
-    15%     { transform: rotate(15deg); }
-    30%     { transform: rotate(-12deg); }
-    45%     { transform: rotate(10deg); }
-    60%     { transform: rotate(-8deg); }
-    75%     { transform: rotate(5deg); }
-  }
-  .bell-ringing { animation: bellPulse 0.6s ease-in-out; }
-
-  /* ALERT TOAST (different from normal toast) */
-  .alert-toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(80px);
-    z-index: 9998;
-    background: #1a1a2e;
-    border: 1px solid;
-    border-radius: 12px;
-    padding: 14px 20px;
-    min-width: 320px;
-    max-width: 90vw;
-    box-shadow: 0 16px 40px rgba(0,0,0,0.6);
-    opacity: 0;
-    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    font-family: 'Poppins', sans-serif;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
-  .alert-toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-  .alert-toast-urgent { border-color: #ef4444; }
-  .alert-toast-warning { border-color: #eab308; }
 
   /* ===== MOBILE RESPONSIVE ===== */
   @media (max-width: 768px) {
@@ -1839,21 +1762,6 @@
   </button>
   
   <div style="margin-left:auto"></div>
-  <button id="notif-bell" onclick="toggleNotifPanel()"  title="Alertas de horário" style="
-    background:none;border:none;cursor:pointer;position:relative;
-    padding:6px 8px;border-radius:8px;transition:background 0.15s;
-    color:#d1d5db;font-size:18px;line-height:1;
-  " onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">
-    🔔
-    <span id="notif-count" style="
-      position:absolute;top:2px;right:2px;
-      background:#ef4444;color:white;
-      border-radius:50%;width:16px;height:16px;
-      font-size:9px;font-weight:700;
-      display:none;align-items:center;justify-content:center;
-      font-family:'Poppins',sans-serif;line-height:1;
-    ">0</span>
-  </button>
 
 </div>
 
@@ -1986,7 +1894,6 @@
       <div id="plat-msgs-list" style="max-height:180px;overflow-y:auto;padding:6px 0"></div>
     </div>
 
-    <div id="proximas-saidas-bar" style="display:none;background:#1a1a2e;border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"></div>
     <div class="stats-row" id="stats-prog"></div>
     <div class="table-wrap">
       <table id="table-prog">
@@ -2508,31 +2415,6 @@ function _gradeAtualizarComMalha(rows) {
     <div id="email-overlay-btns" style="margin-top:20px;display:none;gap:8px;justify-content:center;flex-wrap:wrap"></div>
   </div>
 </div>
-
-<!-- NOTIFICATION PANEL -->
-<div id="notif-panel" style="
-  position:fixed;top:60px;right:16px;z-index:2000;
-  background:#1a1a2e;border:1px solid #2d2d4e;
-  border-radius:12px;width:340px;max-height:480px;
-  box-shadow:0 16px 48px rgba(0,0,0,0.5);
-  display:none;flex-direction:column;overflow:hidden;
-  font-family:'Poppins',sans-serif;
-">
-  <div style="
-    padding:14px 16px 10px;
-    border-bottom:1px solid #2d2d4e;
-    display:flex;align-items:center;justify-content:space-between;
-  ">
-    <div style="font-size:13px;font-weight:700;color:#f1f5f9">🔔 Alertas de Saída</div>
-    <button onclick="limparAlertas()" style="
-      background:none;border:none;cursor:pointer;
-      font-size:10px;color:#64748b;font-family:'Poppins',sans-serif;
-      padding:2px 6px;border-radius:4px;
-    " onmouseover="this.style.color='#94a3b8'" onmouseout="this.style.color='#64748b'">Limpar todos</button>
-  </div>
-  <div id="notif-list" style="overflow-y:auto;max-height:400px;padding:8px 0"></div>
-</div>
-
 
 <!-- ===================== TAB: PLATAFORMA ===================== -->
 
@@ -5908,6 +5790,7 @@ document.addEventListener('click',function(e){
 
   <div id="lp-inbound" style="margin-bottom:22px"></div>
   <div id="lp-outbound"></div>
+  <div id="lp-capacidade" style="margin-top:22px"></div>
 
   <div style="font-size:11px;color:#94a3b8;margin-top:14px">
     Capacidade = QTD &times; Meta da fun&ccedil;&atilde;o &times; Atua&ccedil;&atilde;o Turno &nbsp;&middot;&nbsp; Terceiros usa a meta do Ajudante
@@ -6249,7 +6132,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V156';
+var ROTA7_VERSAO = 'V161';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -8656,20 +8539,20 @@ function _lpLinhaCard(funcao, qtd, cap, campoQtd) {
 
 function _lpMontarCard(opts) {
   var p = LP_PALETA[opts.paleta] || LP_PALETA['Total'];
-  return '<div class="lp-card' + (opts.destaque ? ' lp-card--destaque' : '') + '" ' +
+  return '<div class="lp-card' + (opts.destaque ? ' lp-card--destaque' : '') +
+      (opts.classe ? ' ' + opts.classe : '') + '" ' +
       'style="background:linear-gradient(180deg,' + p.g1 + ' 0%,' + p.g2 + ' 100%)">' +
     '<div class="lp-tab">' +
       '<div class="lp-tab-nome">' + opts.titulo + '</div>' +
       '<div class="lp-tab-sub" style="color:' + p.ac + '">' + opts.subtitulo + '</div>' +
     '</div>' +
     '<div class="lp-body">' +
-      _lpPrecoHtml(opts.capacidade) +
-      '<div class="lp-preco-cap">Capacidade</div>' +
-      '<div class="lp-linhas">' + opts.linhas + '</div>' +
-    '</div>' +
-    '<div class="lp-foot">' +
-      '<span class="lp-foot-lb">Total escalado</span>' +
-      '<span class="lp-foot-vl" style="color:' + p.ac + '">' + _lpFmt(opts.efetivo, 0) + '</span>' +
+      (opts.mostrarCapacidade
+        ? (_lpPrecoHtml(opts.capacidade) + '<div class="lp-preco-cap">Capacidade</div>')
+        : '') +
+      (opts.linhas
+        ? ('<div class="lp-linhas' + (opts.mostrarCapacidade ? '' : ' lp-linhas--solo') + '">' + opts.linhas + '</div>')
+        : '') +
     '</div>' +
   '</div>';
 }
@@ -8738,6 +8621,43 @@ function _lpSecao(fluxo, titulo) {
     '</div>';
 }
 
+// ── Capacidade por turno (Inbound + Outbound) ──
+// Um card por turno logo abaixo da seção Outbound, mostrando SÓ o total: a soma de
+// Ajudante + Terceiros dos DOIS fluxos naquele turno. O detalhe por função já aparece
+// nos cards de Inbound/Outbound acima, então aqui não se repete.
+// É a mesma métrica do card verde "Capacidade" do topo, aberta por turno.
+var LP_FUNCOES_CAP = ['Ajudante', 'Terceiros'];
+
+function _lpCardCapacidadeTurno(turno, atuacao) {
+  var dia = _lpDiaAtual();
+  var somaCap = 0;
+  LP_FUNCOES_CAP.forEach(function(f) {
+    var qtd = 0;
+    ['inbound', 'outbound'].forEach(function(fluxo) {
+      var dados = (dia[fluxo] && dia[fluxo][turno]) ? dia[fluxo][turno] : {};
+      qtd += _lpNum(dados[f]);
+    });
+    somaCap += qtd * _lpMetaDe(f) * atuacao;
+  });
+
+  return _lpMontarCard({
+    paleta: 'Total', titulo: turno, subtitulo: 'Inbound + Outbound',
+    capacidade: somaCap, linhas: '', classe: 'lp-card--cap',
+    destaque: false, mostrarCapacidade: true
+  });
+}
+
+function _lpSecaoCapacidade() {
+  var atuacao = _lpNum((_lpDados.metas || {}).atuacao);
+  var partes = _lpDataSel.split('-');
+  var dataBR = partes.length === 3 ? (partes[2] + '/' + partes[1] + '/' + partes[0]) : _lpDataSel;
+  return '<div style="font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:1px solid #cbd5e1;display:inline-block;padding-right:40px">' +
+      'CAPACIDADE MOVIMENTAÇÃO - ' + dataBR + '</div>' +
+    '<div class="lp-grid">' +
+      LP_TURNOS.map(function(t){ return _lpCardCapacidadeTurno(t, atuacao); }).join('') +
+    '</div>';
+}
+
 // Soma a capacidade de uma função (Conferente/Ajudante/Terceiros) em TODOS os
 // turnos e nos DOIS fluxos (Inbound + Outbound) do dia selecionado.
 function _lpCapacidadeTotalFuncao(funcao) {
@@ -8789,6 +8709,8 @@ function lpRenderizar() {
 
   elIn.innerHTML = _lpSecao('inbound', 'Inbound');
   elOut.innerHTML = _lpSecao('outbound', 'Outbound');
+  var elCap = document.getElementById('lp-capacidade');
+  if (elCap) elCap.innerHTML = _lpSecaoCapacidade();
   _lpAtualizarCardsMeta();
 }
 
@@ -11013,7 +10935,6 @@ setInterval(updateClock, 1000);
 setInterval(applyDTInputs, 2000); // Re-apply after renders
 updateClock();
 
-// checkHorarios and requestNotifPermission called after definition below
 
 
 // ===== ENVIAR POR E-MAIL =====
@@ -11357,256 +11278,12 @@ function saveEditProgramado(id) {
   showToast('Programação de ' + r.destino + ' atualizada!', 'success');
 }
 
-// ===== NOTIFICATION SYSTEM =====
-let alertsShown = new Set(); // track which alerts were already shown
-let notifications = [];
-
-function checkHorarios() {
-  const now = new Date();
-  const hNow = now.getHours();
-  const mNow = now.getMinutes();
-  const minNow = hNow * 60 + mNow;
-  const diaHoje = getDiaHoje();
-  const gradeHoje = gradeData.filter(r => r.dia === diaHoje);
-
-  let newAlerts = [];
-
-  gradeHoje.forEach(r => {
-    if (!r.saida) return;
-    const [hS, mS] = r.saida.split(':').map(Number);
-    const minSaida = hS * 60 + mS;
-    const diff = minSaida - minNow; // minutes until departure
-
-    let level = null;
-    let alertKey = null;
-
-    if (diff > 0 && diff <= 15) {
-      level = 'urgent';
-      alertKey = r.destino + '_' + r.saida + '_15min';
-    } else if (diff > 0 && diff <= 30) {
-      level = 'warning';
-      alertKey = r.destino + '_' + r.saida + '_30min';
-    } else if (diff > 0 && diff <= 60) {
-      level = 'info';
-      alertKey = r.destino + '_' + r.saida + '_60min';
-    }
-
-    if (level && alertKey && !alertsShown.has(alertKey)) {
-      alertsShown.add(alertKey);
-      const alerta = {
-        id: alertKey,
-        level,
-        destino: r.destino,
-        composicao: r.composicao,
-        saida: r.saida,
-        regiao: r.regiao,
-        diff,
-        ts: new Date()
-      };
-      notifications.unshift(alerta);
-      newAlerts.push(alerta);
-      triggerAlertToast(alerta);
-    }
-  });
-
-  // Also reset alerts for times that have passed (next day)
-  gradeHoje.forEach(r => {
-    if (!r.saida) return;
-    const [hS, mS] = r.saida.split(':').map(Number);
-    const minSaida = hS * 60 + mS;
-    if (minSaida < minNow) {
-      // Clean up old keys for past times
-      ['15min','30min','60min'].forEach(k => alertsShown.delete(r.destino + '_' + r.saida + '_' + k));
-    }
-  });
-
-  updateNotifBadge();
-  updateProximasBar();
-}
-
-function updateProximasBar() {
-  const bar = document.getElementById('proximas-saidas-bar');
-  if (!bar) return;
-  const diaHoje = getDiaHoje();
-  const now = new Date();
-  const minNow = now.getHours() * 60 + now.getMinutes();
-  
-  const proximas = gradeData
-    .filter(r => r.dia === diaHoje && r.saida)
-    .map(r => {
-      const [h, m] = r.saida.split(':').map(Number);
-      return { ...r, minSaida: h * 60 + m, diff: (h * 60 + m) - minNow };
-    })
-    .filter(r => r.diff > 0 && r.diff <= 90)
-    .sort((a, b) => a.diff - b.diff)
-    .slice(0, 5);
-
-  if (!proximas.length) {
-    bar.style.display = 'none';
-    return;
-  }
-  bar.style.display = 'flex';
-  bar.innerHTML =
-    '<span style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap">⏰ Próximas saídas:</span>' +
-    proximas.map(r => {
-      const color = r.diff <= 15 ? '#f87171' : r.diff <= 30 ? '#fbbf24' : '#4ade80';
-      const bg = r.diff <= 15 ? 'rgba(239,68,68,0.15)' : r.diff <= 30 ? 'rgba(251,191,36,0.12)' : 'rgba(74,222,128,0.1)';
-      return '<span style="background:' + bg + ';border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;color:' + color + ';white-space:nowrap">' +
-        r.destino + ' <span style="font-family:monospace">' + r.saida + '</span>' +
-        ' <span style="font-weight:400;opacity:0.8">em ' + r.diff + 'min</span>' +
-        '</span>';
-    }).join('');
-}
-
-function diffLabel(diff) {
-  if (diff <= 15) return `⚡ ${diff} min para saída!`;
-  if (diff <= 30) return `⏰ ${diff} min para saída`;
-  return `🕐 ${diff} min para saída`;
-}
-
-function triggerAlertToast(alerta) {
-  // Sound + vibration
-  if (alerta.level === 'urgent') tocarAlertaUrgente();
-  else tocarMensagem();
-
-  // Ring bell safely
-  const bell = document.getElementById('notif-bell');
-  if (bell) {
-    bell.classList.remove('bell-ringing');
-    void bell.offsetWidth;
-    bell.classList.add('bell-ringing');
-    setTimeout(() => bell.classList.remove('bell-ringing'), 700);
-  }
-
-  // Show floating toast
-  let existing = document.getElementById('alert-toast-el');
-  if (existing) existing.remove();
-
-  const icons = { urgent: '🚨', warning: '⚠️', info: '🔔' };
-  const msgs = {
-    urgent: `ATENÇÃO! Saída em ${alerta.diff} minutos`,
-    warning: `Fique atento! Saída em ${alerta.diff} minutos`,
-    info: `Lembrete: saída em ${alerta.diff} minutos`
-  };
-  const colors = { urgent: '#ef4444', warning: '#eab308', info: '#00B200' };
-
-  const el = document.createElement('div');
-  el.id = 'alert-toast-el';
-  el.className = `alert-toast alert-toast-${alerta.level}`;
-  el.innerHTML = `
-    <div style="font-size:28px">${icons[alerta.level]}</div>
-    <div style="flex:1">
-      <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:3px">${msgs[alerta.level]}</div>
-      <div style="font-size:12px;color:#94a3b8">
-        <span style="font-weight:700;color:${colors[alerta.level]}">${alerta.destino}</span>
-        · Saída: <span style="font-weight:700;color:${colors[alerta.level]}">${alerta.saida}</span>
-        · ${alerta.composicao}
-      </div>
-      <div style="font-size:10px;color:#475569;margin-top:3px">Fique esperto para liberação e saída do veículo!</div>
-    </div>
-    <button onclick="this.parentElement.classList.remove('show')" style="
-      background:none;border:none;cursor:pointer;
-      color:#475569;font-size:18px;padding:0 4px;line-height:1;
-    ">✕</button>
-  `;
-  document.body.appendChild(el);
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => el.classList.add('show'));
-  });
-
-  // Auto-hide after 12 seconds (urgent stays longer)
-  const hideDelay = alerta.level === 'urgent' ? 20000 : 12000;
-  setTimeout(() => el && el.classList.remove('show'), hideDelay);
-  setTimeout(() => el && el.remove(), hideDelay + 500);
-
-  // Browser notification (if permitted)
-  if (Notification.permission === 'granted') {
-    new Notification('⚡ ' + msgs[alerta.level], {
-      body: alerta.destino + ' · Saída: ' + alerta.saida + ' · ' + alerta.composicao,
-      icon: ''
-    });
-  }
-
-  updateNotifPanel();
-}
-
-function updateNotifBadge() {
-  const count = notifications.length;
-  const badge = document.getElementById('notif-count');
-  if (!badge) return;
-  if (count > 0) {
-    badge.textContent = count > 9 ? '9+' : count;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-function updateNotifPanel() {
-  const list = document.getElementById('notif-list');
-  if (!notifications.length) {
-    list.innerHTML = `<div style="padding:32px 16px;text-align:center;color:#475569;font-size:12px">
-      <div style="font-size:32px;margin-bottom:8px">🔕</div>
-      Nenhum alerta no momento
-    </div>`;
-    return;
-  }
-  const icons = { urgent: '🚨', warning: '⚠️', info: '🔔' };
-  const colors = { urgent: '#f87171', warning: '#fbbf24', info: '#4ade80' };
-  const badgeCls = { urgent: 'badge-urgent', warning: 'badge-warning', info: 'badge-info' };
-  list.innerHTML = notifications.map(a => `
-    <div class="notif-item">
-      <div class="notif-icon">${icons[a.level]}</div>
-      <div class="notif-body">
-        <div class="notif-title" style="color:${colors[a.level]}">${a.destino} — ${a.saida}</div>
-        <div class="notif-sub">${a.composicao}</div>
-        <div class="notif-sub" style="margin-top:2px">Fique esperto para liberação e saída!</div>
-      </div>
-      <span class="notif-time-badge ${badgeCls[a.level]}">${diffLabel(a.diff)}</span>
-    </div>
-  `).join('');
-}
-
-function toggleNotifPanel() {
-  const panel = document.getElementById('notif-panel');
-  const isOpen = panel.style.display === 'flex';
-  panel.style.display = isOpen ? 'none' : 'flex';
-  if (!isOpen) updateNotifPanel();
-}
-
-function limparAlertas() {
-  notifications = [];
-  updateNotifBadge();
-  updateNotifPanel();
-}
-
-// Close panel clicking outside
-document.addEventListener('click', e => {
-  const panel = document.getElementById('notif-panel');
-  const bell = document.getElementById('notif-bell');
-  if (panel && bell && !panel.contains(e.target) && !bell.contains(e.target)) {
-    panel.style.display = 'none';
-  }
-});
-
-// Request browser notification permission
-function requestNotifPermission() {
-  if (Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-}
-
-
 // Show sync button if Sheets configured
 if (USAR_SHEETS && APPS_SCRIPT_URL) {
   var syncBtn = document.getElementById('sync-btn');
   if (syncBtn) syncBtn.style.display = 'inline-flex';
 }
 
-// ===== START NOTIFICATION CHECKS =====
-setInterval(checkHorarios, 30000);
-checkHorarios();
-requestNotifPermission();
 // ===== PLATAFORMA — ACESSO SIMPLIFICADO =====
 // Alert tracking via Sets (see _shownPlatIds, _shownPlanIds)
 
@@ -18880,6 +18557,8 @@ function gestaoVistaRenderizar() {
   var corVisao = (_gvVisaoAtual === 'out') ? '#f0b429' : '#3fb950';
   // OUT: fluxo TMS calculado uma única vez por render (pílula, card principal e tabela reutilizam)
   var fluxoOut = (_gvVisaoAtual === 'out') ? _gvFluxoFilaOUT() : null;
+  // IN: mesmo padrão — o card Executado e a tabela de Fluxo de Fila reutilizam este cálculo
+  var fluxoIn = (_gvVisaoAtual === 'in') ? _gvFluxoFilaIN() : null;
   if (fluxoOut && fluxoOut.temTms) dados.pesoFila = fluxoOut.total.filaFinal;
 
   // ── Badges de filtro ativo (turno + frota) ──
@@ -18899,6 +18578,12 @@ function gestaoVistaRenderizar() {
   //   Executado  = descarregado/carregado (tem Hora Fim preenchida)
   // Executado e Programado são FATIAS do Plano — a barra branca representa o Plano inteiro (100%).
   var pesoTotalHoje = 0, pesoProgramado = 0, pesoExecutado = 0, pesoNaoIniciado = 0;
+  // Executado recortado no turno vigente — alimenta SOMENTE o card "Executado",
+  // nas duas visões (IN e OUT). Fica null sempre que não houver linha de turno para
+  // ler; nesses casos o card cai de volta no executado do dia. Barra de progressão,
+  // donut de % Eficiência e card "Peso Descarregado/Carregado" continuam lendo
+  // pesoExecutado (dia inteiro), de propósito.
+  var pesoExecutadoTurno = null;
 
   if (_gvVisaoAtual === 'out') {
     // Usar SEMPRE a lista completa sem filtros (não usar _acompOutUltimaLista que é filtrada)
@@ -18924,10 +18609,10 @@ function gestaoVistaRenderizar() {
       return found;
     }
     // Executado/Programado usando peso TMS por frota (fallback: pesoOpl manual).
-    // Os cards do OUT refletem o DIA OPERACIONAL INTEIRO (os três turnos), para
-    // baterem com a linha "Total" do Extrato do Dia logo abaixo. A leitura por
-    // turno continua disponível nos relógios de Performance de Turnos e em cada
-    // linha da tabela — os cards são o fechamento do dia.
+    // Este laço acumula o DIA OPERACIONAL INTEIRO (os três turnos) — é o número que
+    // alimenta a barra de progressão, o donut de % Eficiência e o card "Peso Carregado",
+    // e que bate com a linha "Total" do Extrato do Dia. O card "Executado" do topo usa
+    // o recorte por turno calculado mais abaixo (pesoExecutadoTurno).
     var turnoVigenteGV = _gvTurnoCustomOut(new Date().toTimeString().substring(0, 5));
     itensOut.forEach(function(r) {
       var rec = acompOut[r._id] || {};
@@ -18956,6 +18641,20 @@ function gestaoVistaRenderizar() {
     if (typeof _histRelOutPesoTurnoCustom === 'function') {
       pesoProgramado = _histRelOutPesoTurnoCustom(turnoVigenteOut);
     }
+    // Executado no OUT = somente o carregado no turno vigente, pelo mesmo corte de
+    // turno usado no Programado logo acima. A fonte é a linha do turno em
+    // fluxoOut.linhas — exatamente o número que a coluna EXECUTADO (KG) do Extrato
+    // do Dia mostra naquele turno, então os dois nunca divergem. Antes o card somava
+    // os três turnos (batia com a linha Total), ficando numa escala diferente do
+    // Programado ao lado. Sem a linha do turno, mantém o executado do dia.
+    if (fluxoOut && fluxoOut.linhas) {
+      for (var iLnT = 0; iLnT < fluxoOut.linhas.length; iLnT++) {
+        if (fluxoOut.linhas[iLnT].turno === turnoVigenteOut) {
+          pesoExecutadoTurno = fluxoOut.linhas[iLnT].executado || 0;
+          break;
+        }
+      }
+    }
   } else {
     // IN: Plano e Executado seguem o fluxo deduplicado; Programado vem dos cards
     // persistidos no Histórico de Relatório do grupo IN, por turno vigente.
@@ -18965,6 +18664,21 @@ function gestaoVistaRenderizar() {
       ? dados.pesoProgramadoHistoricoIN
       : (dados.pesoProgramado || 0);
     pesoNaoIniciado = dados.pesoSemProgramacao || 0;
+    // Executado no IN = somente o descarregado no turno vigente, pelo MESMO turno que
+    // o card Programado já usa (dados.turnoProgramadoIN, vindo de _gvTurnoDoHorario).
+    // A fonte é a linha do turno em fluxoIn.linhas — o mesmo número que a coluna
+    // EXECUTADO (KG) do Extrato do Dia mostra naquele turno. Antes o card somava os
+    // três turnos, ficando numa escala diferente do Programado ao lado.
+    // Sem a linha do turno, mantém o executado do dia.
+    var turnoVigenteIn = dados.turnoProgramadoIN || _gvTurnoDoHorario(new Date().toTimeString().substring(0, 5));
+    if (fluxoIn && fluxoIn.linhas && turnoVigenteIn) {
+      for (var iLnI = 0; iLnI < fluxoIn.linhas.length; iLnI++) {
+        if (fluxoIn.linhas[iLnI].turno === turnoVigenteIn) {
+          pesoExecutadoTurno = fluxoIn.linhas[iLnI].executado || 0;
+          break;
+        }
+      }
+    }
   }
 
   var pesoPlano = pesoTotalHoje; // "Plano" = fila total do dia (Fila Inicial + Entrou Depois no IN)
@@ -18992,12 +18706,22 @@ function gestaoVistaRenderizar() {
       var ehOut = (_gvVisaoAtual === 'out');
       var subPlano = ehOut ? 'Peso total a carregar' : 'Peso total a descarregar';
       var subExec = ehOut ? 'Peso total já Carregado' : 'Peso total já Descarregado';
+      // O card Executado é do TURNO VIGENTE nas duas visões (mesma régua do card
+      // Programado ao lado). O subtítulo nomeia o turno para deixar claro por que o
+      // número não bate com a linha Total do Extrato do Dia logo abaixo.
+      var valorExec = pesoExecutado;
+      if (pesoExecutadoTurno != null) {
+        valorExec = pesoExecutadoTurno;
+        var turnoCard = ehOut ? turnoVigenteOut : turnoVigenteIn;
+        subExec = (ehOut ? 'Peso carregado no ' : 'Peso descarregado no ') + turnoCard;
+      }
       // Programado: no OUT já vem do Histórico de Relatório OUT (mesma fonte da barra acima)
+      // % Eficiência segue lendo o executado do DIA INTEIRO (pesoExecutado), não o do turno.
       var pctEficiencia = pesoPlano ? Math.round((pesoExecutado / pesoPlano) * 100) : 0;
       inKpisDiv.innerHTML =
         _fpKpiCard('Plano do dia', Math.round(pesoPlano), '#ffffff', ' kg', subPlano) +
         _fpKpiCard('Programado', Math.round(pesoProgramado), '#f0b429', ' kg', 'Peso total Programado') +
-        _fpKpiCard('Executado', Math.round(pesoExecutado), '#3fb950', ' kg', subExec) +
+        _fpKpiCard('Executado', Math.round(valorExec), '#3fb950', ' kg', subExec) +
         _gvDonutEficienciaCard(pctEficiencia, 'executado');
     }
   }
@@ -19048,9 +18772,9 @@ function gestaoVistaRenderizar() {
   }
 
   // ── Card principal: peso feito / peso na fila (clicável → tooltip com análise) ──
-  // No OUT, "Peso Carregado" precisa ser SEMPRE igual ao card "Executado" do topo — usa o
-  // mesmo valor já calculado (pesoExecutado, turno-vigente) em vez de recalcular pelo dia
-  // inteiro via dados.pesoFeito. O IN não é afetado (mantém dados.pesoFeito como antes).
+  // No OUT este card mostra o carregado do DIA INTEIRO (pesoExecutado), no mesmo par
+  // com o "Peso na Fila" logo abaixo, que também é do dia. Não confundir com o card
+  // "Executado" do topo, que a partir da V159 é recortado no turno vigente.
   var pesoFeitoExibido = (_gvVisaoAtual === 'out' && typeof pesoExecutado === 'number') ? pesoExecutado : dados.pesoFeito;
   var salesDiv = document.getElementById('gv-card-sales');
   if (salesDiv) {
@@ -19159,7 +18883,7 @@ function gestaoVistaRenderizar() {
   // ── Fluxo de Fila (IN: tabela estilo painel executivo) / Itens por Turno (OUT: barras) ──
   var entregaDiv = document.getElementById('gv-card-entrega');
   if (entregaDiv && _gvVisaoAtual === 'in') {
-    var fluxo = _gvFluxoFilaIN();
+    var fluxo = fluxoIn || _gvFluxoFilaIN();
     var fmtKg = function(v){ return Math.round(v).toLocaleString('pt-BR'); };
     // Coluna "Programados": peso que a equipe marcou como Programado no Histórico
     // de Relatório IN, quebrado pelo turno em que a programação foi impressa.
