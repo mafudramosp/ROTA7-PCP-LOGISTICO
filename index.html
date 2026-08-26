@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V154--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V156--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6249,7 +6249,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V154';
+var ROTA7_VERSAO = 'V156';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -6545,12 +6545,27 @@ function _sbCabecalhoLeitura() {
 // ══════════════════════════════════════════════════════════════════════
 
 // Endereço do Web App do Apps Script (o mesmo já usado pela aba Programados).
-var GS_URL = (typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) ? APPS_SCRIPT_URL : '';
+// URL do Web App do ARMAZÉM (projeto de Apps Script separado do antigo).
+// Enquanto estiver vazia, todas as chaves continuam no Supabase e o app se
+// comporta exatamente como o V153 — ou seja, colar a URL é o que liga o Sheets,
+// e apagá-la é o caminho de volta imediato se algo der errado.
+// NÃO reaproveite APPS_SCRIPT_URL aqui: aquele é o script da aba Programados,
+// que continua respondendo pelo que sempre respondeu.
+var GS_URL = '';
 
+// ATENÇÃO — só entram aqui chaves cuja LEITURA também já foi religada ao
+// Sheets. Uma chave que grave no Sheets mas continue lendo do Supabase para de
+// atualizar entre máquinas: a cópia do Supabase congela e a nova nunca é lida.
+// Antes de acrescentar uma chave, confirme que o ponto de leitura dela passa
+// por _kvLerSeMudou.
+//
+// Ainda no Supabase por este motivo (leitura pendente de religar):
+//   tms_relatorio / tms_relatorio_meta  → sbCarregarRelatorio
+//   pbi_transito                        → sbCarregarTransito
+//   hist_rel_out / hist_rel_out_excl    → _histRelOutBaixarRemoto
 var GS_CHAVES = [
-  'tms_relatorio', 'tms_relatorio_meta', 'tms_planejamento',
-  'pbi_transito', 'descarga_historico_relatorio',
-  'hist_rel_out', 'hist_rel_out_excl'
+  'tms_planejamento',
+  'descarga_historico_relatorio'
 ];
 // Baselines são uma chave por dia (cg_baseline_2026-08-26) — casam por prefixo.
 var GS_PREFIXOS = ['cg_baseline_'];
