@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V161--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V162--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6132,7 +6132,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V161';
+var ROTA7_VERSAO = 'V162';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -6378,6 +6378,37 @@ function _verIniciar() {
 
 function _sbCabecalhoLeitura() {
   return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+}
+
+// V162 — lê o "valor" de UMA chave por REST. Existe para que o Realtime não
+// precise mais carregar a coluna "valor" no payload.
+//
+// Motivo: o canal cfg-realtime assina a tabela configuracoes inteira, e o
+// Supabase transmite a LINHA COMPLETA para TODAS as máquinas conectadas a cada
+// gravação. Com o relatório TMS ocupando ~2,5 MB em 5 partes e 24 máquinas
+// conectadas, cada importação custava ~64 MB de egresso — só de broadcast de
+// dados que o próprio handler descarta em seguida. Com 14 importações por dia
+// isso dava ~0,9 GB/dia, contra a franquia de 5 GB/mês do plano gratuito.
+//
+// A economia de verdade vem de tirar a coluna "valor" da publicação:
+//   ALTER PUBLICATION supabase_realtime SET TABLE public.configuracoes (chave, atualizado_em);
+// Depois disso o Realtime vira só uma campainha (chave + carimbo) e quem
+// precisa do conteúdo busca por aqui, uma chave de cada vez.
+//
+// Os pontos de leitura abaixo aceitam os DOIS formatos — com e sem "valor" no
+// payload — de propósito: assim o app funciona igual antes e depois do ALTER,
+// e a ordem de aplicação (publicar o HTML primeiro, rodar o SQL depois) não
+// quebra nada em nenhum momento.
+function _sbLerValorChave(chave) {
+  try {
+    return fetch(SB_URL + '/configuracoes?chave=eq.' + encodeURIComponent(chave) + '&select=valor', {
+      headers: _sbCabecalhoLeitura()
+    }).then(function(r) { return r.json(); }).then(function(rows) {
+      return (rows && rows.length && typeof rows[0].valor === 'string') ? rows[0].valor : null;
+    }).catch(function() { return null; });
+  } catch (e) {
+    return Promise.resolve(null);
+  }
 }
 
 // V154 — desvio das GRAVAÇÕES. Em vez de editar os oito pontos que gravam em
@@ -6683,6 +6714,12 @@ function sbInicializarRealtime() {
           var _macAcomp = chave.slice('desc_acomp_cel:'.length);
           if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompAplicarCelulaRemota === 'function') {
             try { _descAcompAplicarCelulaRemota(_macAcomp, JSON.parse(payload.new.valor)); } catch(e) {}
+          } else if (payload.new && typeof _descAcompAplicarCelulaRemota === 'function') {
+            // Payload sem "valor" (publicação enxuta) — busca só esta célula.
+            _sbLerValorChave(chave).then(function(v) {
+              if (typeof v !== 'string') return;
+              try { _descAcompAplicarCelulaRemota(_macAcomp, JSON.parse(v)); } catch(e) {}
+            });
           }
         } else if (chave === 'descarga_acomp_data') {
           // Formato antigo (antes da correção por célula) — mantido só de fallback.
@@ -6708,6 +6745,12 @@ function sbInicializarRealtime() {
           var _idAcompOut = chave.slice('acomp_out_cel:'.length);
           if (payload.new && typeof payload.new.valor === 'string' && typeof _acompOutAplicarCelulaRemota === 'function') {
             try { _acompOutAplicarCelulaRemota(_idAcompOut, JSON.parse(payload.new.valor)); } catch(e) {}
+          } else if (payload.new && typeof _acompOutAplicarCelulaRemota === 'function') {
+            // Payload sem "valor" (publicação enxuta) — busca só esta célula.
+            _sbLerValorChave(chave).then(function(v) {
+              if (typeof v !== 'string') return;
+              try { _acompOutAplicarCelulaRemota(_idAcompOut, JSON.parse(v)); } catch(e) {}
+            });
           }
         } else if (chave === 'acomp_out_data') {
           // Formato antigo (antes da correção por célula) — mantido só de fallback.
