@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V153--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V154--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6249,7 +6249,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V153';
+var ROTA7_VERSAO = 'V154';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -6495,6 +6495,162 @@ function _verIniciar() {
 
 function _sbCabecalhoLeitura() {
   return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+}
+
+// V154 — desvio das GRAVAÇÕES. Em vez de editar os oito pontos que gravam em
+// /configuracoes (e correr o risco de deixar um para trás), o próprio fetch é
+// envolvido: um POST para /configuracoes cuja chave pertença ao Sheets é
+// convertido em _gsGravar e nunca chega ao Supabase. Todo o resto passa
+// intacto — inclusive as células dos Acompanhamentos e a tabela programados.
+(function() {
+  var _fetchOriginal = window.fetch.bind(window);
+  window.fetch = function(url, opts) {
+    try {
+      var u = String(url || '');
+      if (opts && opts.method === 'POST' && u.indexOf('/configuracoes') >= 0 && opts.body) {
+        var corpo = JSON.parse(opts.body);
+        var chave = corpo && corpo.chave;
+        if (chave && typeof _gsEhDoSheets === 'function' && _gsEhDoSheets(chave)) {
+          return _gsGravar(chave, corpo.valor).then(function(r) {
+            return new Response(JSON.stringify(r || {}), {
+              status: (r && r.status === 'ok') ? 200 : 500,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          });
+        }
+      }
+    } catch (e) {}
+    return _fetchOriginal(url, opts);
+  };
+})();
+
+// ══════════════════════════════════════════════════════════════════════
+// V154 — ARMAZÉM NO GOOGLE SHEETS PARA OS DADOS QUE MUDAM POUCO
+//
+// O V153 zerou o polling ocioso, mas não o custo de abrir a tela: cada boot
+// ainda baixava ~3,6 MB do Supabase, e o relatório TMS sozinho respondia por
+// 2,46 MB disso. Com 12 máquinas recarregando algumas vezes ao dia, só os
+// boots consumiam ~3,9 GB/mês — quase a cota inteira do plano gratuito.
+//
+// As chaves abaixo passam a morar no Sheets. Todas têm o mesmo perfil: valor
+// grande, alteração esporádica, e substituição integral quando muda.
+//
+// FICAM NO SUPABASE, de propósito:
+//   • a tabela "programados" (Programar Malha do dia, Recursos Programados)
+//   • desc_acomp_cel: e acomp_out_cel: (Acompanhamentos IN/OUT)
+// São editadas ao vivo por várias máquinas e dependem de gravação por célula
+// e de tempo real. No Sheets, cada gravação passa por LockService e entra em
+// fila — com 12 máquinas digitando, gravação falharia sob carga e as telas
+// divergiriam entre si, que foi exatamente o defeito corrigido no V150.
+// ══════════════════════════════════════════════════════════════════════
+
+// Endereço do Web App do Apps Script (o mesmo já usado pela aba Programados).
+var GS_URL = (typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) ? APPS_SCRIPT_URL : '';
+
+var GS_CHAVES = [
+  'tms_relatorio', 'tms_relatorio_meta', 'tms_planejamento',
+  'pbi_transito', 'descarga_historico_relatorio',
+  'hist_rel_out', 'hist_rel_out_excl'
+];
+// Baselines são uma chave por dia (cg_baseline_2026-08-26) — casam por prefixo.
+var GS_PREFIXOS = ['cg_baseline_'];
+
+function _gsEhDoSheets(chave) {
+  if (!GS_URL) return false; // sem endpoint configurado, tudo continua no Supabase
+  var c = String(chave || '');
+  if (GS_CHAVES.indexOf(c) >= 0) return true;
+  for (var i = 0; i < GS_PREFIXOS.length; i++) if (c.indexOf(GS_PREFIXOS[i]) === 0) return true;
+  return false;
+}
+
+var _gsVersoes = {};          // último mapa {chave: carimbo} lido do Sheets
+var _gsVersoesEm = 0;         // quando esse mapa foi obtido
+var _GS_VERSOES_TTL = 300000; // 5 min — atraso combinado para os dados do Sheets
+var _gsVersoesEmVoo = null;
+
+// JSONP. O Apps Script não responde ao preflight que um POST com
+// Content-Type: application/json dispara, então leituras vão por <script>.
+function _gsJsonp(params) {
+  return new Promise(function(resolve) {
+    var cb = '_gscb' + Math.random().toString(36).slice(2);
+    var limpou = false;
+    var tag = document.createElement('script');
+    function limpar() {
+      if (limpou) return; limpou = true;
+      try { delete window[cb]; } catch(e) { window[cb] = undefined; }
+      if (tag.parentNode) tag.parentNode.removeChild(tag);
+    }
+    window[cb] = function(r){ limpar(); resolve(r); };
+    tag.onerror = function(){ limpar(); resolve(null); };
+    setTimeout(function(){ if (!limpou) { limpar(); resolve(null); } }, 25000);
+    var q = Object.keys(params).map(function(k){
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    tag.src = GS_URL + '?' + q + '&callback=' + cb;
+    document.head.appendChild(tag);
+  });
+}
+
+// Um único pedido devolve o carimbo de TODAS as chaves. É o que torna a conta
+// de quota viável: 12 máquinas a cada 5 min dão ~3.456 execuções/dia, e esta
+// consulta lê apenas a aba VERSOES, que tem poucos bytes.
+function _gsLerVersoes(forcar) {
+  if (!GS_URL) return Promise.resolve({});
+  if (!forcar && (Date.now() - _gsVersoesEm) < _GS_VERSOES_TTL) return Promise.resolve(_gsVersoes);
+  if (_gsVersoesEmVoo) return _gsVersoesEmVoo;
+  _gsVersoesEmVoo = _gsJsonp({ action: 'kv_versoes' }).then(function(r) {
+    _gsVersoesEmVoo = null;
+    if (r && r.status === 'ok' && r.versoes) { _gsVersoes = r.versoes; _gsVersoesEm = Date.now(); }
+    return _gsVersoes;
+  }).catch(function(){ _gsVersoesEmVoo = null; return _gsVersoes; });
+  return _gsVersoesEmVoo;
+}
+
+// Mesma assinatura de _sbLerSeMudou, para que os pontos de chamada não mudem.
+function _gsLerSeMudou(chave, cbAplicar, forcar) {
+  return _gsLerVersoes(forcar).then(function(versoes) {
+    var ts = versoes[chave] || '';
+    if (!forcar && ts && _sbVersaoCache[chave] === ts) {
+      _sbLeiturasEvitadas++;
+      return null;
+    }
+    if (!ts && !forcar) return null; // chave ainda não existe no Sheets
+    return _gsJsonp({ action: 'kv_ler', chaves: chave }).then(function(r) {
+      if (!r || r.status !== 'ok' || !r.dados || !r.dados[chave]) return null;
+      var d = r.dados[chave];
+      if (d.atualizado_em) _sbVersaoCache[chave] = d.atualizado_em;
+      if (!d.valor) return null;
+      if (typeof cbAplicar === 'function') cbAplicar(d.valor, d.atualizado_em);
+      return d.valor;
+    });
+  }).catch(function(){ return null; });
+}
+
+// Gravação por POST com Content-Type text/plain: assim o navegador trata como
+// requisição simples e não dispara o preflight OPTIONS, que o Apps Script não
+// atende. O corpo continua sendo JSON.
+function _gsGravar(chave, valor) {
+  if (!GS_URL) return Promise.resolve(null);
+  return fetch(GS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'kv_gravar', chave: chave, valor: String(valor == null ? '' : valor) })
+  }).then(function(r){ return r.json(); }).then(function(r) {
+    // Invalida o carimbo local para que a própria máquina releia na sequência
+    // e confirme o que ficou gravado de fato.
+    if (r && r.status === 'ok' && r.atualizado_em) {
+      _sbVersaoCache[chave] = r.atualizado_em;
+      _gsVersoes[chave] = r.atualizado_em;
+    }
+    return r;
+  }).catch(function(){ return null; });
+}
+
+// Ponto único de decisão: daqui para baixo o app não precisa saber onde cada
+// chave mora. Trocar uma chave de lado é editar GS_CHAVES, nada mais.
+function _kvLerSeMudou(chave, cbAplicar, forcar) {
+  return _gsEhDoSheets(chave) ? _gsLerSeMudou(chave, cbAplicar, forcar)
+                              : _sbLerSeMudou(chave, cbAplicar, forcar);
 }
 
 // Lê uma chave única só se ela mudou desde a última vez.
@@ -7612,33 +7768,18 @@ function cgCarregarBaselineSupabase(callback) {
   var chave = cgChaveTurno();
   // V151 — ~100 KB a cada 90s. Se a baseline deste turno já está em memória e
   // não mudou no banco, devolve a cópia local sem baixar nada de novo.
-  fetch(SB_URL + '/configuracoes?chave=eq.' + chave + '&select=atualizado_em', {
-    headers: _sbCabecalhoLeitura()
-  }).then(function(r){ return r.json(); }).then(function(cab) {
-    var ts = (cab && cab.length) ? (cab[0].atualizado_em || '') : '';
-    if (ts && cgBaselineChave === chave && _sbVersaoCache[chave] === ts) {
-      _sbLeiturasEvitadas++;
-      if (typeof callback === 'function') callback(cgBaselineMemoria);
-      return null;
-    }
-    return fetch(SB_URL + '/configuracoes?chave=eq.' + chave + '&select=valor', {
-      headers: _sbCabecalhoLeitura()
-    }).then(function(r2){ return r2.json(); }).then(function(data) {
-      if (ts) _sbVersaoCache[chave] = ts;
-      if (data && data.length && data[0].valor) {
-        try {
-          var obj = JSON.parse(data[0].valor);
-          cgBaselineMemoria = obj.destinos;
-          cgBaselineChave   = chave;
-          if (typeof callback === 'function') callback(cgBaselineMemoria);
-        } catch(e) { if (typeof callback === 'function') callback(null); }
-      } else {
-        cgBaselineMemoria = null;
-        cgBaselineChave   = null;
-        if (typeof callback === 'function') callback(null);
-      }
-      return null;
-    });
+  // V154 — roteado por _kvLerSeMudou: esta chave mora no Sheets.
+  var _jaTinha = (cgBaselineChave === chave);
+  _kvLerSeMudou(chave, function(valor) {
+    try {
+      var obj = JSON.parse(valor);
+      cgBaselineMemoria = obj.destinos;
+      cgBaselineChave   = chave;
+    } catch(e) { cgBaselineMemoria = null; cgBaselineChave = null; }
+  }).then(function(v) {
+    // Sem versão nova, devolve o que já estava em memória para este turno.
+    if (v === null && !_jaTinha) { cgBaselineMemoria = null; cgBaselineChave = null; }
+    if (typeof callback === 'function') callback(cgBaselineMemoria);
   }).catch(function(){ if (typeof callback === 'function') callback(null); });
 }
 // ══════════════════════════════════════════════════════════════════════════
@@ -7671,20 +7812,10 @@ function cgGarantirCriticoRestante(cgData) {
 function sbCarregarPlanejamento() {
   try {
     // V151 — ~100 KB a cada 90s. Confere a versão antes de baixar o conteúdo.
-    fetch(SB_URL + '/configuracoes?chave=eq.tms_planejamento&select=atualizado_em', {
-      headers: _sbCabecalhoLeitura()
-    }).then(function(r){ return r.json(); }).then(function(cab) {
-      var ts = (cab && cab.length) ? (cab[0].atualizado_em || '') : '';
-      if (ts && _sbVersaoCache['tms_planejamento'] === ts) {
-        _sbLeiturasEvitadas++;
-        return null;
-      }
-      return fetch(SB_URL + '/configuracoes?chave=eq.tms_planejamento&select=valor,atualizado_em', {
-        headers: _sbCabecalhoLeitura()
-      }).then(function(r2){ return r2.json(); }).then(function(d) {
-        if (ts) _sbVersaoCache['tms_planejamento'] = ts;
-        return d;
-      });
+    // V154 — chave no Sheets. O formato de retorno é normalizado para o que o
+    // restante desta função já esperava, para não mexer no tratamento abaixo.
+    _kvLerSeMudou('tms_planejamento', null).then(function(v) {
+      return v ? [{ valor: v, atualizado_em: _sbVersaoCache['tms_planejamento'] || '' }] : null;
     }).then(function(data) {
       if (data && data.length && data[0].valor) {
         // Só carrega se não tem dados locais mais recentes
@@ -14965,7 +15096,7 @@ function _relatorioHistoricoCarregarSupabase() {
   try {
     // V151 — era a leitura mais cara do ciclo de 60s: 95 KB baixados sempre,
     // mesmo sem nenhuma mudança. Agora confere a versão antes (~80 bytes).
-    _sbLerSeMudou('descarga_historico_relatorio', function(valor) {
+    _kvLerSeMudou('descarga_historico_relatorio', function(valor) {
       var data = [{ valor: valor }];
       if (data && data.length && data[0].valor) {
         _relatorioHistorico = JSON.parse(data[0].valor);
