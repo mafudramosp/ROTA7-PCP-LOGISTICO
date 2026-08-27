@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V162--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V167--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1216,6 +1216,12 @@
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- Firebase (compat): o app inteiro roda em scripts globais, sem bundler,
+     então a versão "compat" é a única que funciona aqui — a modular exige
+     import/ESM. Carregado sempre, mas SÓ inicializa se FB_CONFIG.projectId
+     estiver preenchido. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 <style>
 .frota-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.06); }
@@ -6132,7 +6138,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V162';
+var ROTA7_VERSAO = 'V167';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -6424,6 +6430,21 @@ function _sbLerValorChave(chave) {
       if (opts && opts.method === 'POST' && u.indexOf('/configuracoes') >= 0 && opts.body) {
         var corpo = JSON.parse(opts.body);
         var chave = corpo && corpo.chave;
+        if (chave && typeof _fbEhDoFirebase === 'function' && _fbEhDoFirebase(chave)) {
+          return _fbGravar(chave, corpo.valor).then(function(r) {
+            if (r && r.status === 'ok') {
+              return new Response(JSON.stringify(r), {
+                status: 200, headers: { 'Content-Type': 'application/json' }
+              });
+            }
+            // Firestore recusou (regra não publicada, cota, rede). NÃO devolve
+            // erro: manda para o Supabase, que continua funcionando. Sem isto,
+            // uma importação do TMS seria simplesmente perdida — não chegaria
+            // nem no Firebase nem no Supabase.
+            console.warn('[firebase] gravação de', chave, 'falhou — gravando no Supabase');
+            return _fetchOriginal(url, opts);
+          });
+        }
         if (chave && typeof _gsEhDoSheets === 'function' && _gsEhDoSheets(chave)) {
           return _gsGravar(chave, corpo.valor).then(function(r) {
             return new Response(JSON.stringify(r || {}), {
@@ -6575,9 +6596,216 @@ function _gsGravar(chave, valor) {
   }).catch(function(){ return null; });
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// FIREBASE (Firestore) — armazém alternativo ao Supabase
+// ══════════════════════════════════════════════════════════════════════
+// Segue exatamente o mesmo desenho do armazém do Sheets logo acima:
+//   • opt-in por configuração — enquanto FB_CONFIG.projectId estiver vazio,
+//     nada muda e o app se comporta como a V162;
+//   • reversível — esvaziar FB_CHAVES devolve a chave ao Supabase na hora;
+//   • mesma assinatura de _gsLerSeMudou / _gsGravar, para plugar no
+//     _kvLerSeMudou sem tocar em nenhum ponto de leitura do app.
+//
+// Modelagem: coleção "configuracoes", ID do documento = chave, campos
+// { valor: string, atualizado_em: string }. É o espelho literal da tabela do
+// Postgres, então nada mais no app precisa saber de onde o dado veio.
+//
+// Por que Firestore e não Realtime Database: aqui dá para ouvir UM documento
+// (o tms_relatorio_meta) sem receber as partes grandes junto. No Supabase o
+// canal é por tabela, que é exatamente o que fazia o broadcast custar caro.
+// Projeto: rota7-pcp-gru (console.firebase.google.com)
+// Estes valores são públicos por natureza — o SDK web do Firebase os expõe no
+// HTML, igual à SB_KEY do Supabase. Quem protege a coleção são as REGRAS do
+// Firestore, não esta chave. Ver Passo 4 do passo a passo.
+// measurementId fica aqui só por completude: o SDK de Analytics não é
+// carregado, então ele não é usado para nada.
+var FB_CONFIG = {
+  apiKey: 'AIzaSyD3O0Wbsq1y_g_sVMTKe0mGVV7vRNNEklc',
+  authDomain: 'rota7-pcp-gru.firebaseapp.com',
+  projectId: 'rota7-pcp-gru',
+  storageBucket: 'rota7-pcp-gru.firebasestorage.app',
+  messagingSenderId: '490201642423',
+  appId: '1:490201642423:web:47718a1084ce140d272432',
+  measurementId: 'G-TGJYDCJ8YM'
+};
+
+// Chaves que passam a morar no Firestore. Comece com o relatório, que é a
+// origem do gasto, e só acrescente outras depois de medir.
+// Para VOLTAR ATRÁS: esvazie as duas listas abaixo e republique. A cópia no
+// Supabase continua intacta — nada é apagado de lá em nenhum momento.
+var FB_CHAVES = ['tms_relatorio'];          // formato antigo, parte única
+var FB_PREFIXOS = ['tms_relatorio_'];       // pega tms_relatorio_0..N e _meta
+
+var _fbDb = null;
+var _fbPronto = false;
+var _fbVersoes = {};    // {chave: atualizado_em} já visto por esta máquina
+
+function _fbLigado() {
+  return !!(FB_CONFIG && FB_CONFIG.projectId && _fbPronto);
+}
+
+function _fbEhDoFirebase(chave) {
+  if (!_fbLigado()) return false;
+  var c = String(chave || '');
+  if (FB_CHAVES.indexOf(c) >= 0) return true;
+  for (var i = 0; i < FB_PREFIXOS.length; i++) if (c.indexOf(FB_PREFIXOS[i]) === 0) return true;
+  return false;
+}
+
+function _fbIniciar() {
+  try {
+    if (!FB_CONFIG.projectId) return;                       // não configurado
+    if (typeof firebase === 'undefined' || !firebase.initializeApp) {
+      console.warn('[firebase] SDK não carregado — tudo continua no Supabase.');
+      return;
+    }
+    if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    _fbDb = firebase.firestore();
+    // Cache em disco: relatório sobrevive a F5 e a máquina não rebaixa tudo
+    // a cada abertura. É o mesmo problema que o carimbo resolve no Supabase.
+    _fbDb.enablePersistence({ synchronizeTabs: true }).catch(function(){});
+    _fbPronto = true;
+    console.log('[firebase] ligado no projeto', FB_CONFIG.projectId);
+  } catch (e) {
+    console.warn('[firebase] falhou ao iniciar — seguindo no Supabase:', e);
+    _fbPronto = false;
+  }
+}
+_fbIniciar();
+
+// Grava uma chave. Mesma assinatura de _gsGravar.
+function _fbGravar(chave, valor) {
+  if (!_fbLigado()) return Promise.resolve(null);
+  var agora = new Date().toISOString();
+  return _fbDb.collection('configuracoes').doc(String(chave)).set({
+    valor: String(valor == null ? '' : valor),
+    atualizado_em: agora
+  }).then(function() {
+    _fbVersoes[chave] = agora;
+    if (typeof _sbVersaoCache !== 'undefined') _sbVersaoCache[chave] = agora;
+    return { status: 'ok', atualizado_em: agora };
+  }).catch(function(e) {
+    console.warn('[firebase] erro ao gravar', chave, e);
+    return null;
+  });
+}
+
+// Lê só se mudou. Mesma assinatura de _gsLerSeMudou / _sbLerSeMudou.
+// O Firestore não deixa pedir "só o carimbo" como o PostgREST, mas o cache
+// local resolve: quando nada mudou, a leitura sai do disco e não custa rede.
+function _fbLerSeMudou(chave, cbAplicar, forcar) {
+  if (!_fbLigado()) return Promise.resolve(null);
+  return _fbDb.collection('configuracoes').doc(String(chave)).get().then(function(doc) {
+    if (!doc.exists) return null;
+    var d = doc.data() || {};
+    var ts = d.atualizado_em || '';
+    if (!forcar && ts && _fbVersoes[chave] === ts) {
+      if (typeof _sbLeiturasEvitadas !== 'undefined') _sbLeiturasEvitadas++;
+      return null;
+    }
+    if (ts) _fbVersoes[chave] = ts;
+    if (typeof d.valor !== 'string' || !d.valor) return null;
+    if (typeof cbAplicar === 'function') cbAplicar(d.valor, ts);
+    return d.valor;
+  }).catch(function(e) {
+    console.warn('[firebase] erro ao ler', chave, e);
+    return null;
+  });
+}
+
+// Campainha: ouve UM documento só. Diferente do canal por tabela do Supabase,
+// aqui as partes grandes não trafegam junto.
+function _fbOuvirChave(chave, cbAplicar) {
+  if (!_fbLigado()) return function(){};
+  return _fbDb.collection('configuracoes').doc(String(chave))
+    .onSnapshot(function(doc) {
+      if (!doc.exists) return;
+      var d = doc.data() || {};
+      if (d.atualizado_em && _fbVersoes[chave] === d.atualizado_em) return;
+      if (d.atualizado_em) _fbVersoes[chave] = d.atualizado_em;
+      if (typeof cbAplicar === 'function') cbAplicar(d.valor, d.atualizado_em);
+    }, function(e) { console.warn('[firebase] listener', chave, e); });
+}
+
+// Leitura do relatório TMS no Firestore. Espelha sbCarregarRelatorio e
+// preserva TODAS as travas dela: guarda de versão pelo carimbo, contagem de
+// partes (meta.total) e conferência de registros (meta.n). Se qualquer uma
+// falhar, prefere não aplicar nada a aplicar um relatório pela metade.
+function _fbCarregarRelatorio(forcar) {
+  if (!_fbLigado()) return Promise.resolve(null);
+  var col = _fbDb.collection('configuracoes');
+
+  return col.doc('tms_relatorio_meta').get().then(function(docMeta) {
+    var meta = null, tsRemoto = null;
+    if (docMeta.exists) {
+      var dm = docMeta.data() || {};
+      try { meta = JSON.parse(dm.valor); } catch (e) {}
+      if (dm.atualizado_em) tsRemoto = new Date(dm.atualizado_em);
+    }
+
+    // Ainda não há relatório no Firestore (antes da primeira importação):
+    // continua lendo do Supabase para a tela não ficar vazia na transição.
+    if (!docMeta.exists) {
+      console.log('[firebase] relatório ainda não migrado — lendo do Supabase');
+      return _fbRelatorioViaSupabase(forcar);
+    }
+
+    // Mesma guarda de versão do caminho Supabase.
+    if (!forcar && _relSupabaseTs && tsRemoto && tsRemoto.getTime() <= _relSupabaseTs.getTime()) {
+      if (typeof _sbLeiturasEvitadas !== 'undefined') _sbLeiturasEvitadas++;
+      return null;
+    }
+
+    var ts = tsRemoto || new Date();
+    var totalChunks = (meta && meta.total) ? meta.total : 1;
+
+    var chaves = [];
+    if (totalChunks === 1) chaves.push('tms_relatorio');
+    else for (var i = 0; i < totalChunks; i++) chaves.push('tms_relatorio_' + i);
+
+    return Promise.all(chaves.map(function(k) { return col.doc(k).get(); })).then(function(docs) {
+      // Falta parte: não aplica nada. Um relatório parcial é pior que um antigo.
+      if (docs.some(function(d) { return !d.exists; })) {
+        console.warn('[firebase] relatório incompleto (parte faltando) — nada aplicado');
+        return null;
+      }
+      var todos = [];
+      docs.forEach(function(d) {
+        try { todos = todos.concat(JSON.parse((d.data() || {}).valor)); } catch (e) {}
+      });
+      if (!todos.length) return null;
+
+      // Mesma conferência de registros do caminho Supabase.
+      if (meta && typeof meta.n === 'number' && todos.length < meta.n) {
+        if (typeof showToast === 'function') {
+          showToast('⚠️ Relatório sincronizado incompleto (' + todos.length + ' de ' + meta.n +
+                    ' registros). Peça para reimportar o Excel TMS.', 'error');
+        }
+        return null;
+      }
+      _relAplicarDados(todos, ts, forcar);
+      return todos;
+    });
+  }).catch(function(e) {
+    // Firestore fora do ar, regra recusando ou rede caída: cai para o Supabase,
+    // onde a cópia anterior continua intacta. A tela nunca fica sem relatório.
+    console.warn('[firebase] leitura do relatório falhou — usando Supabase:', e);
+    return _fbRelatorioViaSupabase(forcar);
+  });
+}
+
+// Escape hatch: executa o caminho Supabase original ignorando o roteamento.
+function _fbRelatorioViaSupabase(forcar) {
+  var salvo = FB_CHAVES, salvoP = FB_PREFIXOS;
+  FB_CHAVES = []; FB_PREFIXOS = [];      // desliga o desvio só nesta chamada
+  try { return sbCarregarRelatorio(forcar); }
+  finally { FB_CHAVES = salvo; FB_PREFIXOS = salvoP; }
+}
+
 // Ponto único de decisão: daqui para baixo o app não precisa saber onde cada
 // chave mora. Trocar uma chave de lado é editar GS_CHAVES, nada mais.
 function _kvLerSeMudou(chave, cbAplicar, forcar) {
+  if (_fbEhDoFirebase(chave)) return _fbLerSeMudou(chave, cbAplicar, forcar);
   return _gsEhDoSheets(chave) ? _gsLerSeMudou(chave, cbAplicar, forcar)
                               : _sbLerSeMudou(chave, cbAplicar, forcar);
 }
@@ -7499,6 +7727,14 @@ function _relAplicarDados(registros, ts, forcar) {
 
 function sbCarregarRelatorio(forcar) {
   try {
+    // V165 — se o relatório foi roteado para o Firestore, a leitura vai por lá.
+    // Sem este desvio a gravação subiria para o Firebase e as máquinas
+    // continuariam lendo a cópia CONGELADA do Supabase — é exatamente o defeito
+    // que o comentário de GS_CHAVES adverte, e o motivo de o relatório nunca
+    // ter ido para o Sheets.
+    if (typeof _fbEhDoFirebase === 'function' && _fbEhDoFirebase('tms_relatorio_meta')) {
+      return _fbCarregarRelatorio(forcar);
+    }
     // V151 — a sondagem agora pede só chave+atualizado_em (~120 bytes). Antes
     // vinha "valor" junto: quando o relatório cabia num único chunk, isso
     // significava baixar até 2,4 MB a cada 120s apenas para ler a data e, na
@@ -9844,6 +10080,44 @@ function limparFiltroCardGrade() {
 
 // ---- Filtro de Período: Hoje / 24h / 48h ----
 var _histFiltroPeriodo = 'hoje';
+
+// ══════════════════════════════════════════════════════════════════════
+// V167 — Comando oculto Shift+P: mostra/esconde o botão "Editar"
+// ══════════════════════════════════════════════════════════════════════
+// O botão sempre existiu no HTML da linha, só estava com display:none fixo.
+// Agora o display é decidido por esta flag, que renderHist() lê a cada
+// redesenho — sem isso o botão sumiria de novo no primeiro filtro ou
+// atualização da tabela.
+//
+// A flag NÃO é persistida de propósito: é um recurso oculto de manutenção,
+// e o estado normal ao abrir o sistema é escondido. Recarregar a página
+// devolve a tela ao comportamento padrão.
+var _progEdicaoVisivel = false;
+
+document.addEventListener('keydown', function(e) {
+  if (!e.shiftKey || (e.key !== 'P' && e.key !== 'p')) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return;   // não rouba atalhos do navegador
+
+  // Digitando em algum campo? Shift+P ali é só a letra "P" maiúscula.
+  var alvo = e.target;
+  if (alvo) {
+    var tag = (alvo.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || alvo.isContentEditable) return;
+  }
+
+  // Só vale dentro da tela Recursos Programados.
+  var tela = document.getElementById('tab-programacao-content');
+  if (!tela || !tela.classList.contains('active')) return;
+
+  e.preventDefault();
+  _progEdicaoVisivel = !_progEdicaoVisivel;
+  if (typeof renderHist === 'function') renderHist();
+  if (typeof showToast === 'function') {
+    showToast(_progEdicaoVisivel
+      ? 'Modo edição ligado — botão Editar visível (Shift+P para esconder)'
+      : 'Modo edição desligado', _progEdicaoVisivel ? 'success' : 'info');
+  }
+});
 function histFiltrarPeriodo(modo) {
   _histFiltroPeriodo = modo;
   ['hoje','24h','48h','72h'].forEach(function(m) {
@@ -10060,7 +10334,7 @@ function renderHist() {
     <td style="text-align:center;font-size:11px;color:var(--text2);white-space:nowrap">${(_acompOutRecProg(r._id).prevFech) || '—'}</td>
     <td style="white-space:nowrap;text-align:center">
       <button class="btn btn-ghost btn-sm" onclick="editProgramado(${r._id})" title="Editar"
-        style="display:none;color:var(--accent);border-color:rgba(0,178,0,0.3)">Editar</button>
+        style="display:${_progEdicaoVisivel ? 'inline-flex' : 'none'};color:var(--accent);border-color:rgba(0,178,0,0.3)">Editar</button>
       <button class="btn btn-ghost btn-sm" onclick="deleteProg(${r._id})" title="Excluir"
         style="color:var(--red);border-color:rgba(220,38,38,0.3);margin-left:6px">Excluir</button>
     </td>
@@ -10231,6 +10505,81 @@ function updateFormOcup() {
   else                fill.style.background = '#9ca3af';
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// V166 — Conferência de malha já programada para o destino
+// ══════════════════════════════════════════════════════════════════════
+// Antes de gravar um veículo pela tela Adicionar, varre os Recursos
+// Programados atrás de carro DA MALHA já lançado hoje para o mesmo destino.
+// Se achar, pergunta se é para seguir como veículo extra.
+//
+// Escopo da varredura: mesmo destino + tipo "Carro da Malha" + gerado HOJE
+// (mesma data civil), que é o filtro padrão da tela Recursos Programados.
+// Não usa o filtro de período ativo (24h/48h/72h) de propósito: aquilo é
+// preferência de visualização de outra tela; a regra aqui é sobre a operação
+// do dia. Se preferir seguir o filtro, é trocar por _histFiltroPeriodo.
+function _addMalhaNoDestino(destino) {
+  var alvo = String(destino || '').trim().toUpperCase();
+  if (!alvo) return [];
+  var hoje = new Date();
+  var dHoje = hoje.getDate(), mHoje = hoje.getMonth(), aHoje = hoje.getFullYear();
+
+  return (progData || []).filter(function(r) {
+    if (!r || r.tipo !== 'Carro da Malha') return false;
+    if (String(r.destino || '').trim().toUpperCase() !== alvo) return false;
+    // "gerado" vem no formato dd/mm/aaaa hh:mm — compara a data civil.
+    var partes = String(r.gerado || '').split(' ')[0].split('/');
+    if (partes.length !== 3) return false;
+    return (parseInt(partes[0], 10) === dHoje &&
+            parseInt(partes[1], 10) - 1 === mHoje &&
+            parseInt(partes[2], 10) === aHoje);
+  });
+}
+
+// Monta o aviso e devolve a decisão pelo callback. Reaproveita o modal
+// genérico (#modal-overlay) que o resto do app já usa.
+function _addConfirmarMalha(destino, achados, aoConfirmar) {
+  var lista = achados.slice(0, 6).map(function(r) {
+    var frota = r.frota ? ('Frota ' + r.frota) : 'sem frota';
+    var saida = r.saida ? (' — saída ' + r.saida) : '';
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--bg3);font-size:12px">' +
+           '<b>' + (r.destino || '') + '</b> · ' + frota + saida +
+           (r.motorista ? ('<br><span style="color:var(--text2)">' + r.motorista + '</span>') : '') +
+           '</div>';
+  }).join('');
+  var extras = achados.length > 6
+    ? '<div style="font-size:11px;color:var(--text2);padding-top:6px">e mais ' + (achados.length - 6) + '…</div>'
+    : '';
+
+  var modal = document.getElementById('modal-content');
+  if (!modal) { aoConfirmar(true); return; }   // sem modal, não bloqueia o operador
+
+  modal.innerHTML =
+    '<div style="max-width:440px">' +
+      '<div style="font-size:15px;font-weight:800;margin-bottom:4px">Já existe malha para ' + destino + '</div>' +
+      '<div style="font-size:12px;color:var(--text2);margin-bottom:12px">' +
+        achados.length + ' carro' + (achados.length > 1 ? 's' : '') + ' da malha já programado' +
+        (achados.length > 1 ? 's' : '') + ' hoje para este destino.</div>' +
+      '<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:16px;max-height:190px;overflow:auto">' +
+        lista + extras +
+      '</div>' +
+      '<div style="font-size:13px;margin-bottom:16px">Deseja continuar como <b>veículo extra</b>?</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+        '<button class="btn btn-ghost" onclick="_addRespostaMalha(false)">Não</button>' +
+        '<button class="btn btn-primary" onclick="_addRespostaMalha(true)">Sim, continuar</button>' +
+      '</div>' +
+    '</div>';
+  _addRespostaMalhaCb = aoConfirmar;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+var _addRespostaMalhaCb = null;
+function _addRespostaMalha(seguir) {
+  document.getElementById('modal-overlay').classList.remove('open');
+  var cb = _addRespostaMalhaCb;
+  _addRespostaMalhaCb = null;
+  if (typeof cb === 'function') cb(seguir);
+}
+
 function salvarProg() {
   const origem = document.getElementById('f-origem').value;
   const destino = document.getElementById('f-destino').value.toUpperCase();
@@ -10267,6 +10616,26 @@ function salvarProg() {
     ocup, prev_fech: formatDTLocal(prev_fech), obs, tipo_prior,
     data_crit: formatDTLocal(data_crit), id: ''
   };
+
+  // V166 — só confere quando o veículo NÃO é da malha. Um carro da malha
+  // lançado por aqui é justamente o que se espera; o aviso existe para o
+  // extra/fora da malha que duplicaria um destino já atendido.
+  var jaTemMalha = (tipo !== 'Carro da Malha') ? _addMalhaNoDestino(destino) : [];
+  if (jaTemMalha.length) {
+    _addConfirmarMalha(destino, jaTemMalha, function(seguir) {
+      if (seguir) _salvarProgConfirmado(rec);
+      // "Não" apenas fecha: o formulário fica preenchido para o operador
+      // corrigir o destino ou o tipo sem redigitar tudo.
+    });
+    return;
+  }
+
+  _salvarProgConfirmado(rec);
+}
+
+// Gravação propriamente dita, separada para ser chamada também depois da
+// confirmação do aviso de malha.
+function _salvarProgConfirmado(rec) {
   progData.unshift(rec);
   saveData(rec);
   showToast('Programação salva com sucesso!','success');
