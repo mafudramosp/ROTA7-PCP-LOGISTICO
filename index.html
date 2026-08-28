@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V168--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V169--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6139,7 +6139,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V168';
+var ROTA7_VERSAO = 'V169';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -13773,7 +13773,9 @@ function descargaPesoSelecionadoPorTurno() {
 // usuário desmarcar o checkbox depois de imprimir. Usa a mesma fonte de peso ao vivo
 // (_descColetaRanking / _descMacRanking) que as demais somas desta tela, para nunca
 // ficar dessincronizada.
-function descargaPesoProgramadoPorTurno() {
+function descargaPesoProgramadoPorTurno(classificador) {
+  // V169 — classificador opcional: cada tela informa a SUA régua de turno.
+  // Sem parâmetro usa o corte do Histórico de Relatório, como sempre foi.
   var totais = { '1º Turno': 0, '2º Turno': 0, '3º Turno': 0 };
   var pesoPorMac = {};
   function id(mac) {
@@ -13798,7 +13800,7 @@ function descargaPesoProgramadoPorTurno() {
   Object.keys(programacoes).forEach(function(chave) {
     var rec = programacoes[chave];
     if (!rec || rec.programado !== true) return;
-    var turno = _descProgramacaoTurnoDe(rec);
+    var turno = _descProgramacaoTurnoDe(rec, classificador);
     if (!turno || !totais.hasOwnProperty(turno)) return;
     if (!_descProgramacaoNoDiaOperacional(rec, pesoPorMac[chave] !== undefined)) return;
     // Peso congelado no ato da programação. Antes lia só o peso vivo da fila, e
@@ -13814,7 +13816,7 @@ function descargaPesoProgramadoPorTurno() {
       var rec = _descAcompData[mac];
       var chave = id(mac);
       if (!rec || !rec.programado || programacoes[chave]) return;
-      var turno = _descProgramacaoTurnoDe({ turno: rec.programadoTurno, dataISO: rec.programadoDataISO });
+      var turno = _descProgramacaoTurnoDe({ turno: rec.programadoTurno, dataISO: rec.programadoDataISO }, classificador);
       if (!turno || !totais.hasOwnProperty(turno)) return;
       if (!_descProgramacaoNoDiaOperacional({ dataISO: rec.programadoDataISO }, pesoPorMac[chave] !== undefined)) return;
       var pLegado = pesoDe(chave, { dataISO: rec.programadoDataISO });
@@ -14666,14 +14668,25 @@ function _descProgramacaoCongelarPesos() {
 // Regra literal: programou entre 22:31 e 05:59 → 3º Turno, mesmo atravessando a
 // meia-noite (19/08 22:31 até 20/08 06:00 pertencem ao mesmo 3º Turno).
 // O campo gravado só é usado quando não há horário utilizável.
-function _descProgramacaoTurnoDe(rec) {
+function _descProgramacaoTurnoDe(rec, classificador) {
+  // V169 — o classificador agora é um parâmetro. Motivo: esta função arquiva a
+  // programação num balde de turno, e a tela que CONSULTA precisa usar a mesma
+  // régua da que GRAVOU. Depois que a V168 deu ao Painel Executivo um corte
+  // próprio (06:40–15:45 / 15:46–23:00 / 23:01–06:39), o card "Programado"
+  // passou a procurar num balde diferente daquele onde o item tinha sido
+  // arquivado, e sumiam do card todas as programações feitas entre 06:01–06:39,
+  // 15:01–15:45 e 22:31–23:00. Sem parâmetro, mantém _hroTurnoClassificar —
+  // que é o corte do Histórico de Relatório, quem chamava esta função antes.
+  var fnTurno = (typeof classificador === 'function')
+    ? classificador
+    : ((typeof _hroTurnoClassificar === 'function') ? _hroTurnoClassificar : null);
   var validos = { '1º Turno': 1, '2º Turno': 1, '3º Turno': 1 };
   var iso = String((rec && (rec.dataISO || rec.programadoDataISO)) || '').trim();
-  if (iso) {
+  if (iso && fnTurno) {
     var d = new Date(iso);
     if (!isNaN(d.getTime())) {
       var horaStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-      var peloRelogio = (typeof _hroTurnoClassificar === 'function') ? _hroTurnoClassificar(horaStr) : '';
+      var peloRelogio = fnTurno(horaStr);
       if (validos[peloRelogio]) return peloRelogio;
     }
   }
@@ -17773,7 +17786,8 @@ function _gvPesoProgramadoTotalIN() {
 
 function _gvPesoProgramadoHistoricoIN(turnoAlvo) {
   if (typeof descargaPesoProgramadoPorTurno !== 'function') return null;
-  var cards = descargaPesoProgramadoPorTurno();
+  // Régua do Painel Executivo (V168), a mesma usada para escolher turnoAlvo.
+  var cards = descargaPesoProgramadoPorTurno(_gvTurnoDoHorario);
   if (!cards || typeof cards !== 'object') return null;
   var ordem = ['1º Turno', '2º Turno', '3º Turno'];
   if (turnoAlvo && Object.prototype.hasOwnProperty.call(cards, turnoAlvo)) {
@@ -19321,7 +19335,7 @@ function gestaoVistaRenderizar() {
     // de Relatório IN, quebrado pelo turno em que a programação foi impressa.
     // Mesma fonte dos cards "Peso Nº Turno Programado" daquela tela.
     var progIN = (typeof descargaPesoProgramadoPorTurno === 'function')
-      ? descargaPesoProgramadoPorTurno() : {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+      ? descargaPesoProgramadoPorTurno(_gvTurnoDoHorario) : {'1º Turno':0,'2º Turno':0,'3º Turno':0};
     var progINTotal = (progIN['1º Turno']||0) + (progIN['2º Turno']||0) + (progIN['3º Turno']||0);
     var thNum = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
     var tdNum = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#e5e5e5;white-space:nowrap';
