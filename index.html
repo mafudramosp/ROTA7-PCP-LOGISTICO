@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V171--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V172--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6139,7 +6139,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V171';
+var ROTA7_VERSAO = 'V172';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -16429,15 +16429,22 @@ function acompOutAtualizarCards() {
 
   var emCarregamento = data.length;
   var finalizado = 0, emAndamento = 0, pesoTotal = 0;
-  var mapaTms = _tmsPesoPorFrotaMapa();
 
   data.forEach(function(r) {
     var rec = _acompOutGet(r._id);
     var estaFinalizado = !!(rec.horaFim && String(rec.horaFim).trim() !== '');
-    // "Total Carregado" deve somar só o que já foi efetivamente carregado (finalizado),
-    // usando a mesma fonte de peso do Painel Executivo (prioriza TMS, cai para o manual).
+    // V172 — soma o PESO OPL digitado, que é a coluna exibida na própria tela.
+    //
+    // Antes usava _acompOutPesoOficial, que prioriza o peso do TMS por frota e só
+    // cai no manual quando o TMS não tem a frota. Isso fazia o card divergir da
+    // coluna: somando a mão dava 175.185 kg e o card mostrava 166.875,6 kg. Os
+    // decimais eram a assinatura do problema — a coluna é inteira, a fração vinha
+    // do TMS. O rótulo diz "Peso OPL", então a conta passa a ser a do Peso OPL.
+    //
+    // _acompOutPesoOficial continua intacta e segue servindo o Painel Executivo,
+    // que é onde o peso do TMS deve mesmo prevalecer.
     if (estaFinalizado) {
-      pesoTotal += _acompOutPesoOficial(r, rec, mapaTms);
+      pesoTotal += _parsePesoBR(rec.pesoOpl);
       finalizado++;
     }
     else if (rec.horaInicio && String(rec.horaInicio).trim() !== '') emAndamento++;
