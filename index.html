@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V167--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V168--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -5035,8 +5035,8 @@ function _histRelOutPesoHoje() {
 }
 
 // ── Classificador de turno dedicado ao Painel Executivo — Carregamento (OUT) ──
-// Horários de corte operacionais usados pelo Dashboard e pelo Extrato:
-// 1º Turno 06:00–14:59 · 2º Turno 15:00–22:30 · 3º Turno 22:31–05:59.
+// Horários de corte operacionais usados pelo Dashboard e pelo Extrato (V168):
+// 1º Turno 06:40–15:45 · 2º Turno 15:46–23:00 · 3º Turno 23:01–06:39.
 // O 3º Turno cruza a meia-noite e, por isso, é classificado pela janela
 // operacional, não apenas pela data civil do registro.
 function _gvTurnoCustomOut(horaStr) {
@@ -5045,10 +5045,10 @@ function _gvTurnoCustomOut(horaStr) {
   if (isNaN(h)) return null;
   if (isNaN(m)) m = 0;
   var minutos = h * 60 + m;
-  if (minutos <= 360) return '3º Turno';    // 22:31–06:00 (atravessa a meia-noite)
-  if (minutos <= 900) return '1º Turno';    // 06:01–15:00
-  if (minutos <= 1350) return '2º Turno';   // 15:01–22:30
-  return '3º Turno';                        // 22:31–23:59
+  if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
+  if (minutos <= 945) return '1º Turno';    // 06:40–15:45
+  if (minutos <= 1380) return '2º Turno';   // 15:46–23:00
+  return '3º Turno';                        // 23:01–23:59
 }
 
 // Peso total (kg) registrado HOJE no Histórico de Relatório OUT, só do turno informado,
@@ -5098,7 +5098,8 @@ function _histRelOutPesoTurno(turnoAlvo) {
 // é DIFERENTE das outras 3 regras de turno já existentes no app, então ganhou nome e
 // funções próprias para não colidir com nenhuma delas:
 //   • calcTurnoCorte / _resumoMalhaClassificarTurno → 06h–15h / 15h–23h / 23h–06h
-//   • _gvTurnoCustomOut (Painel Executivo)          → 06:00–14:59 / 15:00–22:30 / 22:31–05:59
+//   • _gvTurnoCustomOut / _gvTurnoDoHorario (Painel Executivo, V168)
+//                                                  → 06:40–15:45 / 15:46–23:00 / 23:01–06:39
 //   • _hroTurnoClassificar (ESTA, só para os 3 cards abaixo):
 //       1º Turno 06:00–14:59 | 2º Turno 15:00–22:30 | 3º Turno 22:31–05:59 (vira o dia)
 function _hroTurnoClassificar(horaStr) {
@@ -6138,7 +6139,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V167';
+var ROTA7_VERSAO = 'V168';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -17386,10 +17387,27 @@ function _gvGaugeSvg(pct, corAtivo, label, valorTexto) {
 }
 
 function _gvTurnoDoHorario(horaStr) {
-  // O Dashboard usa o corte operacional informado: 1º 06:00–14:59,
-  // 2º 15:00–22:30 e 3º 22:31–05:59.
-  if (typeof _hroTurnoClassificar === 'function') return _hroTurnoClassificar(horaStr);
-  return (typeof _resumoMalhaClassificarTurno === 'function') ? _resumoMalhaClassificarTurno(horaStr) : null;
+  // Corte operacional do Painel Executivo — Descarga (IN), V168:
+  // 1º 06:40–15:45 · 2º 15:46–23:00 · 3º 23:01–06:39.
+  //
+  // ATENÇÃO — até a V167 esta função delegava para _hroTurnoClassificar.
+  // Isso foi desfeito de propósito: aquela função pertence aos cards de turno
+  // do HISTÓRICO DE RELATÓRIO, que continuam no corte antigo (06:00–14:59 /
+  // 15:00–22:30 / 22:31–05:59). Se continuasse delegando, mudar o Painel
+  // Executivo mudaria o Histórico junto, sem ninguém pedir. Agora cada tela
+  // tem a sua régua e uma não arrasta a outra.
+  //
+  // É o mesmo corte de _gvTurnoCustomOut (lado OUT), mantido em função
+  // separada porque as duas visões são configuradas de forma independente.
+  var partes = String(horaStr || '').split(':');
+  var h = parseInt(partes[0], 10), m = parseInt(partes[1], 10);
+  if (isNaN(h)) return null;
+  if (isNaN(m)) m = 0;
+  var minutos = h * 60 + m;
+  if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
+  if (minutos <= 945) return '1º Turno';    // 06:40–15:45
+  if (minutos <= 1380) return '2º Turno';   // 15:46–23:00
+  return '3º Turno';                        // 23:01–23:59
 }
 
 function _gvDiaDaSemanaAtual() {
@@ -17439,12 +17457,14 @@ function _gvJanelaOperacionalAtual(agoraReferencia) {
   var minutosAgora = agora.getHours() * 60 + agora.getMinutes();
   var dataRef = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0, 0);
 
-  // Depois das 22:31, o 3º Turno recém-iniciado pertence ao próximo dia
-  // operacional, pois termina às 05:59 da madrugada seguinte.
-  if (minutosAgora >= 1351) dataRef.setDate(dataRef.getDate() + 1);
+  // V168 — o dia operacional começa junto com o 3º Turno, agora às 23:01
+  // (antes 22:31). Se este corte ficasse para trás, o Extrato do Dia passaria
+  // a contar entre 22:31 e 23:00 registros que o classificador já considera
+  // do 2º Turno, e a linha Total deixaria de bater com a soma dos turnos.
+  if (minutosAgora >= 1381) dataRef.setDate(dataRef.getDate() + 1);
 
-  var inicio = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate() - 1, 22, 31, 0, 0);
-  var fimProgramado = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), 22, 31, 0, 0);
+  var inicio = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate() - 1, 23, 1, 0, 0);
+  var fimProgramado = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), 23, 1, 0, 0);
   var fim = agora < fimProgramado ? agora : fimProgramado;
 
   return { agora: agora, dataRef: dataRef, inicio: inicio, fim: fim, fimProgramado: fimProgramado };
@@ -18813,7 +18833,7 @@ function _gvFluxoFilaIN() {
     return unicos;
   }
 
-  // O dia operacional do Dashboard começa às 22:31 do dia anterior e
+  // O dia operacional do Dashboard começa às 23:01 do dia anterior e
   // permanece aberto até o momento atual, respeitando a virada do 3º Turno.
   var janela = (typeof _gvJanelaOperacionalAtual === 'function')
     ? _gvJanelaOperacionalAtual(agora) : null;
@@ -19345,7 +19365,7 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfo = fluxo.horaPrimeiroImport
-      ? 'Dia operacional · 3º Turno: 22:31–05:59 · primeiro importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
+      ? 'Dia operacional · 3º Turno: 23:01–06:39 · primeiro importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
       : 'Sem importação registrada na janela operacional atual';
 
     var corpoTabela = fluxo.horaPrimeiroImport
@@ -19435,7 +19455,7 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfoO = fo.temTms
-      ? 'CARREGAMENTO · KG · Dia operacional · 3º Turno: 22:31–05:59 · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) na janela'
+      ? 'CARREGAMENTO · KG · Dia operacional · 3º Turno: 23:01–06:39 · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) na janela'
       : 'CARREGAMENTO · KG · Dia operacional · sem import TMS na janela — Plano = soma da lista do Acompanhamento';
 
     entregaDiv.innerHTML =
