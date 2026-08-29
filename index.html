@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V172--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V167--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -5035,8 +5035,8 @@ function _histRelOutPesoHoje() {
 }
 
 // ── Classificador de turno dedicado ao Painel Executivo — Carregamento (OUT) ──
-// Horários de corte operacionais usados pelo Dashboard e pelo Extrato (V168):
-// 1º Turno 06:40–15:45 · 2º Turno 15:46–23:00 · 3º Turno 23:01–06:39.
+// Horários de corte operacionais usados pelo Dashboard e pelo Extrato:
+// 1º Turno 06:00–14:59 · 2º Turno 15:00–22:30 · 3º Turno 22:31–05:59.
 // O 3º Turno cruza a meia-noite e, por isso, é classificado pela janela
 // operacional, não apenas pela data civil do registro.
 function _gvTurnoCustomOut(horaStr) {
@@ -5045,10 +5045,10 @@ function _gvTurnoCustomOut(horaStr) {
   if (isNaN(h)) return null;
   if (isNaN(m)) m = 0;
   var minutos = h * 60 + m;
-  if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
-  if (minutos <= 945) return '1º Turno';    // 06:40–15:45
-  if (minutos <= 1380) return '2º Turno';   // 15:46–23:00
-  return '3º Turno';                        // 23:01–23:59
+  if (minutos <= 360) return '3º Turno';    // 22:31–06:00 (atravessa a meia-noite)
+  if (minutos <= 900) return '1º Turno';    // 06:01–15:00
+  if (minutos <= 1350) return '2º Turno';   // 15:01–22:30
+  return '3º Turno';                        // 22:31–23:59
 }
 
 // Peso total (kg) registrado HOJE no Histórico de Relatório OUT, só do turno informado,
@@ -5098,8 +5098,7 @@ function _histRelOutPesoTurno(turnoAlvo) {
 // é DIFERENTE das outras 3 regras de turno já existentes no app, então ganhou nome e
 // funções próprias para não colidir com nenhuma delas:
 //   • calcTurnoCorte / _resumoMalhaClassificarTurno → 06h–15h / 15h–23h / 23h–06h
-//   • _gvTurnoCustomOut / _gvTurnoDoHorario (Painel Executivo, V168)
-//                                                  → 06:40–15:45 / 15:46–23:00 / 23:01–06:39
+//   • _gvTurnoCustomOut (Painel Executivo)          → 06:00–14:59 / 15:00–22:30 / 22:31–05:59
 //   • _hroTurnoClassificar (ESTA, só para os 3 cards abaixo):
 //       1º Turno 06:00–14:59 | 2º Turno 15:00–22:30 | 3º Turno 22:31–05:59 (vira o dia)
 function _hroTurnoClassificar(horaStr) {
@@ -6139,7 +6138,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V172';
+var ROTA7_VERSAO = 'V167';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -7620,66 +7619,20 @@ function sbSalvarRelatorio() {
     var comprimidos = _relData.map(_relComprimir);
     var payload = JSON.stringify(comprimidos);
 
-    // ══════════════════════════════════════════════════════════════════
-    // V170 — divisão ESTÁVEL por chave (antes: fatiamento por posição)
-    // ══════════════════════════════════════════════════════════════════
-    // Antes, por_chunk era recalculado a partir do total de registros. Bastava
-    // chegar um CTRC novo para todas as fronteiras andarem e as N partes virarem
-    // bytes diferentes — então toda importação regravava tudo e as 24 máquinas
-    // rebaixavam os 2,46 MB inteiros.
-    //
-    // Agora cada registro cai sempre no mesmo bloco, escolhido pela sua chave
-    // (CTRC + Nota, verificada como única nos 7.091 registros do relatório).
-    // Um CTRC novo entra num bloco só; os outros continuam byte a byte iguais,
-    // não são regravados e ninguém precisa rebaixá-los.
-    //
-    // IMPORTANTE: isto muda apenas COMO o relatório é dividido para trafegar.
-    // O conteúdo remontado na leitura é o mesmo de sempre, então nenhuma regra
-    // de negócio muda — Disponível, Pátio, Em Descarregamento e o Extrato do
-    // Dia continuam vendo exatamente os mesmos registros de hoje.
-    // Blocos de ~20 KB. O tamanho decide a economia: com poucos blocos grandes,
-    // qualquer punhado de registros novos espalhados atinge todos eles e não se
-    // economiza nada (medido: 4 blocos de 250 KB → 40 CTRCs novos mudavam os 4).
-    // Blocos menores fazem a alteração ficar contida em poucos deles.
-    var CHUNK_SIZE = 20000;
-    var NUM_BLOCOS = Math.max(1, Math.ceil(payload.length / CHUNK_SIZE));
-
-    function _relChaveRegistro(o) {
-      // ct = CTRC, nt = Nota (nomes curtos de _relComprimir).
-      // Registro sem chave cai no bloco 0 por um hash do conteúdo — nunca some.
-      var k = String(o && o.ct != null ? o.ct : '') + '|' + String(o && o.nt != null ? o.nt : '');
-      return (k === '|') ? JSON.stringify(o) : k;
+    // Dividir em chunks de ~250KB — antes eram ~600KB; em rede móvel mais lenta/
+    // instável, um POST/PATCH desse tamanho tem mais chance de cair no meio.
+    // Partes menores terminam mais rápido cada uma, o que reduz a chance de queda.
+    var CHUNK_SIZE = 250000;
+    var chunks = [];
+    if (payload.length <= CHUNK_SIZE) {
+      chunks.push(payload);
+    } else {
+      // Dividir o array em pedaços
+      var por_chunk = Math.ceil(comprimidos.length / Math.ceil(payload.length / CHUNK_SIZE));
+      for (var i = 0; i < comprimidos.length; i += por_chunk) {
+        chunks.push(JSON.stringify(comprimidos.slice(i, i + por_chunk)));
+      }
     }
-    function _relHashBloco(s) {
-      // djb2 + finalizador de avalanche. O djb2 sozinho não serve aqui: os CTRCs
-      // são sequenciais e o número de blocos costuma ser potência de 2, então o
-      // módulo pegaria só os bits baixos e os blocos sairiam desequilibrados
-      // (medido: 1.000 contra 3.000 registros). O embaralhamento abaixo espalha
-      // os bits altos para os baixos e devolve blocos de tamanho parecido.
-      // Determinístico e igual em todas as máquinas, que é o que importa para o
-      // mesmo registro cair sempre no mesmo bloco em qualquer navegador.
-      var h = 5381;
-      for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
-      h ^= h >>> 16; h = Math.imul(h, 2246822507) >>> 0;
-      h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0;
-      h ^= h >>> 16;
-      return h >>> 0;
-    }
-
-    var baldes = [];
-    for (var b = 0; b < NUM_BLOCOS; b++) baldes.push([]);
-    comprimidos.forEach(function(o) {
-      baldes[_relHashBloco(_relChaveRegistro(o)) % NUM_BLOCOS].push(o);
-    });
-    // Ordem interna fixa: sem isto, dois navegadores poderiam serializar o mesmo
-    // conjunto em ordens diferentes e o bloco pareceria alterado sem ter mudado.
-    var chunks = baldes.map(function(lista) {
-      lista.sort(function(a, c) {
-        var ka = _relChaveRegistro(a), kc = _relChaveRegistro(c);
-        return ka < kc ? -1 : (ka > kc ? 1 : 0);
-      });
-      return JSON.stringify(lista);
-    });
 
     var totalChunks = chunks.length;
     var salvos = 0;
@@ -7687,31 +7640,11 @@ function sbSalvarRelatorio() {
     var ultimoErro = '';
     var MAX_TENTATIVAS = 3; // tentativa original + 2 novas tentativas
 
-    // V170 — só sobe o bloco cujo conteúdo mudou. _relBlocosEnviados guarda o
-    // que esta máquina gravou por último; bloco igual é pulado, e como não é
-    // gravado, o Realtime não o transmite e nenhuma máquina o rebaixa.
-    // Os carimbos por bloco vão no metadado, para a leitura saber o que baixar.
-    var blocosCarimbo = {};
-    var pulados = 0;
-    chunks.forEach(function(conteudo, idx) {
-      var nomeBloco = (totalChunks === 1) ? 'tms_relatorio' : ('tms_relatorio_' + idx);
-      var anterior = _relBlocosEnviados[nomeBloco];
-      if (anterior && anterior.hash === _relHashBloco(conteudo)) {
-        blocosCarimbo[nomeBloco] = anterior.ts;   // preserva o carimbo antigo
-        pulados++;
-      } else {
-        blocosCarimbo[nomeBloco] = agora;
-      }
-    });
-
     function finalizarSeCompleto() {
       if (salvos + erros !== totalChunks) return;
       if (erros === 0) {
         // Salvar metadado com total de chunks e timestamp
-        // V170 — "bl" leva o carimbo de cada bloco. A leitura compara com o que
-        // já tem em mãos e baixa só os que avançaram. Metadados antigos (sem
-        // "bl") continuam válidos: nesse caso a leitura baixa tudo, como antes.
-        var meta = JSON.stringify({ total: totalChunks, ts: agora, n: _relData.length, bl: blocosCarimbo });
+        var meta = JSON.stringify({ total: totalChunks, ts: agora, n: _relData.length });
         fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio_meta', {
           method: 'PATCH', headers: SB_HEADERS,
           body: JSON.stringify({ valor: meta, atualizado_em: agora })
@@ -7735,14 +7668,6 @@ function sbSalvarRelatorio() {
     function salvarChunk(idx, tentativa) {
       tentativa = tentativa || 1;
       var chave = totalChunks === 1 ? 'tms_relatorio' : 'tms_relatorio_' + idx;
-      // V170 — bloco idêntico ao que esta máquina já gravou: não sobe nada.
-      // É aqui que a economia acontece; sem gravação não há broadcast nem
-      // redownload nas outras máquinas.
-      if (blocosCarimbo[chave] !== agora) {
-        salvos++;
-        finalizarSeCompleto();
-        return;
-      }
       var body = { chave: chave, valor: chunks[idx], atualizado_em: agora };
       // PATCH primeiro (atualiza timestamp), depois POST se não existir
       fetch(SB_URL + '/configuracoes?chave=eq.' + chave, {
@@ -7761,7 +7686,6 @@ function sbSalvarRelatorio() {
           }
         });
       }).then(function() {
-        _relBlocosEnviados[chave] = { hash: _relHashBloco(chunks[idx]), ts: agora };
         salvos++;
         finalizarSeCompleto();
       }).catch(function(err) {
@@ -7784,17 +7708,6 @@ function sbSalvarRelatorio() {
 
 // Timestamp da última versão do relatório carregada do Supabase
 var _relSupabaseTs = null;
-
-// V170 — memória da divisão por blocos.
-// _relBlocosEnviados: o que ESTA máquina gravou por último (hash + carimbo),
-//   usado para pular blocos idênticos na hora de subir.
-// _relBlocosCache: o conteúdo de cada bloco já baixado, com o carimbo que veio
-//   no metadado. Permite remontar o relatório baixando só os blocos que
-//   avançaram, em vez dos 2,46 MB inteiros a cada importação.
-// Ambos vivem só em memória: numa máquina recém-aberta ficam vazios e o
-// comportamento cai no de sempre — baixa tudo uma vez e segue incremental.
-var _relBlocosEnviados = {};
-var _relBlocosCache = {};
 
 function _relAplicarDados(registros, ts, forcar) {
   _relData = registros.map(_relDescomprimir);
@@ -7897,55 +7810,16 @@ function sbCarregarRelatorio(forcar) {
           if (typeof _relSalvarLocal === 'function') _relSalvarLocal();
         }
       } else {
-        // V170 — baixa SÓ os blocos cujo carimbo avançou desde a última vez.
-        // meta.bl traz o carimbo de cada bloco; o que já está em _relBlocosCache
-        // com o mesmo carimbo é reaproveitado da memória, sem tráfego. Metadado
-        // antigo (sem "bl") cai no comportamento de sempre: baixa todos.
+        // Múltiplos chunks — buscar todos em paralelo
         var chaves = [];
-        var reaproveitados = 0;
-        for (var i = 0; i < totalChunks; i++) {
-          var nb = 'tms_relatorio_' + i;
-          var carimbo = (meta && meta.bl) ? meta.bl[nb] : null;
-          var emCache = _relBlocosCache[nb];
-          if (carimbo && emCache && emCache.ts === carimbo) { reaproveitados++; continue; }
-          chaves.push(nb);
-        }
-        if (!chaves.length) {
-          // Nada mudou de fato — remonta da memória, sem nenhuma requisição.
-          var todosCache = [];
-          for (var j = 0; j < totalChunks; j++) {
-            try { todosCache = todosCache.concat(JSON.parse(_relBlocosCache['tms_relatorio_' + j].valor)); } catch(e){}
-          }
-          if (todosCache.length) _relAplicarDados(todosCache, ts, forcar);
-          return;
-        }
-        // Busca em lotes de 40 chaves: com blocos de 20 KB o relatório tem ~120
-        // partes, e um in.() com todas elas geraria uma URL longa demais para o
-        // servidor aceitar. No dia a dia só alguns blocos mudam e cai num lote só.
-        var lotes = [];
-        for (var L = 0; L < chaves.length; L += 40) lotes.push(chaves.slice(L, L + 40));
-        Promise.all(lotes.map(function(lote) {
-          return fetch(SB_URL + '/configuracoes?chave=in.(' + lote.join(',') + ')&select=chave,valor', {
-            headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-          }).then(function(r){ return r.json(); });
-        })).then(function(partes) {
-          var data = [];
-          partes.forEach(function(p){ if (p && p.length) data = data.concat(p); });
-          if (!data || data.length < chaves.length) return;
-          // Guarda o que veio e remonta juntando com os blocos já em memória.
-          data.forEach(function(d) {
-            _relBlocosCache[d.chave] = {
-              valor: d.valor,
-              ts: (meta && meta.bl) ? meta.bl[d.chave] : (ts ? ts.toISOString() : '')
-            };
-          });
+        for (var i = 0; i < totalChunks; i++) chaves.push('tms_relatorio_' + i);
+        fetch(SB_URL + '/configuracoes?chave=in.(' + chaves.join(',') + ')&select=chave,valor', {
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+        }).then(function(r){ return r.json(); }).then(function(data) {
+          if (!data || data.length < totalChunks) return;
+          data.sort(function(a,b){ return a.chave < b.chave ? -1 : 1; });
           var todos = [];
-          for (var k = 0; k < totalChunks; k++) {
-            var reg = _relBlocosCache['tms_relatorio_' + k];
-            if (!reg) { todos = null; break; }        // faltou bloco: não aplica nada
-            try { todos = todos.concat(JSON.parse(reg.valor)); } catch(e){}
-          }
-          if (!todos) return;
+          data.forEach(function(d){ try { todos = todos.concat(JSON.parse(d.valor)); } catch(e){} });
           // Confere o total combinado contra o que foi gravado no metadado (meta.n) —
           // pegava chunk com conteúdo truncado/corrompido sem avisar, mesmo com a
           // quantidade de PARTES certa (a checagem acima só conta partes, não registros).
@@ -13898,9 +13772,7 @@ function descargaPesoSelecionadoPorTurno() {
 // usuário desmarcar o checkbox depois de imprimir. Usa a mesma fonte de peso ao vivo
 // (_descColetaRanking / _descMacRanking) que as demais somas desta tela, para nunca
 // ficar dessincronizada.
-function descargaPesoProgramadoPorTurno(classificador) {
-  // V169 — classificador opcional: cada tela informa a SUA régua de turno.
-  // Sem parâmetro usa o corte do Histórico de Relatório, como sempre foi.
+function descargaPesoProgramadoPorTurno() {
   var totais = { '1º Turno': 0, '2º Turno': 0, '3º Turno': 0 };
   var pesoPorMac = {};
   function id(mac) {
@@ -13925,7 +13797,7 @@ function descargaPesoProgramadoPorTurno(classificador) {
   Object.keys(programacoes).forEach(function(chave) {
     var rec = programacoes[chave];
     if (!rec || rec.programado !== true) return;
-    var turno = _descProgramacaoTurnoDe(rec, classificador);
+    var turno = _descProgramacaoTurnoDe(rec);
     if (!turno || !totais.hasOwnProperty(turno)) return;
     if (!_descProgramacaoNoDiaOperacional(rec, pesoPorMac[chave] !== undefined)) return;
     // Peso congelado no ato da programação. Antes lia só o peso vivo da fila, e
@@ -13941,7 +13813,7 @@ function descargaPesoProgramadoPorTurno(classificador) {
       var rec = _descAcompData[mac];
       var chave = id(mac);
       if (!rec || !rec.programado || programacoes[chave]) return;
-      var turno = _descProgramacaoTurnoDe({ turno: rec.programadoTurno, dataISO: rec.programadoDataISO }, classificador);
+      var turno = _descProgramacaoTurnoDe({ turno: rec.programadoTurno, dataISO: rec.programadoDataISO });
       if (!turno || !totais.hasOwnProperty(turno)) return;
       if (!_descProgramacaoNoDiaOperacional({ dataISO: rec.programadoDataISO }, pesoPorMac[chave] !== undefined)) return;
       var pLegado = pesoDe(chave, { dataISO: rec.programadoDataISO });
@@ -14793,25 +14665,14 @@ function _descProgramacaoCongelarPesos() {
 // Regra literal: programou entre 22:31 e 05:59 → 3º Turno, mesmo atravessando a
 // meia-noite (19/08 22:31 até 20/08 06:00 pertencem ao mesmo 3º Turno).
 // O campo gravado só é usado quando não há horário utilizável.
-function _descProgramacaoTurnoDe(rec, classificador) {
-  // V169 — o classificador agora é um parâmetro. Motivo: esta função arquiva a
-  // programação num balde de turno, e a tela que CONSULTA precisa usar a mesma
-  // régua da que GRAVOU. Depois que a V168 deu ao Painel Executivo um corte
-  // próprio (06:40–15:45 / 15:46–23:00 / 23:01–06:39), o card "Programado"
-  // passou a procurar num balde diferente daquele onde o item tinha sido
-  // arquivado, e sumiam do card todas as programações feitas entre 06:01–06:39,
-  // 15:01–15:45 e 22:31–23:00. Sem parâmetro, mantém _hroTurnoClassificar —
-  // que é o corte do Histórico de Relatório, quem chamava esta função antes.
-  var fnTurno = (typeof classificador === 'function')
-    ? classificador
-    : ((typeof _hroTurnoClassificar === 'function') ? _hroTurnoClassificar : null);
+function _descProgramacaoTurnoDe(rec) {
   var validos = { '1º Turno': 1, '2º Turno': 1, '3º Turno': 1 };
   var iso = String((rec && (rec.dataISO || rec.programadoDataISO)) || '').trim();
-  if (iso && fnTurno) {
+  if (iso) {
     var d = new Date(iso);
     if (!isNaN(d.getTime())) {
       var horaStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-      var peloRelogio = fnTurno(horaStr);
+      var peloRelogio = (typeof _hroTurnoClassificar === 'function') ? _hroTurnoClassificar(horaStr) : '';
       if (validos[peloRelogio]) return peloRelogio;
     }
   }
@@ -16429,22 +16290,15 @@ function acompOutAtualizarCards() {
 
   var emCarregamento = data.length;
   var finalizado = 0, emAndamento = 0, pesoTotal = 0;
+  var mapaTms = _tmsPesoPorFrotaMapa();
 
   data.forEach(function(r) {
     var rec = _acompOutGet(r._id);
     var estaFinalizado = !!(rec.horaFim && String(rec.horaFim).trim() !== '');
-    // V172 — soma o PESO OPL digitado, que é a coluna exibida na própria tela.
-    //
-    // Antes usava _acompOutPesoOficial, que prioriza o peso do TMS por frota e só
-    // cai no manual quando o TMS não tem a frota. Isso fazia o card divergir da
-    // coluna: somando a mão dava 175.185 kg e o card mostrava 166.875,6 kg. Os
-    // decimais eram a assinatura do problema — a coluna é inteira, a fração vinha
-    // do TMS. O rótulo diz "Peso OPL", então a conta passa a ser a do Peso OPL.
-    //
-    // _acompOutPesoOficial continua intacta e segue servindo o Painel Executivo,
-    // que é onde o peso do TMS deve mesmo prevalecer.
+    // "Total Carregado" deve somar só o que já foi efetivamente carregado (finalizado),
+    // usando a mesma fonte de peso do Painel Executivo (prioriza TMS, cai para o manual).
     if (estaFinalizado) {
-      pesoTotal += _parsePesoBR(rec.pesoOpl);
+      pesoTotal += _acompOutPesoOficial(r, rec, mapaTms);
       finalizado++;
     }
     else if (rec.horaInicio && String(rec.horaInicio).trim() !== '') emAndamento++;
@@ -17532,27 +17386,10 @@ function _gvGaugeSvg(pct, corAtivo, label, valorTexto) {
 }
 
 function _gvTurnoDoHorario(horaStr) {
-  // Corte operacional do Painel Executivo — Descarga (IN), V168:
-  // 1º 06:40–15:45 · 2º 15:46–23:00 · 3º 23:01–06:39.
-  //
-  // ATENÇÃO — até a V167 esta função delegava para _hroTurnoClassificar.
-  // Isso foi desfeito de propósito: aquela função pertence aos cards de turno
-  // do HISTÓRICO DE RELATÓRIO, que continuam no corte antigo (06:00–14:59 /
-  // 15:00–22:30 / 22:31–05:59). Se continuasse delegando, mudar o Painel
-  // Executivo mudaria o Histórico junto, sem ninguém pedir. Agora cada tela
-  // tem a sua régua e uma não arrasta a outra.
-  //
-  // É o mesmo corte de _gvTurnoCustomOut (lado OUT), mantido em função
-  // separada porque as duas visões são configuradas de forma independente.
-  var partes = String(horaStr || '').split(':');
-  var h = parseInt(partes[0], 10), m = parseInt(partes[1], 10);
-  if (isNaN(h)) return null;
-  if (isNaN(m)) m = 0;
-  var minutos = h * 60 + m;
-  if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
-  if (minutos <= 945) return '1º Turno';    // 06:40–15:45
-  if (minutos <= 1380) return '2º Turno';   // 15:46–23:00
-  return '3º Turno';                        // 23:01–23:59
+  // O Dashboard usa o corte operacional informado: 1º 06:00–14:59,
+  // 2º 15:00–22:30 e 3º 22:31–05:59.
+  if (typeof _hroTurnoClassificar === 'function') return _hroTurnoClassificar(horaStr);
+  return (typeof _resumoMalhaClassificarTurno === 'function') ? _resumoMalhaClassificarTurno(horaStr) : null;
 }
 
 function _gvDiaDaSemanaAtual() {
@@ -17602,14 +17439,12 @@ function _gvJanelaOperacionalAtual(agoraReferencia) {
   var minutosAgora = agora.getHours() * 60 + agora.getMinutes();
   var dataRef = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0, 0);
 
-  // V168 — o dia operacional começa junto com o 3º Turno, agora às 23:01
-  // (antes 22:31). Se este corte ficasse para trás, o Extrato do Dia passaria
-  // a contar entre 22:31 e 23:00 registros que o classificador já considera
-  // do 2º Turno, e a linha Total deixaria de bater com a soma dos turnos.
-  if (minutosAgora >= 1381) dataRef.setDate(dataRef.getDate() + 1);
+  // Depois das 22:31, o 3º Turno recém-iniciado pertence ao próximo dia
+  // operacional, pois termina às 05:59 da madrugada seguinte.
+  if (minutosAgora >= 1351) dataRef.setDate(dataRef.getDate() + 1);
 
-  var inicio = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate() - 1, 23, 1, 0, 0);
-  var fimProgramado = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), 23, 1, 0, 0);
+  var inicio = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate() - 1, 22, 31, 0, 0);
+  var fimProgramado = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), 22, 31, 0, 0);
   var fim = agora < fimProgramado ? agora : fimProgramado;
 
   return { agora: agora, dataRef: dataRef, inicio: inicio, fim: fim, fimProgramado: fimProgramado };
@@ -17918,8 +17753,7 @@ function _gvPesoProgramadoTotalIN() {
 
 function _gvPesoProgramadoHistoricoIN(turnoAlvo) {
   if (typeof descargaPesoProgramadoPorTurno !== 'function') return null;
-  // Régua do Painel Executivo (V168), a mesma usada para escolher turnoAlvo.
-  var cards = descargaPesoProgramadoPorTurno(_gvTurnoDoHorario);
+  var cards = descargaPesoProgramadoPorTurno();
   if (!cards || typeof cards !== 'object') return null;
   var ordem = ['1º Turno', '2º Turno', '3º Turno'];
   if (turnoAlvo && Object.prototype.hasOwnProperty.call(cards, turnoAlvo)) {
@@ -18793,19 +18627,10 @@ function _gvFluxoFilaOUT() {
     var t = (typeof _acompOutTurnoEfetivo === 'function')
       ? _acompOutTurnoEfetivo(rec, 'inicio')
       : turnoDe(temInicio ? rec.horaInicio : (rec.horaFim || agoraHora));
-    // Turno que EXECUTOU: contabilizado pelo RELÓGIO da Hora Fim.
-    //
-    // V171 — antes usava _acompOutTurnoEfetivo, que respeita a coluna "Turno"
-    // preenchida à mão no Acompanhamento OUT. Quando um veículo era fixado num
-    // turno anterior, o peso dele caía no balde daquele turno e o card
-    // "Executado" do turno vigente parava de crescer mesmo com carregamento
-    // fechando — o efeito relatado de travar num valor e não somar o restante.
-    // O campo manual continua valendo em todo o resto (tabela, coluna Turno,
-    // ordenação); só a contabilização do peso executado passa a seguir a hora
-    // real do fechamento. Para reverter, basta trocar de volta por
-    // _acompOutTurnoEfetivo nesta linha.
-    var tExec = (typeof _acompOutTurnoAuto === 'function')
-      ? _acompOutTurnoAuto(rec, 'fim')
+    // Turno que EXECUTOU: coluna Turno do Acompanhamento OUT; sem ela, pela Hora Fim
+    // (o veículo pertence ao turno que fechou o carregamento, não ao que o iniciou).
+    var tExec = (typeof _acompOutTurnoEfetivo === 'function')
+      ? _acompOutTurnoEfetivo(rec, 'fim')
       : turnoDe(rec.horaFim || rec.horaInicio || agoraHora);
     if (!pesoAcompTurno.hasOwnProperty(t)) t = '1º Turno';
     if (!execTurno.hasOwnProperty(tExec)) tExec = t;
@@ -18988,7 +18813,7 @@ function _gvFluxoFilaIN() {
     return unicos;
   }
 
-  // O dia operacional do Dashboard começa às 23:01 do dia anterior e
+  // O dia operacional do Dashboard começa às 22:31 do dia anterior e
   // permanece aberto até o momento atual, respeitando a virada do 3º Turno.
   var janela = (typeof _gvJanelaOperacionalAtual === 'function')
     ? _gvJanelaOperacionalAtual(agora) : null;
@@ -19476,7 +19301,7 @@ function gestaoVistaRenderizar() {
     // de Relatório IN, quebrado pelo turno em que a programação foi impressa.
     // Mesma fonte dos cards "Peso Nº Turno Programado" daquela tela.
     var progIN = (typeof descargaPesoProgramadoPorTurno === 'function')
-      ? descargaPesoProgramadoPorTurno(_gvTurnoDoHorario) : {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+      ? descargaPesoProgramadoPorTurno() : {'1º Turno':0,'2º Turno':0,'3º Turno':0};
     var progINTotal = (progIN['1º Turno']||0) + (progIN['2º Turno']||0) + (progIN['3º Turno']||0);
     var thNum = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
     var tdNum = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#e5e5e5;white-space:nowrap';
@@ -19520,7 +19345,7 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfo = fluxo.horaPrimeiroImport
-      ? 'Dia operacional · 3º Turno: 23:01–06:39 · primeiro importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
+      ? 'Dia operacional · 3º Turno: 22:31–05:59 · primeiro importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
       : 'Sem importação registrada na janela operacional atual';
 
     var corpoTabela = fluxo.horaPrimeiroImport
@@ -19610,7 +19435,7 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfoO = fo.temTms
-      ? 'CARREGAMENTO · KG · Dia operacional · 3º Turno: 23:01–06:39 · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) na janela'
+      ? 'CARREGAMENTO · KG · Dia operacional · 3º Turno: 22:31–05:59 · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) na janela'
       : 'CARREGAMENTO · KG · Dia operacional · sem import TMS na janela — Plano = soma da lista do Acompanhamento';
 
     entregaDiv.innerHTML =
