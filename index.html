@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V175--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V176--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6146,7 +6146,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V175';
+var ROTA7_VERSAO = 'V176';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -15973,8 +15973,25 @@ function _acompOutPesoOficial(r, rec, mapaTms) {
   // original — usar o TMS de novo contaria a mesma carga duas vezes. A cópia vale
   // exatamente o Peso OPL digitado para a nova operação.
   if (r && r._adiantado) return pesoManual;
+  // V176 — o PESO OPL DIGITADO manda; o TMS entra só quando o campo está vazio.
+  //
+  // Antes era o contrário (pesoTms > 0 ? pesoTms : pesoManual) e isso gerava dois
+  // problemas relatados:
+  //
+  // 1. O Painel Executivo divergia do Acompanhamento OUT. O card "Peso OPL Total
+  //    Carregado" soma o digitado; o Painel somava o TMS. Com o mesmo filtro de
+  //    turno dava 229.854 kg de um lado e 209.989 kg do outro.
+  //
+  // 2. Máquinas diferentes mostravam números diferentes. O peso do TMS depende do
+  //    relatório estar carregado igual em todas elas; enquanto uma máquina ainda
+  //    não recebeu a importação mais recente, ela calcula outro total. O Peso OPL
+  //    chega por célula (acomp_out_cel:<id>), que é pequeno e sincroniza na hora,
+  //    então o número converge muito mais rápido entre as estações.
+  //
+  // O digitado também é o que a operação de fato registrou na balança, então é a
+  // fonte mais defensável para o número que o diretor acompanha.
   var pesoTms = _tmsPesoDeFrota(r.frota, mapaTms);
-  return pesoTms > 0 ? pesoTms : pesoManual;
+  return pesoManual > 0 ? pesoManual : pesoTms;
 }
 
 // PERSISTÊNCIA: cada veículo (id) é gravado como sua PRÓPRIA linha no Supabase
