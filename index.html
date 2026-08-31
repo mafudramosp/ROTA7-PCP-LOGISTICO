@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V174--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V175--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -4692,6 +4692,11 @@ var REL_COLS = [
 var dispBadge={'Planejado':'rel-badge-plan','Disponível':'rel-badge-disp','Patio':'rel-badge-patio','Em descarregamento':'rel-badge-desc','Descarregado':'rel-badge-dcgd'};
 var dispLabel={'Patio':'Pátio','Em descarregamento':'Em descarga'};
 var posicaoBadge={'Fila de descarga':'rel-badge-patio','Disponível':'rel-badge-disp','Carregando':'rel-badge-plan','Descarregado':'rel-badge-dcgd'};
+// Rótulo EXIBIDO da coluna Posição no Planejamento OUT. Só troca o que aparece na
+// tela; o valor interno continua 'Descarregado', que é o que as regras de
+// classificação comparam (AC = 0 + AE vazia + AM preenchida). Renomear o valor em si
+// quebraria a classificação e o filtro em todas as outras telas.
+var posicaoLabel={'Descarregado':'Intermediário'};
 var critBadge={'⚠ Cliente critico':'rel-badge-crit','⚠ Agendamento':'rel-badge-agend','Fluxo':'rel-badge-fluxo'};
 var etiqBadge={'Coleta':'rel-badge-colet','Reembarque':'rel-badge-remb'};
 
@@ -5408,7 +5413,7 @@ function relRenderizar() {
       var col = REL_COLS[ci]; var v = r[col.k]; var disp = '';
       if (col.type==='badge') {
         var bc = col.k==='disp'?dispBadge[v]:col.k==='posicao'?posicaoBadge[v]:col.k==='cliente'?critBadge[v]:etiqBadge[v];
-        var lb = col.k==='disp'?(dispLabel[v]||v):v;
+        var lb = col.k==='disp'?(dispLabel[v]||v):(col.k==='posicao'?(posicaoLabel[v]||v):v);
         disp = '<span class="rel-badge '+(bc||'rel-badge-fluxo')+'">'+lb+'</span>';
       } else if (col.type==='num') {
         disp = col.k==='valor'?'R$ '+relFmtNum(v||0,2).replace('.',','):relFmtNum(v||0,3);
@@ -5488,7 +5493,9 @@ function rcfDraw(vals,sel){
   }) : vals;
   document.getElementById('rel-cf-list').innerHTML=f.map(function(v){
     var chk=sel&&sel.has?sel.has(v):true;
-    return '<label class="rel-cf-item"><input type="checkbox" value="'+v.split('"').join('&quot;')+'" '+(chk?'checked':'')+'><span>'+(v||'(vazio)')+'</span></label>';
+    // O value do checkbox continua sendo o valor interno — só o texto muda.
+    var rot = (_rcfCol==='posicao' && typeof posicaoLabel!=='undefined' && posicaoLabel[v]) ? posicaoLabel[v] : v;
+    return '<label class="rel-cf-item"><input type="checkbox" value="'+v.split('"').join('&quot;')+'" '+(chk?'checked':'')+'><span>'+(rot||'(vazio)')+'</span></label>';
   }).join('') || '<div style="padding:10px;font-size:11px;color:#94a3b8;text-align:center">Nenhum valor encontrado</div>';
 }
 function rcfSearchFilter(){ if(!_rcfCol)return; rcfDraw(_rcfVals[_rcfCol]||[],_rcfF[_rcfCol]||new Set(_rcfVals[_rcfCol]||[])); }
@@ -6139,7 +6146,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V174';
+var ROTA7_VERSAO = 'V175';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
