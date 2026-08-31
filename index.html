@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V176--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V177--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6146,7 +6146,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V176';
+var ROTA7_VERSAO = 'V177';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -18927,9 +18927,18 @@ function _gvFluxoFilaOUT() {
   // fila própria nova. O 2º Turno recebe o saldo do 1º pelo mesmo mecanismo.
   var pendenteAnterior = 0;
   var minutosAgora = agora.getHours() * 60 + agora.getMinutes();
-  var ordemCascata = (minutosAgora >= 1351 || minutosAgora <= 359)
+  // V177 — cortes alinhados ao classificador do Painel Executivo
+  // (1º 06:40–15:45 · 2º 15:46–23:00 · 3º 23:01–06:39).
+  //
+  // Ficaram para trás na V168: a cascata ainda usava 22:31 (1351), 05:59 (359) e
+  // 14:59 (899). O efeito aparecia entre 22:31 e 23:00 — o classificador já dizia
+  // "2º Turno", mas a cascata montava só a linha do 3º. Sem linha do turno vigente,
+  // pesoExecutadoTurno ficava null e o card "Executado" caía no total do DIA em vez
+  // de zerar na virada. Era o card que não zerava na passagem de turno.
+  //   1381 = 23:01 · 399 = 06:39 · 945 = 15:45
+  var ordemCascata = (minutosAgora >= 1381 || minutosAgora <= 399)
     ? ['3º Turno']
-    : (minutosAgora <= 899 ? ['3º Turno', '1º Turno'] : ['3º Turno', '1º Turno', '2º Turno']);
+    : (minutosAgora <= 945 ? ['3º Turno', '1º Turno'] : ['3º Turno', '1º Turno', '2º Turno']);
   var linhasPorTurno = {};
   ordemCascata.forEach(function(t) {
     var filaPropriaT = filaPropriaPorTurno[t] || 0;
@@ -19100,9 +19109,18 @@ function _gvFluxoFilaIN() {
   var pendenteAnterior = 0;
   var total = { turno: 'Total', filaInicial: 0, entrouDepois: 0, executado: 0 };
   var minutosAgora = agora.getHours() * 60 + agora.getMinutes();
-  var ordemCascata = (minutosAgora >= 1351 || minutosAgora <= 359)
+  // V177 — cortes alinhados ao classificador do Painel Executivo
+  // (1º 06:40–15:45 · 2º 15:46–23:00 · 3º 23:01–06:39).
+  //
+  // Ficaram para trás na V168: a cascata ainda usava 22:31 (1351), 05:59 (359) e
+  // 14:59 (899). O efeito aparecia entre 22:31 e 23:00 — o classificador já dizia
+  // "2º Turno", mas a cascata montava só a linha do 3º. Sem linha do turno vigente,
+  // pesoExecutadoTurno ficava null e o card "Executado" caía no total do DIA em vez
+  // de zerar na virada. Era o card que não zerava na passagem de turno.
+  //   1381 = 23:01 · 399 = 06:39 · 945 = 15:45
+  var ordemCascata = (minutosAgora >= 1381 || minutosAgora <= 399)
     ? ['3º Turno']
-    : (minutosAgora <= 899 ? ['3º Turno', '1º Turno'] : ['3º Turno', '1º Turno', '2º Turno']);
+    : (minutosAgora <= 945 ? ['3º Turno', '1º Turno'] : ['3º Turno', '1º Turno', '2º Turno']);
   var processados = {};
   ordemCascata.forEach(function(t) {
     var l = linhas[t];
