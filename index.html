@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V177--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V178--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6146,7 +6146,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V177';
+var ROTA7_VERSAO = 'V178';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -7803,8 +7803,43 @@ var _relSupabaseTs = null;
 var _relBlocosEnviados = {};
 var _relBlocosCache = {};
 
+// Chave de identidade de um registro do relatório: CTRC + Nota.
+// Verificada como única nos 7.091 registros reais da planilha do TMS (CTRC
+// sozinho repete 2.072 vezes, por isso os dois juntos).
+function _relChaveRegistroAplicado(r) {
+  var k = String((r && r.ctrc) || '') + '|' + String((r && r.nota) || '');
+  return k === '|' ? JSON.stringify(r) : k;
+}
+
 function _relAplicarDados(registros, ts, forcar) {
-  _relData = registros.map(_relDescomprimir);
+  // V178 — MESCLA em vez de substituir.
+  //
+  // Antes era _relData = registros.map(...), uma substituição total. Se a carga
+  // viesse vazia ou incompleta — bloco que não chegou, requisição recusada,
+  // rede oscilando — o relatório inteiro era apagado da tela e ficava em branco,
+  // em todas as máquinas. Era o defeito relatado.
+  //
+  // Agora: o que é novo entra, o que já existe é sobrescrito pela versão nova
+  // (a mais recente vale), e o que não veio na carga permanece. Uma carga vazia
+  // não mexe em nada, então a tela nunca fica em branco.
+  //
+  // A sincronização em tempo real continua igual: quem importa dispara o
+  // Realtime e as outras máquinas recarregam — só que agora acrescentando ao que
+  // já têm em vez de trocar tudo.
+  if (!registros || !registros.length) return;
+
+  var novos = registros.map(_relDescomprimir);
+  if (_relData && _relData.length) {
+    var idx = {};
+    for (var i = 0; i < _relData.length; i++) idx[_relChaveRegistroAplicado(_relData[i])] = i;
+    for (var j = 0; j < novos.length; j++) {
+      var k = _relChaveRegistroAplicado(novos[j]);
+      if (idx[k] !== undefined) _relData[idx[k]] = novos[j];   // duplicado: sobrescreve
+      else { _relData.push(novos[j]); idx[k] = _relData.length - 1; }  // novo: acrescenta
+    }
+  } else {
+    _relData = novos;
+  }
   _rcfF = {}; _relSort = {col:null,asc:true}; _rowCache = [];
   if (typeof _hubTree !== 'undefined') _hubTree = null;
   _relDataTs = ts;
