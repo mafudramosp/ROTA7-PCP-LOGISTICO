@@ -3413,6 +3413,24 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
   function fmtKgLocal(v){ return (v*1000).toLocaleString('pt-BR',{maximumFractionDigits:0})+' kg'; }
   setEl('pc-kpi-disp', fmtKgLocal(totalGeral));
 
+  // V180 — "Peso Total Armazém" e "Em Descarregamento" ficavam em "—".
+  // Esta tela só preenchia o card DISPONÍVEL; os outros dois dependiam do
+  // hubRenderizar, que é de outra tela e nem sempre roda antes desta abrir.
+  // Agora ela calcula os três com a mesma regra do hub: soma linha a linha de
+  // _relData, sem deduplicar por CTRC e sem descartar Ocor.Aberta, usando a
+  // classificação r.disp, que já aplica os parâmetros das colunas AC/AE/AL/AM.
+  if (typeof _relData !== 'undefined' && _relData && _relData.length) {
+    var pcTotal = 0, pcDesc = 0;
+    for (var iPc = 0; iPc < _relData.length; iPc++) {
+      var rPc = _relData[iPc];
+      pcTotal += rPc.peso || 0;
+      if (String(rPc.disp || '').trim().toLowerCase() === 'em descarregamento') pcDesc += rPc.peso || 0;
+    }
+    var fmtKgPc = function(v){ return v.toLocaleString('pt-BR',{maximumFractionDigits:0})+' kg'; };
+    setEl('pc-kpi-total', fmtKgPc(pcTotal));
+    setEl('pc-kpi-desc',  fmtKgPc(pcDesc));
+  }
+
   // Card 1 — Carretas necessárias (usa peso Disponível do _relData se disponível)
   var pesoDisponivel = 0;
   if (typeof _relData !== 'undefined' && _relData.length > 0) {
@@ -6786,8 +6804,9 @@ function _fbCarregarRelatorio(forcar) {
       // Mesma conferência de registros do caminho Supabase.
       if (meta && typeof meta.n === 'number' && todos.length < meta.n) {
         if (typeof showToast === 'function') {
-          showToast('⚠️ Relatório sincronizado incompleto (' + todos.length + ' de ' + meta.n +
-                    ' registros). Peça para reimportar o Excel TMS.', 'error');
+          // V180 — aviso removido a pedido: com a mescla da V178 uma carga parcial não
+          // apaga nada, e o que faltar entra na carga seguinte.
+          console.warn('[rel] carga parcial: ' + todos.length + ' de ' + meta.n + ' registros');
         }
         return null;
       }
@@ -8022,7 +8041,8 @@ function sbCarregarRelatorio(forcar) {
           // pegava chunk com conteúdo truncado/corrompido sem avisar, mesmo com a
           // quantidade de PARTES certa (a checagem acima só conta partes, não registros).
           if (meta && typeof meta.n === 'number' && todos.length < meta.n) {
-            showToast('⚠️ Relatório sincronizado incompleto (' + todos.length + ' de ' + meta.n + ' registros). Peça para reimportar o Excel TMS.', 'error');
+            // V180 — aviso removido a pedido (ver acima).
+            console.warn('[rel] carga parcial: ' + todos.length + ' de ' + meta.n + ' registros');
             return;
           }
           _relAplicarDados(todos, ts, forcar);
