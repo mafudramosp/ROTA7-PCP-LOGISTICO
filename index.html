@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V178--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V179--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6146,7 +6146,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V178';
+var ROTA7_VERSAO = 'V179';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -7609,9 +7609,39 @@ function _relCarregarLocal() {
     _relDataTs = raw.ts ? new Date(raw.ts) : null;
     var u = document.getElementById('rel-updated');
     if (u && _relDataTs) u.textContent = 'Sincronizado: '+_relDataTs.toLocaleString('pt-BR')+' · '+_relData.length+' registros (cache local)';
-    if (typeof relFiltrar === 'function') relFiltrar();
-    if (typeof descargaRenderizar === 'function') descargaRenderizar();
-  } catch(e) {}
+    _relPintarQuandoPronto();
+  } catch(e) { console.warn('[rel] cache local falhou:', e); }
+}
+
+// V179 — pinta o relatório assim que a tela existir.
+//
+// Defeito corrigido: _relCarregarLocal() roda no instante em que este bloco de
+// script é lido, que é ANTES de a tabela do Planejamento OUT existir no DOM. Ele
+// carregava os registros e escrevia o cabeçalho ("6823 registros (cache local)"),
+// mas o relFiltrar() pintava no vazio. Normalmente a carga do Supabase chegava
+// logo depois e repintava — quando ela falha (franquia estourada, rede fora), a
+// segunda pintura nunca acontecia e a tela ficava em branco com o contador cheio.
+//
+// Agora a pintura é repetida assim que o DOM fica pronto e mais duas vezes, e só
+// executa se ainda não houver linhas na tela. Não altera dado nenhum: é só
+// desenho, então repetir é inofensivo. Os erros passam a aparecer no console em
+// vez de serem engolidos pelo try/catch, que foi o que escondeu isso até agora.
+function _relPintarQuandoPronto() {
+  var pintar = function() {
+    if (!_relData || !_relData.length) return;
+    var corpo = document.getElementById('rel-tbody');
+    if (corpo && corpo.children && corpo.children.length) return; // já está desenhado
+    try { if (typeof relFiltrar === 'function') relFiltrar(); }
+    catch(e) { console.warn('[rel] relFiltrar falhou:', e); }
+    try { if (typeof descargaRenderizar === 'function') descargaRenderizar(); }
+    catch(e) { console.warn('[rel] descargaRenderizar falhou:', e); }
+  };
+  pintar();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', pintar);
+  }
+  setTimeout(pintar, 300);
+  setTimeout(pintar, 1500);
 }
 _relCarregarLocal(); // roda já, assim que este bloco termina de carregar — não espera a rede
 
@@ -7996,7 +8026,14 @@ function sbCarregarRelatorio(forcar) {
             return;
           }
           _relAplicarDados(todos, ts, forcar);
-        }).catch(function(){});
+        }).catch(function(e){
+          // V179 — falha de rede/franquia não pode passar em silêncio: sem isto a
+          // tela ficava em branco sem ninguém saber por quê. Os dados em memória
+          // são preservados (a mescla da V178 já garante isso) e a tela é
+          // repintada com o que houver.
+          console.warn('[rel] leitura das partes falhou:', e);
+          if (typeof _relPintarQuandoPronto === 'function') _relPintarQuandoPronto();
+        });
       }
     }).catch(function(){});
   } catch(e) {}
