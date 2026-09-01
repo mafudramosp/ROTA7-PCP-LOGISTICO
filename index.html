@@ -5841,7 +5841,12 @@ document.addEventListener('click',function(e){
     </div>
   </div>
 
-  <!-- Cards de Totais Gerais do Histórico -->
+  <!-- Cards de Totais Gerais do Histórico + Peso por Turno (1º/2º/3º), todos na
+       mesma fileira. V182 — os 3 cards de turno passam a ficar logo após
+       "Qtd. Crit. Entrega", na mesma linha dos outros 6, em vez de formarem uma
+       segunda fileira própria. Mesma classe .rel-stat-card, mesmo tamanho.
+       1º Turno 06:00–14:59 · 2º Turno 15:00–22:30 · 3º Turno 22:31–05:59
+       (soma a virada de dia com a madrugada do dia seguinte). -->
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <div class="rel-stat-card"><div class="rel-stat-label">Total CTRCs</div><div class="rel-stat-val" id="hro-c-ctrcs">0</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Peso total (kg)</div><div class="rel-stat-val" id="hro-c-peso">0</div></div>
@@ -5849,12 +5854,6 @@ document.addEventListener('click',function(e){
     <div class="rel-stat-card"><div class="rel-stat-label">Volumes</div><div class="rel-stat-val" id="hro-c-vols">0</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Total de Notas</div><div class="rel-stat-val" id="hro-c-notas">0</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Qtd. Crit. Entrega</div><div class="rel-stat-val" id="hro-c-crit">0</div></div>
-  </div>
-
-  <!-- Cards de Peso por Turno (1º/2º/3º) — 1º Turno 06:00–14:59 · 2º Turno 15:00–22:30 ·
-       3º Turno 22:31–05:59 (soma a virada de dia com a madrugada do dia seguinte).
-       Mesmo padrão visual dos 6 cards de Totais Gerais acima (tamanho e cor). -->
-  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <div class="rel-stat-card" title="06:00–14:59"><div class="rel-stat-label">Peso 1º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t1">0</div></div>
     <div class="rel-stat-card" title="15:00–22:30"><div class="rel-stat-label">Peso 2º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t2">0</div></div>
     <div class="rel-stat-card" title="22:31–05:59 (inclui a madrugada do dia seguinte)"><div class="rel-stat-label">Peso 3º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t3">0</div></div>
