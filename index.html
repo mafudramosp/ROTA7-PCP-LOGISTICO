@@ -19394,7 +19394,12 @@ function gestaoVistaRenderizar() {
   } else {
     // IN: Plano e Executado seguem o fluxo deduplicado; Programado vem dos cards
     // persistidos no Histórico de Relatório do grupo IN, por turno vigente.
-    pesoTotalHoje = dados.pesoPlano || 0;
+    // Plano do dia IN = coluna "Total de Carga" da linha "Total" do Extrato do Dia
+    // (Fila Inicial + Entrou Depois), mesmo padrão já usado no OUT, para os dois
+    // baterem sempre. Sem fluxoIn.total, cai de volta no valor antigo (dados.pesoPlano).
+    pesoTotalHoje = (fluxoIn && fluxoIn.total)
+      ? (fluxoIn.total.filaInicial + fluxoIn.total.entrouDepois)
+      : (dados.pesoPlano || 0);
     pesoExecutado = dados.pesoExecutado || 0;
     pesoProgramado = (dados.pesoProgramadoHistoricoIN != null)
       ? dados.pesoProgramadoHistoricoIN
