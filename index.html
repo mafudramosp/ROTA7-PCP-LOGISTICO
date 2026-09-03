@@ -1808,6 +1808,7 @@
       <span class="sb-group-arrow" id="arrow-estoque">›</span>
     </div>
     <div class="sb-group-items" id="items-estoque">
+      <button class="sb-item" id="tab-resumoOper" onclick="showTab('resumoOper')" data-tip="Resumo Operacional"><span class="sb-text">Resumo Operacional</span></button>
       <div class="sb-label" style="padding-left:22px;color:#eab308">IN</div>
       <button class="sb-item" id="tab-descarga" onclick="showTab('descarga')" data-tip="Descarga"><span class="sb-text">Descarga</span></button>
       <button class="sb-item" id="tab-descargaAcomp" onclick="showTab('descargaAcomp')" data-tip="Acompanhamento IN" style="padding-left:40px !important"><span class="sb-text">Acompanhamento IN</span></button>
@@ -6062,6 +6063,30 @@ document.addEventListener('click',function(e){
 </div>
 
 
+<!-- ===================== TAB: RESUMO OPERACIONAL (Terminal | Filial) ===================== -->
+<div id="tab-resumoOper-content" class="tab-content">
+  <div style="padding:20px 24px;box-sizing:border-box;background:#0d0d0d;min-height:calc(100vh - 64px);font-family:'Poppins',sans-serif">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:#fff">Resumo Operacional</div>
+        <div style="font-size:11px;color:#9a9a9a">Terminal | Filial &middot; posi&ccedil;&atilde;o por etapa com Peso, Volume e Valor &mdash; fonte: relat&oacute;rio TMS importado</div>
+      </div>
+      <div style="font-size:11px;color:#9a9a9a;text-align:right;white-space:nowrap" id="ro-atualizado">&mdash;</div>
+    </div>
+
+    <!-- Cards de peso por etapa -->
+    <div id="ro-cards-peso" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:16px"></div>
+
+    <!-- Tabela por etapa + rel&oacute;gios de ICD -->
+    <div style="margin-bottom:16px">
+      <div id="ro-tabela-etapa"></div>
+    </div>
+
+    <div id="ro-gauges-icd"></div>
+
+  </div>
+</div>
 
 </div><!-- /sb-content -->
 </div><!-- /app-layout -->
@@ -13019,6 +13044,7 @@ var _sbGroupMap = {
   'programacao': 'programar', 'nova': 'programar', 'historico': 'programar',
   'grade': 'malha',
   'cargas': 'estoque', 'relatorio': 'estoque', 'frotas': 'estoque', 'descarga': 'estoque', 'descargaAcomp': 'estoque', 'descargaHistorico': 'estoque', 'histRelOut': 'estoque',
+  'resumoOper': 'estoque',
   'transito': 'emtransito',
   'dashboard': 'analise'
 };
@@ -20201,4 +20227,281 @@ function histRelOutExcluirSelecionados() {
   showToast(indicesToDelete.length + ' registro(s) excluído(s) com sucesso', 'success');
 }
 
+</script>
+
+<script>
+/* =========================================================================
+   RESUMO OPERACIONAL — grupo Terminal | Filial
+   -------------------------------------------------------------------------
+   Tela de leitura (não grava nada). Reaproveita as MESMAS funções já usadas
+   no quadro "Status por Etapa — Carregamento (OUT)" do Painel Executivo, para
+   os números não divergirem entre as duas telas quando a regra mudar:
+
+   · Exclusão Ocor.Aberta ......... _relOcorIgnorar(r)         (S = Ocor.Aberta e AQ ≠ SIM)
+   · Situação de prazo ............ _cargaCriticaSituacaoDe(r) (coluna AH)
+   · Agendamento tem prioridade ... r.agend === 'SIM' cai em Agend, não no prazo
+   · Etapa / posição .............. r.posicao (derivada de AC/AE/AL/AM na importação)
+   · ICD .......................... (Atrasado + Hoje) ÷ Total
+       - IN : base é o relatório inteiro
+       - OUT: base é só a carga Disponível, já sem Ocor.Aberta
+     (idêntico ao card "Índice de Criticidade de Demanda" do Painel Executivo)
+   · Relógio ...................... _gvGaugeSvg(), o mesmo componente do painel
+
+   Colunas novas em relação ao painel, somadas linha a linha:
+   Peso (kg) = coluna M · Volume = coluna I · Valor = coluna P.
+   ========================================================================= */
+
+var RO_POSICOES = ['Carregando', 'Descarregado', 'Disponível', 'Fila de descarga'];
+var RO_POSICAO_LABEL = {
+  'Carregando': 'Carregando',
+  'Descarregado': 'Intermediário',
+  'Disponível': 'Disponível',
+  'Fila de descarga': 'Fila de Descarga'
+};
+var RO_POSICAO_COR = {
+  'Carregando': '#f0b429',
+  'Descarregado': '#60a5fa',
+  'Disponível': '#3fb950',
+  'Fila de descarga': '#94a3b8'
+};
+
+// Volume — coluna I do TMS, guardada em r.vols como texto. Mesmo parse já
+// usado nas demais telas (Resumo de Malha, Consolidação, Carga Crítica).
+function _roVol(r) { return parseFloat(String(r.vols || '0').replace(',', '.')) || 0; }
+function _roKg(v)  { return Math.round(Number(v) || 0).toLocaleString('pt-BR'); }
+function _roInt(v) { return Math.round(Number(v) || 0).toLocaleString('pt-BR'); }
+function _roMoeda(v) {
+  return (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function _roIcdPct(c) {
+  var tot = c.atrasado + c.hoje + c.noPrazo + c.agendamento;
+  return tot ? Math.round(((c.atrasado + c.hoje) / tot) * 100) : 0;
+}
+function _roIcdCor(icd) { return icd >= 50 ? '#ef4444' : (icd >= 25 ? '#f59e0b' : '#3fb950'); }
+
+function _roIcdBase(relData, visao) {
+  if (visao === 'out') {
+    return relData.filter(function(r) {
+      if (typeof _relOcorIgnorar === 'function' && _relOcorIgnorar(r)) return false;
+      return String(r.disp || '').trim().toLowerCase() === 'disponível';
+    });
+  }
+  return relData;
+}
+function _roIcdContar(lista) {
+  var c = { atrasado: 0, hoje: 0, noPrazo: 0 };
+  lista.forEach(function(r) {
+    var sit = (typeof _cargaCriticaSituacaoDe === 'function') ? _cargaCriticaSituacaoDe(r) : 'No Prazo';
+    if (sit === 'Atrasado') c.atrasado++;
+    else if (sit === 'Hoje') c.hoje++;
+    else c.noPrazo++;
+  });
+  return c;
+}
+
+function resumoOperRenderizar() {
+  var cont = document.getElementById('tab-resumoOper-content');
+  if (!cont) return;
+
+  var relData = (typeof _relData !== 'undefined' && Array.isArray(_relData)) ? _relData : [];
+
+  var atualizadoEl = document.getElementById('ro-atualizado');
+  if (atualizadoEl) {
+    var ts = (typeof _relDataTs !== 'undefined' && _relDataTs) ? new Date(_relDataTs) : null;
+    atualizadoEl.textContent = (ts && !isNaN(ts.getTime()))
+      ? ('Relatório de ' + ts.toLocaleString('pt-BR') + ' · ' + relData.length.toLocaleString('pt-BR') + ' registros')
+      : 'Nenhum relatório TMS importado';
+  }
+
+  var cardsDiv  = document.getElementById('ro-cards-peso');
+  var tabelaDiv = document.getElementById('ro-tabela-etapa');
+  var gaugesDiv = document.getElementById('ro-gauges-icd');
+
+  if (!relData.length) {
+    if (cardsDiv) cardsDiv.innerHTML = '';
+    if (gaugesDiv) gaugesDiv.innerHTML = '';
+    if (tabelaDiv) tabelaDiv.innerHTML =
+      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:28px;text-align:center;color:#9a9a9a;font-size:12px">' +
+        'Importe o relatório TMS em Planejamento OUT para ver os dados.' +
+      '</div>';
+    return;
+  }
+
+  // ── Agregação por etapa: CTRCs por prazo + peso, volume e valor ──
+  var etapa = {};
+  RO_POSICOES.forEach(function(p) {
+    etapa[p] = { atrasado: 0, hoje: 0, noPrazo: 0, agendamento: 0, ctrcs: 0, peso: 0, vol: 0, valor: 0 };
+  });
+  relData.forEach(function(r) {
+    // Mesma exclusão do Planejamento OUT: a linha sai do quadro inteiro
+    if (typeof _relOcorIgnorar === 'function' && _relOcorIgnorar(r)) return;
+    var c = etapa[String(r.posicao || '').trim()];
+    if (!c) return; // posição "—" (sem classificação) fica fora da tabela
+    c.ctrcs++;
+    c.peso  += Math.max(0, Number(r.peso) || 0);
+    c.vol   += _roVol(r);
+    c.valor += Math.max(0, Number(r.valor) || 0);
+    if (String(r.agend || '').trim().toUpperCase() === 'SIM') { c.agendamento++; return; }
+    var sit = (typeof _cargaCriticaSituacaoDe === 'function') ? _cargaCriticaSituacaoDe(r) : 'No Prazo';
+    if (sit === 'Atrasado') c.atrasado++;
+    else if (sit === 'Hoje') c.hoje++;
+    else c.noPrazo++;
+  });
+
+  var total = { atrasado: 0, hoje: 0, noPrazo: 0, agendamento: 0, ctrcs: 0, peso: 0, vol: 0, valor: 0 };
+  RO_POSICOES.forEach(function(p) {
+    var c = etapa[p];
+    total.atrasado += c.atrasado; total.hoje += c.hoje; total.noPrazo += c.noPrazo;
+    total.agendamento += c.agendamento; total.ctrcs += c.ctrcs;
+    total.peso += c.peso; total.vol += c.vol; total.valor += c.valor;
+  });
+
+  // ── Cards de peso por etapa ──
+  if (cardsDiv) {
+    var ordemCards = ['Disponível', 'Fila de descarga', 'Descarregado', 'Carregando'];
+    cardsDiv.innerHTML = ordemCards.map(function(p) {
+      var c = etapa[p];
+      var cor = RO_POSICAO_COR[p];
+      var pctPeso = total.peso ? Math.round((c.peso / total.peso) * 100) : 0;
+      return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 18px;box-sizing:border-box;min-width:0">' +
+        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + RO_POSICAO_LABEL[p] + '</div>' +
+        '<div style="font-size:24px;font-weight:800;color:' + cor + ';line-height:1;white-space:nowrap">' + _roKg(c.peso) +
+          '<span style="font-size:12px;font-weight:600;color:#9a9a9a;margin-left:4px">kg</span></div>' +
+        '<div style="font-size:10.5px;color:#8a8a8a;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+          _roInt(c.ctrcs) + ' CTRCs · ' + _roInt(c.vol) + ' vol · R$ ' + _roMoeda(c.valor) +
+        '</div>' +
+        '<div style="height:2px;background:' + cor + ';opacity:.55;border-radius:2px;margin-top:10px"></div>' +
+        '<div style="font-size:10px;color:#6b6b6b;margin-top:6px">' + pctPeso + '% do peso do terminal</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // ── Tabela: Status por Etapa + Peso / Volume / Valor ──
+  if (tabelaDiv) {
+    var thTxt = 'padding:8px 7px;text-align:left;font-size:9.5px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
+    var thNum = 'padding:8px 7px;text-align:right;font-size:9.5px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
+    var tdNum = 'padding:9px 7px;text-align:right;font-size:12px;color:#e5e5e5;white-space:nowrap';
+    var tdTot = 'padding:10px 7px;text-align:right;font-size:12.5px;font-weight:800;color:#fff;white-space:nowrap;border-top:2px solid #3a3a3a;background:#1b1b1b';
+
+    var linhas = RO_POSICOES.map(function(p, i) {
+      var c = etapa[p];
+      var icd = _roIcdPct(c);
+      var zebra = (i % 2 === 0) ? '#121212' : '#161616';
+      return '<tr style="background:' + zebra + '">' +
+        '<td style="padding:9px 8px;font-size:12px;font-weight:600;color:#e5e5e5;white-space:nowrap;border-right:1px solid #232323">' + RO_POSICAO_LABEL[p] + '</td>' +
+        '<td style="' + tdNum + ';color:#ef4444;font-weight:700">' + _roInt(c.atrasado) + '</td>' +
+        '<td style="' + tdNum + ';color:#f59e0b;font-weight:700">' + _roInt(c.hoje) + '</td>' +
+        '<td style="' + tdNum + ';color:#9a9a9a">' + _roInt(c.noPrazo) + '</td>' +
+        '<td style="' + tdNum + ';color:#d97706;font-weight:700">' + _roInt(c.agendamento) + '</td>' +
+        '<td style="' + tdNum + ';color:' + _roIcdCor(icd) + ';font-weight:800;border-right:1px solid #232323">' + icd + '%</td>' +
+        '<td style="' + tdNum + ';font-weight:700">' + _roKg(c.peso) + '</td>' +
+        '<td style="' + tdNum + '">' + _roInt(c.vol) + '</td>' +
+        '<td style="' + tdNum + '">' + _roMoeda(c.valor) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var icdTotal = _roIcdPct(total);
+    var linhaTotal =
+      '<tr>' +
+        '<td style="padding:10px 8px;font-size:12.5px;font-weight:800;color:#fff;white-space:nowrap;border-top:2px solid #3a3a3a;background:#1b1b1b;border-right:1px solid #232323">Total Geral</td>' +
+        '<td style="' + tdTot + ';color:#ef4444">' + _roInt(total.atrasado) + '</td>' +
+        '<td style="' + tdTot + ';color:#f59e0b">' + _roInt(total.hoje) + '</td>' +
+        '<td style="' + tdTot + ';color:#9a9a9a">' + _roInt(total.noPrazo) + '</td>' +
+        '<td style="' + tdTot + ';color:#d97706">' + _roInt(total.agendamento) + '</td>' +
+        '<td style="' + tdTot + ';color:' + _roIcdCor(icdTotal) + ';border-right:1px solid #232323">' + icdTotal + '%</td>' +
+        '<td style="' + tdTot + '">' + _roKg(total.peso) + '</td>' +
+        '<td style="' + tdTot + '">' + _roInt(total.vol) + '</td>' +
+        '<td style="' + tdTot + '">' + _roMoeda(total.valor) + '</td>' +
+      '</tr>';
+
+    tabelaDiv.innerHTML =
+      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 14px;height:100%;box-sizing:border-box;overflow:hidden;min-width:0;display:flex;flex-direction:column">' +
+        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;padding-left:4px">Status por Etapa — Carregamento (OUT)</div>' +
+        '<div style="overflow-x:auto">' +
+          '<table style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif">' +
+            '<thead>' +
+              '<tr>' +
+                '<th style="' + thTxt + '">Posição</th>' +
+                '<th style="' + thNum + '">Atrasado</th>' +
+                '<th style="' + thNum + '">Hoje</th>' +
+                '<th style="' + thNum + '">Prazo</th>' +
+                '<th style="' + thNum + '">Agend</th>' +
+                '<th style="' + thNum + '">ICD</th>' +
+                '<th style="' + thNum + ';color:#f0b429">Peso (kg)</th>' +
+                '<th style="' + thNum + '">Volume</th>' +
+                '<th style="' + thNum + '">Valor (R$)</th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody>' + linhas + linhaTotal + '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div style="font-size:10px;color:#6b6b6b;margin-top:10px;padding-top:8px;border-top:1px solid #262626">' +
+          'Atrasado / Hoje / Prazo / Agend em CTRCs · Peso = coluna M · Volume = coluna I · Valor = coluna P · exclui Ocor.Aberta sem agendamento' +
+        '</div>' +
+      '</div>';
+  }
+
+  // ── Relógios de ICD: IN e OUT ──
+  if (gaugesDiv) {
+    var blocos = [
+      { visao: 'in',  titulo: 'ICD — Descarga (IN)',      nota: 'Base: relatório completo' },
+      { visao: 'out', titulo: 'ICD — Carregamento (OUT)', nota: 'Base: carga Disponível' }
+    ].map(function(b) {
+      var base = _roIcdBase(relData, b.visao);
+      var c = _roIcdContar(base);
+      var tot = c.atrasado + c.hoje + c.noPrazo;
+      var pct = tot ? Math.round(((c.atrasado + c.hoje) / tot) * 100) : 0;
+      var cor = _roIcdCor(pct);
+      return '<div style="flex:1;min-width:0;text-align:center">' +
+        '<div style="font-size:10.5px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + b.titulo + '</div>' +
+        (typeof _gvGaugeSvg === 'function'
+          ? _gvGaugeSvg(pct, cor, 'ICD', pct + '%')
+          : '<div style="font-size:26px;font-weight:800;color:' + cor + '">' + pct + '%</div>') +
+        '<div style="display:flex;text-align:center;margin-top:8px">' +
+          '<div style="flex:1;min-width:0"><div style="font-size:9.5px;color:#9a9a9a;text-transform:uppercase;margin-bottom:2px">Atrasado</div><div style="font-size:14px;font-weight:800;color:#ef4444">' + _roInt(c.atrasado) + '</div></div>' +
+          '<div style="width:1px;background:#2b2b2b;margin:2px 6px"></div>' +
+          '<div style="flex:1;min-width:0"><div style="font-size:9.5px;color:#9a9a9a;text-transform:uppercase;margin-bottom:2px">Hoje</div><div style="font-size:14px;font-weight:800;color:#f59e0b">' + _roInt(c.hoje) + '</div></div>' +
+          '<div style="width:1px;background:#2b2b2b;margin:2px 6px"></div>' +
+          '<div style="flex:1;min-width:0"><div style="font-size:9.5px;color:#9a9a9a;text-transform:uppercase;margin-bottom:2px">No Prazo</div><div style="font-size:14px;font-weight:800;color:#e5e5e5">' + _roInt(c.noPrazo) + '</div></div>' +
+        '</div>' +
+        '<div style="font-size:10px;color:#6b6b6b;margin-top:8px">' + b.nota + ' · ' + _roInt(tot) + ' CTRCs</div>' +
+      '</div>';
+    }).join('<div style="width:1px;background:#262626;margin:0 8px"></div>');
+
+    gaugesDiv.innerHTML =
+      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 14px;height:100%;box-sizing:border-box;display:flex;flex-direction:column">' +
+        '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-left:4px">Índice de Criticidade de Demanda</div>' +
+        '<div style="flex:1;display:flex;align-items:center;justify-content:center;gap:24px;min-width:0;max-width:760px;margin:0 auto">' + blocos + '</div>' +
+        '<div style="font-size:10px;color:#6b6b6b;margin-top:10px;padding-top:8px;border-top:1px solid #262626">ICD = (Atrasado + Hoje) ÷ Total de CTRCs</div>' +
+      '</div>';
+  }
+}
+
+// Redesenha só se a tela estiver aberta (mesmo padrão do _gvRedesenharSeAtivo)
+function _roRedesenharSeAtivo() {
+  try {
+    var tab = document.getElementById('tab-resumoOper-content');
+    if (!tab || !tab.classList.contains('active')) return;
+    resumoOperRenderizar();
+  } catch (e) {}
+}
+
+// Hook showTab — renderiza ao abrir a aba
+var _stResumoOper = showTab;
+showTab = function(tab) {
+  _stResumoOper(tab);
+  if (tab === 'resumoOper' && typeof resumoOperRenderizar === 'function') setTimeout(resumoOperRenderizar, 50);
+};
+
+// Hook relFiltrar — é o ponto por onde passa todo relatório que chega
+// (import local, sincronização Supabase/Firebase e cache local). Assim a tela
+// se atualiza sozinha sem precisar trocar de aba e voltar.
+if (typeof relFiltrar === 'function') {
+  var _rfResumoOper = relFiltrar;
+  relFiltrar = function() {
+    var r = _rfResumoOper.apply(this, arguments);
+    _roRedesenharSeAtivo();
+    return r;
+  };
+}
 </script>
