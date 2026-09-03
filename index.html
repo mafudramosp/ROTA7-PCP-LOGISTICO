@@ -6076,7 +6076,7 @@ document.addEventListener('click',function(e){
     </div>
 
     <!-- Cards de peso por etapa -->
-    <div id="ro-cards-peso" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:16px"></div>
+    <div id="ro-cards-peso" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin-bottom:16px"></div>
 
     <!-- Tabela por etapa + rel&oacute;gios de ICD -->
     <div style="margin-bottom:16px">
@@ -20333,10 +20333,17 @@ function resumoOperRenderizar() {
     etapa[p] = { atrasado: 0, hoje: 0, noPrazo: 0, agendamento: 0, ctrcs: 0, peso: 0, vol: 0, valor: 0 };
   });
   relData.forEach(function(r) {
-    // Mesma exclusão do Planejamento OUT: a linha sai do quadro inteiro
-    if (typeof _relOcorIgnorar === 'function' && _relOcorIgnorar(r)) return;
-    var c = etapa[String(r.posicao || '').trim()];
+    var pos = String(r.posicao || '').trim();
+    var c = etapa[pos];
     if (!c) return; // posição "—" (sem classificação) fica fora da tabela
+    // Ocor.Aberta — a exclusão é POR ETAPA, seguindo a tela dona de cada fluxo:
+    //   OUT (Carregando / Intermediário / Disponível) → Planejamento OUT e Painel
+    //        Executivo excluem Ocor.Aberta sem agendamento (_relOcorIgnorar).
+    //   IN  (Fila de Descarga) → a tela Descarga soma a fila INTEIRA, sem essa
+    //        exclusão (_descLinhaAtendeCriterio: disp = Patio ou Em descarregamento).
+    // Era exatamente essa diferença que fazia o peso da fila desta tela ficar abaixo
+    // do card "Peso Total na Fila" da tela Descarga. Agora as duas fecham no mesmo kg.
+    if (pos !== 'Fila de descarga' && typeof _relOcorIgnorar === 'function' && _relOcorIgnorar(r)) return;
     c.ctrcs++;
     c.peso  += Math.max(0, Number(r.peso) || 0);
     c.vol   += _roVol(r);
@@ -20368,12 +20375,26 @@ function resumoOperRenderizar() {
         '<div style="font-size:24px;font-weight:800;color:' + cor + ';line-height:1;white-space:nowrap">' + _roKg(c.peso) +
           '<span style="font-size:12px;font-weight:600;color:#9a9a9a;margin-left:4px">kg</span></div>' +
         '<div style="font-size:10.5px;color:#8a8a8a;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
-          _roInt(c.ctrcs) + ' CTRCs · ' + _roInt(c.vol) + ' vol · R$ ' + _roMoeda(c.valor) +
-        '</div>' +
+          _roInt(c.ctrcs) + ' CTRCs · ' + _roInt(c.vol) + ' vol</div>' +
+        '<div style="font-size:10.5px;color:#8a8a8a;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">R$ ' +
+          _roMoeda(c.valor) + '</div>' +
         '<div style="height:2px;background:' + cor + ';opacity:.55;border-radius:2px;margin-top:10px"></div>' +
         '<div style="font-size:10px;color:#6b6b6b;margin-top:6px">' + pctPeso + '% do peso do terminal</div>' +
       '</div>';
-    }).join('');
+    }).join('') +
+    // Card de fechamento: soma das quatro etapas — mesmo número da linha
+    // "Total Geral" da tabela abaixo.
+    '<div style="background:#141414;border:1px solid #3a3a3a;border-radius:6px;padding:16px 18px;box-sizing:border-box;min-width:0">' +
+      '<div style="font-size:11px;color:#e5e5e5;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Total do Terminal</div>' +
+      '<div style="font-size:24px;font-weight:800;color:#fff;line-height:1;white-space:nowrap">' + _roKg(total.peso) +
+        '<span style="font-size:12px;font-weight:600;color:#9a9a9a;margin-left:4px">kg</span></div>' +
+      '<div style="font-size:10.5px;color:#8a8a8a;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+        _roInt(total.ctrcs) + ' CTRCs · ' + _roInt(total.vol) + ' vol</div>' +
+      '<div style="font-size:10.5px;color:#c9c9c9;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">R$ ' +
+        _roMoeda(total.valor) + '</div>' +
+      '<div style="height:2px;background:#e5e5e5;opacity:.55;border-radius:2px;margin-top:10px"></div>' +
+      '<div style="font-size:10px;color:#6b6b6b;margin-top:6px">Soma das 4 etapas</div>' +
+    '</div>';
   }
 
   // ── Tabela: Status por Etapa + Peso / Volume / Valor ──
@@ -20436,7 +20457,7 @@ function resumoOperRenderizar() {
           '</table>' +
         '</div>' +
         '<div style="font-size:10px;color:#6b6b6b;margin-top:10px;padding-top:8px;border-top:1px solid #262626">' +
-          'Atrasado / Hoje / Prazo / Agend em CTRCs · Peso = coluna M · Volume = coluna I · Valor = coluna P · exclui Ocor.Aberta sem agendamento' +
+          'Atrasado / Hoje / Prazo / Agend em CTRCs · Peso = coluna M · Volume = coluna I · Valor = coluna P · Ocor.Aberta sem agendamento excluída nas etapas OUT; Fila de Descarga soma a fila inteira, igual à tela Descarga' +
         '</div>' +
       '</div>';
   }
