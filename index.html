@@ -13636,12 +13636,20 @@ function hubSaveNote(key,val) {}
 <script>
 var _descMacSel = null;
 var _descMacRanking = [];
+// Mesmos MACs de _descMacRanking, porém SEM o corte de ctrcs>=11 (ver comentário
+// junto do filter em descargaRenderizar). Usada só pelo Acompanhamento IN, que
+// precisa rastrear todo MAC que entrou na fila, não só os que o card da tela
+// Descarga decide exibir.
+var _descMacRankingCompleto = [];
 var _descSort = {col: null, asc: false};
 
 // ═══════════ FILA DE COLETAS ═══════════
 // Bloco independente das Transferências: nada aqui altera macMap, _descMacRanking
 // ou qualquer regra já existente da fila de Transferências.
 var _descColetaRanking = [];
+// Mesmos MECs de _descColetaRanking, porém SEM o corte de ctrcs>5 (ver comentário
+// junto do filter em _descMontarFilaColetas). Usada só pelo Acompanhamento IN.
+var _descColetaRankingCompleto = [];
 
 // Destinos de rota curta (coluna AJ) — mesma classificação já usada na Consolidação:
 // Rota Curta = regiões SUL + SÃO PAULO
@@ -13758,7 +13766,7 @@ function _descMontarFilaColetas() {
   });
 
   // Pontuação de prioridade das Coletas
-  return Object.keys(mecMap).map(function(k) {
+  var _descColetaTodosCalculados = Object.keys(mecMap).map(function(k) {
     var m = mecMap[k];
     Object.keys(m._ctrcs).forEach(function(c) {
       m.ctrcs++;
@@ -13769,7 +13777,15 @@ function _descMontarFilaColetas() {
     m.rotaCurta = _descColetaEhRotaCurta(m.destinoAJ);
     m.score = (m.atras * 3) + (m.hoje * 2) + (m.maior24h ? 5 : 0) + (m.rotaCurta ? 4 : 0);
     return m;
-  }).filter(function(m) {
+  });
+  // ERRO CORRIGIDO (Acompanhamento IN): o corte "ctrcs > 5" abaixo existe só para
+  // enxugar o CARD da fila de Coletas na tela Descarga. Só o resultado FILTRADO
+  // era repassado adiante, então todo MEC com 5 CTRCs ou menos também sumia do
+  // Acompanhamento IN — mesmo aparecendo no Histórico de Relatório importado.
+  // Guarda-se aqui a lista completa (sem o corte) para uso exclusivo do
+  // Acompanhamento IN, sem alterar em nada a fila exibida na tela Descarga.
+  _descColetaRankingCompleto = _descColetaTodosCalculados.slice();
+  return _descColetaTodosCalculados.filter(function(m) {
     return m.ctrcs > 5; // coletas de 1 a 5 CTRCs não entram na fila
   }).sort(function(a, b) {
     if (b.score !== a.score) return b.score - a.score;
@@ -13831,7 +13847,7 @@ function descargaRenderizar() {
   // 1º maior quantidade de CTRCs "Atrasado" + "Hoje" (coluna AH)
   // 2º maior quantidade de CTRCs com Agendamento = SIM (coluna AQ)
   // 3º MAC com data mais antiga (coluna R) há mais de 36h da hora atual
-  _descMacRanking = Object.values(macMap).map(function(m) {
+  var _descMacTodosCalculados = Object.values(macMap).map(function(m) {
     m.atras=0; m.hoje=0; m.ctrcs=0; m.agendCount=0;
     Object.values(m._ctrcs).forEach(function(info){
       m.ctrcs++;
@@ -13844,7 +13860,16 @@ function descargaRenderizar() {
     m.atrasoHoje = m.atras + m.hoje;
     m.urgente = m.atras > 0 || m.maior36h;
     return m;
-  }).filter(function(m){ return m.ctrcs >= 11; }).sort(function(a,b){
+  });
+  // ERRO CORRIGIDO (Acompanhamento IN): o corte "ctrcs >= 11" abaixo existe só
+  // para enxugar o CARD da fila de Transferências na tela Descarga. Só o
+  // resultado FILTRADO alimentava o Acompanhamento IN (via _descAcompFilaCompleta),
+  // então todo MAC com menos de 11 CTRCs sumia de lá — mesmo constando no
+  // Histórico de Relatório importado. Guarda-se aqui a lista completa (sem o
+  // corte) para uso exclusivo do Acompanhamento IN, sem alterar em nada a fila
+  // exibida na tela Descarga.
+  _descMacRankingCompleto = _descMacTodosCalculados.slice();
+  _descMacRanking = _descMacTodosCalculados.filter(function(m){ return m.ctrcs >= 11; }).sort(function(a,b){
     if (b.atrasoHoje !== a.atrasoHoje) return b.atrasoHoje - a.atrasoHoje;
     if (b.agendCount !== a.agendCount) return b.agendCount - a.agendCount;
     return (b.maior36h?1:0) - (a.maior36h?1:0);
@@ -14432,10 +14457,15 @@ function _descAcompListaCarregarSupabase() {
 // campo diferentes (peso/destinoAJ/nome), então são normalizadas aqui para o
 // mesmo formato — sem isso o Acompanhamento IN mostrava só as transferências.
 function _descAcompFilaCompleta() {
-  var fila = (_descMacRanking || []).map(function(m) {
+  // CORREÇÃO: usa as listas COMPLETAS (_descMacRankingCompleto/_descColetaRankingCompleto),
+  // sem o corte de tamanho (ctrcs>=11 / ctrcs>5) que existe só para enxugar os cards
+  // da fila na tela Descarga. Esse corte é exclusivo daquela tela — o Acompanhamento
+  // IN precisa listar TODO MAC/MEC que entrou na fila, senão itens pequenos (ex.: MAC
+  // com 3 ou 8 CTRCs) somem daqui mesmo constando no Histórico de Relatório importado.
+  var fila = (_descMacRankingCompleto || []).map(function(m) {
     return { mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: 'Transferência' };
   });
-  (typeof _descColetaRanking !== 'undefined' ? (_descColetaRanking || []) : []).forEach(function(c) {
+  (typeof _descColetaRankingCompleto !== 'undefined' ? (_descColetaRankingCompleto || []) : []).forEach(function(c) {
     fila.push({
       mac: c.mac,
       // Em coleta o que identifica a carga é o REMETENTE (c.nome), igual ao card da
