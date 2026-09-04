@@ -14513,7 +14513,10 @@ function _descAcompListaMerge() {
   _descAcompLista.forEach(function(item){ existentes[item.mac] = true; });
   filaAtual.forEach(function(m){
     if (!existentes[m.mac]) {
-      _descAcompLista.push({ mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: m.tipo, ativo: true });
+      // V176 — "entradaISO" carimba quando o MAC/MEC entrou na fila. É a régua das
+      // 72h que decide se um item fora da fila ainda fica em aberto para registro
+      // ou já pode ir para "Finalizado anteriormente" (ver _descAcompIdadeHoras).
+      _descAcompLista.push({ mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: m.tipo, ativo: true, entradaISO: new Date().toISOString() });
     }
   });
 
@@ -15121,6 +15124,29 @@ function descargaAcompRegistrarImpressao(mac) {
 function descargaAcompCampoAlterado(mac, campo, valor) {
   var rec = _descAcompGet(mac);
   rec[campo] = valor;
+  // V176 — carimba o instante da finalização também quando a Hora Fim é digitada
+  // direto no campo. Antes, só o seletor de status gravava "dataFimISO"; sem esse
+  // carimbo o Painel Executivo não conseguia situar a carga no dia operacional e
+  // o peso ficava de fora do Executado.
+  if (campo === 'horaFim') {
+    if (valor && String(valor).trim()) {
+      var _pf = String(valor).split(':');
+      var _hf = parseInt(_pf[0], 10), _mf = parseInt(_pf[1], 10);
+      var _agoraFim = new Date();
+      if (isNaN(_hf)) {
+        rec.dataFimISO = _agoraFim.toISOString();
+      } else {
+        if (isNaN(_mf)) _mf = 0;
+        var _dtFim = new Date(_agoraFim.getFullYear(), _agoraFim.getMonth(), _agoraFim.getDate(), _hf, _mf, 0, 0);
+        // Hora à frente do relógio no mesmo dia = registro do turno que atravessou
+        // a meia-noite (ex.: 23:40 lançado às 00:20) — pertence ao dia anterior.
+        if (_dtFim.getTime() - _agoraFim.getTime() > 3600000) _dtFim.setDate(_dtFim.getDate() - 1);
+        rec.dataFimISO = _dtFim.toISOString();
+      }
+    } else {
+      delete rec.dataFimISO;
+    }
+  }
   _descAcompSalvar();
   setTimeout(function(){
     descargaAcompAtualizarLinha(mac);
@@ -15224,6 +15250,75 @@ function _descAcompStatusPorHoras(horaInicio, horaFim) {
   return { label: 'Não iniciado', cor: '#9ca3af', valor: 'nao-iniciado' };
 }
 
+// ── V176 · REGRA DAS 72h PARA "FINALIZADO ANTERIORMENTE" ─────────────────────
+// Até aqui, QUALQUER MAC/MEC que saísse da fila (ativo=false, ou seja, deixou de
+// vir no relatório TMS importado) virava "Finalizado anteriormente" na hora — mesmo
+// que tivesse entrado minutos antes e ainda não tivesse sido registrado. Além de
+// esconder carga que continuava aberta, esse rótulo tirava a linha do fluxo normal
+// de registro. Regra nova:
+//   • registrado no Acompanhamento IN (tem Hora Fim) → "Finalizado", sempre;
+//   • fora da fila há MAIS de 72h e sem registro     → "Finalizado anteriormente";
+//   • fora da fila há MENOS de 72h e sem registro    → continua EM ABERTO
+//     (Não iniciado / Em andamento), até ser registrado.
+var DESC_ACOMP_HORAS_ARQUIVAR = 72;
+
+// Data da primeira vez que cada MAC/MEC apareceu em qualquer relatório importado.
+// É a idade real da carga no sistema e serve de referência para as 72h nos itens
+// antigos, que ainda não têm o carimbo "entradaISO". Cache de 60s: o histórico é
+// grande e esta leitura roda a cada render da tabela.
+var _descAcompPrimeiraAparicaoCache = null;
+var _descAcompPrimeiraAparicaoCacheTs = 0;
+function _descAcompPrimeiraAparicaoMapa() {
+  var agora = Date.now();
+  if (_descAcompPrimeiraAparicaoCache && (agora - _descAcompPrimeiraAparicaoCacheTs) < 60000) {
+    return _descAcompPrimeiraAparicaoCache;
+  }
+  var mapa = {};
+  var hist = (typeof _relatorioHistorico !== 'undefined' && _relatorioHistorico) ? _relatorioHistorico : [];
+  hist.forEach(function(h) {
+    var ts = new Date(h && h.dataHoraISO).getTime();
+    if (isNaN(ts)) return;
+    ((h && h.filaSnapshot) || []).forEach(function(f) {
+      var k = String(f && f.mac == null ? '' : f.mac).trim().toUpperCase();
+      if (!k) return;
+      if (mapa[k] === undefined || ts < mapa[k]) mapa[k] = ts;
+    });
+  });
+  _descAcompPrimeiraAparicaoCache = mapa;
+  _descAcompPrimeiraAparicaoCacheTs = agora;
+  return mapa;
+}
+
+function _descAcompIdadeHoras(item) {
+  if (!item) return Infinity;
+  var ms = null;
+  if (item.entradaISO) {
+    var d = new Date(item.entradaISO);
+    if (!isNaN(d.getTime())) ms = d.getTime();
+  }
+  if (ms === null) {
+    var mapa = _descAcompPrimeiraAparicaoMapa();
+    var k = String(item.mac == null ? '' : item.mac).trim().toUpperCase();
+    if (mapa[k] !== undefined) ms = mapa[k];
+  }
+  // Item legado sem nenhum rastro de data: mantém o comportamento anterior
+  // (arquivado), em vez de reabrir em massa cargas antigas já encerradas.
+  if (ms === null) return Infinity;
+  return (Date.now() - ms) / 3600000;
+}
+
+// Status oficial de uma linha do Acompanhamento IN, já com a regra das 72h.
+function _descAcompStatusItem(item, rec) {
+  var r = rec || {};
+  if (r.horaFim && String(r.horaFim).trim() !== '') {
+    return { label: 'Finalizado', cor: '#16a34a', valor: 'finalizado' };
+  }
+  if (item && item.ativo === false && _descAcompIdadeHoras(item) > DESC_ACOMP_HORAS_ARQUIVAR) {
+    return { label: 'Finalizado anteriormente', cor: '#7c3aed', valor: 'finalizado-anteriormente' };
+  }
+  return _descAcompStatusPorHoras(r.horaInicio, r.horaFim);
+}
+
 // Atualiza só a linha de um MAC (evita re-renderizar a tabela inteira e perder foco do input)
 function descargaAcompAtualizarLinha(mac) {
   var rec = _descAcompGet(mac);
@@ -15295,7 +15390,6 @@ function descargaAcompAtualizarCards() {
   } catch(ex) {}
   
   var macsFila = _descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){ return {mac:m.mac, ativo:true}; });
-  var total = macsFila.filter(function(m){ return m.ativo !== false; }).length;
   var totalGeral = macsFila.length;
   var naoIniciado = 0, emAndamento = 0, finalizado = 0, finalizadoAnter = 0, totalImpressoes = 0;
   var macsComConferente = 0;
@@ -15305,14 +15399,15 @@ function descargaAcompAtualizarCards() {
     var rec = _descAcompGet(mac);
     totalImpressoes += rec.impressoes || 0;
     
-    // Items inativos (Saiu da fila) = Finalizado Anteriormente
-    if (item.ativo === false) {
+    // V176 — o rótulo "Finalizado Anteriormente" agora só vale para item fora da
+    // fila há mais de 72h e sem registro. Abaixo disso, a linha continua no fluxo
+    // normal (Não iniciado / Em andamento / Finalizado) e segue contando na fila.
+    var st = _descAcompStatusItem(item, rec);
+    if (st.valor === 'finalizado-anteriormente') {
       finalizadoAnter++;
       return;
     }
     
-    // Usar o novo status baseado em horas (Finalizado/Em andamento/Não iniciado)
-    var st = _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim);
     if (st.valor === 'finalizado') finalizado++;
     else if (st.valor === 'em-andamento') emAndamento++;
     else naoIniciado++;
@@ -15320,6 +15415,7 @@ function descargaAcompAtualizarCards() {
     if (rec.conferente && rec.conferente.trim() !== '') macsComConferente++;
   });
   
+  var total = totalGeral - finalizadoAnter;
   var corConferente = total === 0 ? '#9ca3af' : (macsComConferente === total ? '#16a34a' : macsComConferente > 0 ? '#ca8a04' : '#dc2626');
   var cards = [
     { l: 'MACs na Fila', v: total, cor: '#1e293b' },
@@ -15403,9 +15499,12 @@ function descargaAcompRenderizar() {
     });
   }
 
-  // Separar ativos de inativos
-  var listAativos = lista.filter(function(m) { return m.ativo !== false; });
-  var listainativos = lista.filter(function(m) { return m.ativo === false; });
+  // Separar arquivados (fora da fila há mais de 72h, sem registro) dos demais.
+  // V176 — antes o critério era só "saiu da fila", o que jogava para o fim da
+  // tabela cargas recentes que ainda precisavam ser registradas.
+  function _stItem(m) { return _descAcompStatusItem(m, _descAcompGet(m.mac)); }
+  var listAativos = lista.filter(function(m) { return _stItem(m).valor !== 'finalizado-anteriormente'; });
+  var listainativos = lista.filter(function(m) { return _stItem(m).valor === 'finalizado-anteriormente'; });
 
   // Aplicar ordenação apenas nos ativos
   listAativos.sort(function(a, b) {
@@ -15425,7 +15524,7 @@ function descargaAcompRenderizar() {
     return 0;
   });
 
-  // Concatenar ativos + inativos (inativos sempre no final)
+  // Concatenar em aberto/finalizados + arquivados (arquivados sempre no final)
   lista = listAativos.concat(listainativos);
 
   if (!lista.length) {
@@ -15436,24 +15535,28 @@ function descargaAcompRenderizar() {
   tbody.innerHTML = lista.map(function(m, idx){
     var rec = _descAcompGet(m.mac);
     var macEsc = String(m.mac).replace(/'/g, "\\'");
+    // V176 — o esmaecimento e o rótulo roxo agora seguem o STATUS (regra das 72h),
+    // não o simples fato de ter saído da fila. Uma carga fora da fila há poucas
+    // horas continua legível e editável, para o conferente conseguir registrá-la.
+    var st = _descAcompStatusItem(m, rec);
+    var arquivado = st.valor === 'finalizado-anteriormente';
     var inativo = m.ativo === false;
-    var bgRow = inativo ? 'background:#f8fafc;opacity:0.75' : '';
+    var bgRow = arquivado ? 'background:#f8fafc;opacity:0.75' : '';
     var statusInativo = inativo ? '<span style="font-size:9px;background:#e2e8f0;color:#64748b;border-radius:10px;padding:1px 7px;margin-left:6px;font-weight:700">Saiu da fila</span>' : '';
     // Coleta e Transferência convivem na mesma fila; o selo evita confundir um MEC
     // de coleta com um MAC de transferência.
     var tagColeta = (m.tipo === 'Coleta') ? '<span style="font-size:9px;background:#dcfce7;color:#15803d;border:1px solid #86efac;border-radius:10px;padding:1px 7px;margin-left:6px;font-weight:700">Coleta</span>' : '';
-    var st = inativo ? { label: 'Finalizado anteriormente', cor: '#7c3aed', valor: 'finalizado-anteriormente' } : _descAcompStatusPorHoras(rec.horaInicio, rec.horaFim);
     var posicaoFila = idx + 1;
     return '<tr style="border-bottom:1px solid #f1f5f9;' + bgRow + '">' +
       '<td style="padding:8px 10px;text-align:center;font-weight:700;color:#1e293b">#' + posicaoFila + '</td>' +
-      '<td style="padding:8px 10px;font-weight:700;color:' + (inativo?'#94a3b8':'#1e293b') + '">' + m.mac + tagColeta + statusInativo + '</td>' +
+      '<td style="padding:8px 10px;font-weight:700;color:' + (arquivado?'#94a3b8':'#1e293b') + '">' + m.mac + tagColeta + statusInativo + '</td>' +
       '<td style="padding:8px 10px">' + (m.dest || '—') + '</td>' +
       '<td style="padding:8px 10px;text-align:right;font-family:monospace">' + Math.round(m.pesoTotal||0).toLocaleString('pt-BR') + '</td>' +
       '<td style="padding:8px 10px;text-align:right;font-family:monospace">' + (m.ctrcs||0) + '</td>' +
       '<td style="padding:8px 10px;text-align:center;font-weight:700" id="acomp-imp-' + macEsc + '">' + (rec.impressoes||0) + '</td>' +
       '<td style="padding:8px 10px">' +
         '<select style="width:130px;padding:4px 6px;font-size:11px;border:1px solid #e2e8f0;border-radius:4px;background:#fff;color:' + st.cor + ';font-weight:700;cursor:not-allowed" disabled id="acomp-status-select-' + macEsc + '">' +
-          (inativo ? 
+          (arquivado ? 
             '<option value="finalizado-anteriormente" selected style="color:#7c3aed">Finalizado anteriormente</option>' :
             ('<option value="nao-iniciado" ' + (st.valor === 'nao-iniciado' ? 'selected' : '') + ' style="color:#9ca3af">Não iniciado</option>' +
              '<option value="em-andamento" ' + (st.valor === 'em-andamento' ? 'selected' : '') + ' style="color:#ca8a04">Em andamento</option>' +
@@ -18174,6 +18277,131 @@ function _gvPesoProgramadoHistoricoIN(turnoAlvo) {
   }, 0);
 }
 
+// ── V176 · EXECUTADO REGISTRADO FORA DO SNAPSHOT DA JANELA ───────────────────
+// CAUSA DO DEFEITO: tanto _gvColetarDadosIN quanto _gvFluxoFilaIN montavam o
+// universo de MACs/MECs SOMENTE a partir dos snapshots de relatório importados
+// DENTRO da janela operacional. Quem registrasse um MAC/MEC no Acompanhamento IN
+// cuja carga não estivesse em nenhum desses snapshots — tipicamente o que já saiu
+// da fila ("Finalizado Anteriormente") ou o que entrou por um relatório anterior —
+// simplesmente não entrava na conta: o peso ficava de fora do card Executado e da
+// coluna Executado do Extrato do Dia. Daí a soma dos MACs/MECs lançados na tela
+// não bater com o número exibido no Painel Executivo.
+//
+// A correção é aditiva: o caminho original continua exatamente como estava, e
+// estas funções apenas RECUPERAM o que ele deixava passar, sem duplicar nada.
+
+// Peso por MAC/MEC vindo de todas as fontes que o app conhece, sem recorte de
+// janela. Ordem de precedência (a primeira que responder vence):
+//   1) lista acumulada do Acompanhamento IN — é o peso que aparece na tela onde
+//      o conferente registra, então é o que precisa fechar com a soma dele;
+//   2) fila viva (Transferências + Coletas) do relatório atual;
+//   3) histórico de relatórios, do mais recente para o mais antigo.
+// Cache curto (15s): _gvColetarDadosIN e _gvFluxoFilaIN rodam no mesmo render e a
+// varredura do histórico é cara.
+var _inPesoPorMacCache = null;
+var _inPesoPorMacCacheTs = 0;
+function _inPesoPorMacTodos() {
+  var agora = Date.now();
+  if (_inPesoPorMacCache && (agora - _inPesoPorMacCacheTs) < 15000) return _inPesoPorMacCache;
+  var mapa = {};
+  function reg(mac, peso) {
+    var k = String(mac == null ? '' : mac).trim().toUpperCase();
+    if (!k || mapa[k] !== undefined) return;
+    var p = parseFloat(peso);
+    if (isNaN(p) || p <= 0) return;
+    mapa[k] = p;
+  }
+  ((typeof _descAcompLista !== 'undefined' && _descAcompLista) ? _descAcompLista : [])
+    .forEach(function(m) { reg(m && m.mac, m && m.pesoTotal); });
+  ((typeof _descMacRankingCompleto !== 'undefined' && _descMacRankingCompleto) ? _descMacRankingCompleto : [])
+    .forEach(function(m) { reg(m && m.mac, m && m.pesoTotal); });
+  ((typeof _descColetaRankingCompleto !== 'undefined' && _descColetaRankingCompleto) ? _descColetaRankingCompleto : [])
+    .forEach(function(c) { reg(c && c.mac, c && c.peso); });
+  var hist = (typeof _relatorioHistorico !== 'undefined' && _relatorioHistorico) ? _relatorioHistorico : [];
+  hist.slice().sort(function(a, b) {
+    return new Date(b && b.dataHoraISO).getTime() - new Date(a && a.dataHoraISO).getTime();
+  }).forEach(function(h) {
+    ((h && h.filaSnapshot) || []).forEach(function(f) { reg(f && f.mac, f && f.pesoOpl); });
+  });
+  _inPesoPorMacCache = mapa;
+  _inPesoPorMacCacheTs = agora;
+  return mapa;
+}
+
+// Índice da lista acumulada do Acompanhamento IN por MAC/MEC normalizado.
+function _inItemAcompPorMac() {
+  var idx = {};
+  ((typeof _descAcompLista !== 'undefined' && _descAcompLista) ? _descAcompLista : []).forEach(function(m) {
+    var k = String(m && m.mac == null ? '' : m.mac).trim().toUpperCase();
+    if (k && idx[k] === undefined) idx[k] = m;
+  });
+  return idx;
+}
+
+// Instante em que a descarga foi concluída, se ele cair dentro da janela
+// operacional; caso contrário null. Usa "dataFimISO" quando existe (carimbo
+// exato) e, para registros antigos gravados só com a hora, reconstrói o instante
+// testando o dia de referência e o anterior — a janela cruza a meia-noite.
+function _inInstanteFimNaJanela(rec, horaFim, janela) {
+  if (!janela) return null;
+  if (rec && rec.dataFimISO) {
+    var d = new Date(rec.dataFimISO);
+    if (!isNaN(d.getTime())) return _gvDataDentroDaJanela(d, janela) ? d : null;
+  }
+  var partes = String(horaFim || '').split(':');
+  var hh = parseInt(partes[0], 10), mm = parseInt(partes[1], 10);
+  if (isNaN(hh)) return null;
+  if (isNaN(mm)) mm = 0;
+  var ref = janela.dataRef;
+  for (var off = 0; off <= 1; off++) {
+    var c = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - off, hh, mm, 0, 0);
+    if (_gvDataDentroDaJanela(c, janela)) return c;
+  }
+  return null;
+}
+
+// Todo MAC/MEC com Hora Fim registrada no Acompanhamento IN dentro da janela
+// operacional que NÃO foi contado pelo caminho dos snapshots. O turno segue a
+// mesma régua do painel (_gvTurnoDoHorario sobre a Hora Fim), respeitando a
+// consolidação do 3º Turno na virada de dia.
+function _inExecutadoForaDoSnapshot(janela, jaContados) {
+  var res = { porTurno: {'1º Turno':0, '2º Turno':0, '3º Turno':0}, total: 0, itens: [] };
+  var acompData = (typeof _descAcompData !== 'undefined' && _descAcompData) ? _descAcompData : {};
+  if (!janela || !acompData) return res;
+  var pesos = _inPesoPorMacTodos();
+  var itensAcomp = _inItemAcompPorMac();
+  var vistos = {}; // duas grafias do mesmo MAC não podem somar duas vezes
+  Object.keys(acompData).forEach(function(macBruto) {
+    var rec = acompData[macBruto] || {};
+    var horaFim = rec.horaFim && String(rec.horaFim).trim();
+    if (!horaFim) return;
+    var chave = String(macBruto).trim().toUpperCase();
+    if (!chave || vistos[chave]) return;
+    if (jaContados && jaContados[chave] !== undefined) return; // já somado pelo caminho original
+
+    // Sem "dataFimISO" (registro anterior à V176) o instante é reconstruído pela
+    // hora, o que sozinho colocaria QUALQUER fim antigo dentro do dia de hoje.
+    // Por isso, nesse caminho, exige-se que a carga ainda seja recente: na fila
+    // ativa ou com menos de 72h — o mesmo limite da regra de arquivamento.
+    if (!rec.dataFimISO) {
+      var item = itensAcomp[chave];
+      var recente = item ? (item.ativo !== false || _descAcompIdadeHoras(item) <= DESC_ACOMP_HORAS_ARQUIVAR) : false;
+      if (!recente) return;
+    }
+    if (!_inInstanteFimNaJanela(rec, horaFim, janela)) return; // concluído em outro dia operacional
+
+    var peso = pesos[chave];
+    if (!peso) return;                                          // sem peso conhecido, nada a somar
+    var t = _gvTurnoDoHorario(horaFim) || '3º Turno';
+    if (res.porTurno[t] === undefined) res.porTurno[t] = 0;
+    vistos[chave] = true;
+    res.porTurno[t] += peso;
+    res.total += peso;
+    res.itens.push({ mac: String(macBruto).trim(), peso: peso, turno: t });
+  });
+  return res;
+}
+
 // ── Coleta dados do lado IN (Descarga) usando _descAcompLista + _descAcompData ──
 function _gvColetarDadosIN() {
   var acompData = (typeof _descAcompData !== 'undefined') ? _descAcompData : {};
@@ -18238,6 +18466,24 @@ function _gvColetarDadosIN() {
 
     pesoPorDestino[info.origem] = (pesoPorDestino[info.origem] || 0) + peso;
   });
+
+  // V176 — recupera o que foi registrado no Acompanhamento IN mas ficou fora dos
+  // snapshots desta janela (ver _inExecutadoForaDoSnapshot). Entra no Executado e
+  // no Plano com o mesmo valor: a carga foi descarregada hoje, logo compõe também
+  // a carga do dia. Somando nos dois, "Peso na Fila" (Plano − Executado) não muda.
+  var compIN = _inExecutadoForaDoSnapshot(janela, macsUnicos);
+  if (compIN.total > 0) {
+    pesoExecutado += compIN.total;
+    pesoPlano += compIN.total;
+    compIN.itens.forEach(function(it) {
+      if (turnoTotal[it.turno] === undefined) return;
+      turnoTotal[it.turno]++;
+      turnoFeito[it.turno]++;
+      turnoTotalPeso[it.turno] += it.peso;
+      turnoFeitoPeso[it.turno] += it.peso;
+      turnoItens[it.turno].push({ label: 'MAC ' + it.mac + ' — registrado no Acompanhamento IN', peso: it.peso, finalizado: true });
+    });
+  }
 
   // O card "Programado" do Dashboard IN mostra o peso do TURNO VIGENTE — não a
   // soma dos três turnos. A leitura acumulada do dia fica na coluna "Programados"
@@ -19306,6 +19552,20 @@ function _gvFluxoFilaIN() {
     var t = turnoDe(temFim ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHora));
     if (temFim) linhas[t].executado += peso;
   });
+
+  // V176 — mesma recuperação aplicada ao card Executado do painel: MAC/MEC
+  // registrado no Acompanhamento IN cuja carga não está nos snapshots desta
+  // janela entra aqui pelo turno da Hora Fim. Soma em "Entrou Depois" E em
+  // "Executado" do MESMO turno, então Pendente (Início + Entrou − Executado)
+  // fica inalterado e a cascata entre turnos continua fechando.
+  var compFluxoIN = _inExecutadoForaDoSnapshot(janela, macsUnicos);
+  if (compFluxoIN.total > 0) {
+    compFluxoIN.itens.forEach(function(it) {
+      if (!linhas[it.turno]) return;
+      linhas[it.turno].entrouDepois += it.peso;
+      linhas[it.turno].executado += it.peso;
+    });
+  }
 
   // Cascata operacional: o Pendente do turno anterior é incorporado ao
   // Início do turno vigente. Assim, se o 3º Turno terminou com 312.558 kg,
