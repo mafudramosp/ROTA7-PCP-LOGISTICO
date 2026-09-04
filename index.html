@@ -6947,6 +6947,12 @@ function _sbResincronizarFontesPainel() {
     // V176 — mesma rede de segurança para o Extrato do Dia (Gestão à Vista):
     // se o Realtime cair, este ciclo de 60s ainda repõe o histórico compartilhado
     if (typeof _gvExtratoHistCarregarSupabase === 'function') _gvExtratoHistCarregarSupabase();
+    // V177 — faltava aqui a lista de MACs/MECs do Acompanhamento IN
+    // (_descAcompLista). Ela alimenta o peso Executado do Painel (via
+    // _inPesoPorMacTodos/_inItemAcompPorMac) desde a correção anterior; sem
+    // reforço, uma mensagem perdida do Realtime deixava a máquina desse usuário
+    // divergindo das demais indefinidamente, sem nenhum mecanismo de recuperação.
+    if (typeof _descAcompListaCarregarSupabase === 'function') _descAcompListaCarregarSupabase();
   } catch (e) {}
 }
 
@@ -14438,6 +14444,13 @@ function _descAcompListaAplicarDadosRemotos(valorStr) {
     var tab = document.getElementById('tab-descargaAcomp-content');
     if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
   }
+  // V177 — a lista (_descAcompLista) chegando de outra máquina atualizava a aba
+  // Acompanhamento IN, mas nunca avisava o Painel Executivo. Como o Executado (IN)
+  // hoje usa o peso e a elegibilidade de 72h desta lista (ver _inPesoPorMacTodos /
+  // _inItemAcompPorMac), quem estivesse com o Painel aberto ficava com o número
+  // antigo até trocar de aba — exatamente o sintoma de "cada máquina mostra um
+  // total diferente e não se atualiza sozinho".
+  _gvRedesenharSeAtivo();
 }
 
 // Carrega a lista do Supabase (chamado no início do app; via realtime usa-se o
