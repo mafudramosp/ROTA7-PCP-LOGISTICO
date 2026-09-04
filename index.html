@@ -3825,6 +3825,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof _descProgramacaoCarregarSupabase === 'function') setTimeout(_descProgramacaoCarregarSupabase, 1425);
   if (typeof _descAcompListaCarregarSupabase === 'function') setTimeout(_descAcompListaCarregarSupabase, 1450);
   if (typeof _cargaCriticaHistoricoCarregarSupabase === 'function') setTimeout(_cargaCriticaHistoricoCarregarSupabase, 1500);
+  // Carregar Extrato do Dia (Gestão à Vista) do Supabase — compartilhado entre usuários
+  if (typeof _gvExtratoHistCarregarSupabase === 'function') setTimeout(_gvExtratoHistCarregarSupabase, 1550);
   if (typeof _deletedIdsCarregarSupabase === 'function') setTimeout(_deletedIdsCarregarSupabase, 1000);
   // Carregar Acompanhamento OUT (Carregamento) do Supabase para compartilhamento entre usuários
   if (typeof _acompOutCarregarSupabase === 'function') setTimeout(_acompOutCarregarSupabase, 1600);
@@ -6942,6 +6944,9 @@ function _sbResincronizarFontesPainel() {
     if (typeof _descAcompCarregarSupabase === 'function') _descAcompCarregarSupabase();
     if (typeof _acompOutCarregarSupabase === 'function') _acompOutCarregarSupabase();
     if (typeof _relatorioHistoricoCarregarSupabase === 'function') _relatorioHistoricoCarregarSupabase();
+    // V176 — mesma rede de segurança para o Extrato do Dia (Gestão à Vista):
+    // se o Realtime cair, este ciclo de 60s ainda repõe o histórico compartilhado
+    if (typeof _gvExtratoHistCarregarSupabase === 'function') _gvExtratoHistCarregarSupabase();
   } catch (e) {}
 }
 
@@ -7037,6 +7042,9 @@ function sbInicializarRealtime() {
         } else if (chave === 'carga_critica_historico') {
           // Histórico de Relatório da Carga Crítica mudou em outra máquina
           if (typeof _cargaCriticaHistoricoCarregarSupabase === 'function') _cargaCriticaHistoricoCarregarSupabase();
+        } else if (chave === GV_EXTRATO_HIST_KEY) {
+          // Extrato do Dia (Gestão à Vista) mudou em outra máquina — recarrega e mescla
+          if (typeof _gvExtratoHistCarregarSupabase === 'function') _gvExtratoHistCarregarSupabase();
         } else if (chave === 'prog_deleted_ids') {
           // Alguém excluiu um registro em Recurso Programado em outra máquina — sincroniza aqui também
           if (typeof _deletedIdsCarregarSupabase === 'function') _deletedIdsCarregarSupabase();
@@ -17912,6 +17920,12 @@ function _gvExtratoColeta() {
 }
 
 // ── Histórico diário: guarda um snapshot por dia para consulta posterior ──
+// V176 — até aqui o histórico só existia no localStorage: cada máquina calculava
+// e guardava o próprio "Extrato do Dia" sozinha, então a aba "Ontem" (e o dia
+// corrente, enquanto ainda não vira histórico) nunca chegava a outros usuários —
+// exatamente como as demais seções já resolvem via Supabase (ver
+// _cargaCriticaHistoricoSalvarSupabase / _cargaCriticaHistoricoCarregarSupabase,
+// mesmo padrão espelhado aqui).
 function _gvExtratoHistLer() {
   try { return JSON.parse(localStorage.getItem(GV_EXTRATO_HIST_KEY) || '{}') || {}; }
   catch (e) { return {}; }
@@ -17926,7 +17940,50 @@ function _gvExtratoHistSalvar(dados) {
     var chaves = Object.keys(h).sort();
     while (chaves.length > 60) { delete h[chaves.shift()]; }
     localStorage.setItem(GV_EXTRATO_HIST_KEY, JSON.stringify(h));
+    _gvExtratoHistSalvarSupabase();
   } catch (e) {}
+}
+
+// Grava o histórico completo no Supabase (tabela "configuracoes", mesma
+// convenção de chave/valor usada pelo restante do app) para todos os usuários
+// enxergarem o mesmo Extrato do Dia — hoje e nos dias anteriores.
+function _gvExtratoHistSalvarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes', {
+      method: 'POST',
+      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ chave: GV_EXTRATO_HIST_KEY, valor: JSON.stringify(_gvExtratoHistLer()) })
+    }).catch(function(){});
+  } catch(e) {}
+}
+
+// Busca o histórico compartilhado no Supabase e mescla com o que já existe
+// localmente (nunca perde snapshot: se uma chave só existe de um lado, fica).
+function _gvExtratoHistCarregarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.' + GV_EXTRATO_HIST_KEY + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r){ return r.json(); }).then(function(data) {
+      if (data && data.length && data[0].valor) {
+        var remoto = JSON.parse(data[0].valor);
+        var local = _gvExtratoHistLer();
+        var h = Object.assign({}, local, remoto);
+        // o snapshot de "hoje" é recalculado a cada render a partir dos dados já
+        // sincronizados (IN/OUT/FP); mantém o local para não piscar com um valor
+        // remoto potencialmente alguns segundos mais velho — ele se corrige sozinho
+        // no próximo render, que já regrava no Supabase.
+        var hojeISO = _gvExtratoDataISO(0);
+        if (local[hojeISO]) h[hojeISO] = local[hojeISO];
+        var chaves = Object.keys(h).sort();
+        while (chaves.length > 60) { delete h[chaves.shift()]; }
+        localStorage.setItem(GV_EXTRATO_HIST_KEY, JSON.stringify(h));
+        if (_gvExtratoDia === 'ontem' && typeof gvExtratoRenderizar === 'function') {
+          var tab = document.getElementById('tab-gestaoVista-content');
+          if (tab && tab.classList.contains('active')) gvExtratoRenderizar();
+        }
+      }
+    }).catch(function(){});
+  } catch(e) {}
 }
 
 function gvExtratoTrocarDia(dia) {
