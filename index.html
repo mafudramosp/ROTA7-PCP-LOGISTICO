@@ -7014,6 +7014,20 @@ function sbInicializarRealtime() {
         } else if (chave === 'descarga_acomp_data') {
           // Formato antigo (antes da correção por célula) — mantido só de fallback.
           if (typeof _descAcompCarregarSupabase === 'function') _descAcompCarregarSupabase();
+        } else if (chave.indexOf('desc_acomp_item:') === 0) {
+          // V177 — um item da lista do Acompanhamento IN mudou em outra máquina —
+          // aplica só esse item (nunca recarrega/substitui a lista inteira). Mesmo
+          // padrão de 'desc_acomp_cel:' acima.
+          var _macItem = chave.slice('desc_acomp_item:'.length);
+          if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompListaAplicarItemRemoto === 'function') {
+            try { _descAcompListaAplicarItemRemoto(_macItem, JSON.parse(payload.new.valor)); } catch(e) {}
+          } else if (payload.new && typeof _descAcompListaAplicarItemRemoto === 'function') {
+            // Payload sem "valor" (publicação enxuta) — busca só este item.
+            _sbLerValorChave(chave).then(function(v) {
+              if (typeof v !== 'string') return;
+              try { _descAcompListaAplicarItemRemoto(_macItem, JSON.parse(v)); } catch(e) {}
+            });
+          }
         } else if (chave === 'descarga_programacao_in') {
           // Programações impressas são permanentes por MAC/MEC e não devem ser
           // substituídas pelo estado atual dos checkboxes ou por novo import.
@@ -14382,41 +14396,86 @@ function _descAcompResetarImpressoes() {
   }
 }
 
-// Proteção contra eco do realtime para a lista/fila (mecanismo próprio, separado do
-// _descAcompData por célula acima — a lista é um array, não um mapa por chave).
-var _descAcompListaSalvandoLocal = false;
-var _descAcompListaSalvandoLocalTimer = null;
-function _descAcompListaMarcarSalvandoLocal() {
-  _descAcompListaSalvandoLocal = true;
-  clearTimeout(_descAcompListaSalvandoLocalTimer);
-  _descAcompListaSalvandoLocalTimer = setTimeout(function(){ _descAcompListaSalvandoLocal = false; }, 4000);
+// V177 — CAUSA DA QUEDA: a lista inteira era gravada como UM blob só (chave
+// 'descarga_acomp_lista'). Quando dois usuários adicionavam/atualizavam itens
+// perto um do outro (ex.: um importando o relatório enquanto outro registra uma
+// Hora Fim), a última gravação vencia e apagava, do compartilhado, os itens que
+// o outro usuário tivesse acabado de somar — e o Executado, que soma peso a
+// partir desta lista (ver _inPesoPorMacTodos/_inItemAcompPorMac), caía sozinho
+// na tela de quem lesse o servidor logo em seguida. É o MESMO defeito que a
+// gravação por célula já eliminou para _descAcompData (ver comentário acima de
+// _descAcompSalvar) — corrigido aqui do mesmo jeito: cada item vira sua própria
+// linha ('desc_acomp_item:<mac>'), então a gravação de um usuário nunca apaga o
+// que outro acabou de gravar.
+var _descAcompItemUltimoSalvo = {};
+var _descAcompItemEditadoLocalEm = {};
+var _DESC_ACOMP_ITEM_JANELA_LOCAL_MS = 20000;
+function _descAcompItemLocalMaisNovo(mac) {
+  var t = _descAcompItemEditadoLocalEm[mac];
+  return !!(t && (Date.now() - t) < _DESC_ACOMP_ITEM_JANELA_LOCAL_MS);
 }
 
 function _descAcompListaSalvar() {
   try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(ex) {}
-  _descAcompListaMarcarSalvandoLocal();
-  _descAcompListaSalvarSupabase(); // compartilha com todos os usuários
+  _descAcompLista.forEach(function(item) {
+    if (!item || !item.mac) return;
+    var atual = JSON.stringify(item);
+    if (_descAcompItemUltimoSalvo[item.mac] === atual) return; // este item não mudou desde a última gravação
+    _descAcompItemUltimoSalvo[item.mac] = atual;
+    _descAcompItemEditadoLocalEm[item.mac] = Date.now();
+    _descAcompListaSalvarItemSupabase(item);
+  });
+  // O Executado (IN) do Painel Executivo sai também desta lista — sem isto, quem
+  // acabou de importar o relatório ou registrar um item só via o total atualizar
+  // ao trocar de aba.
+  _gvRedesenharSeAtivo();
 }
 
-// Salva a lista (fila + "Finalizado Anteriormente") no Supabase, compartilhado entre todos os usuários
-function _descAcompListaSalvarSupabase() {
+// Grava UM item da lista no Supabase, na própria linha dele — compartilhado com
+// todos os usuários sem depender do estado do blob antigo.
+function _descAcompListaSalvarItemSupabase(item) {
   try {
     fetch(SB_URL + '/configuracoes', {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: 'descarga_acomp_lista', valor: JSON.stringify(_descAcompLista) })
+      body: JSON.stringify({ chave: 'desc_acomp_item:' + item.mac, valor: JSON.stringify(item) })
     }).catch(function(){});
   } catch(e) {}
 }
 
-// Aplica um valor (string JSON) de _descAcompLista vindo do servidor — usado tanto
-// pelo carregamento inicial/polling quanto pelo payload do realtime.
+// Aplica o registro de UM item vindo do servidor (payload do realtime ou leitura
+// paginada) — nunca recarrega/substitui a lista inteira, então a edição de um
+// item por um usuário nunca interfere na de outro.
+function _descAcompListaAplicarItemRemoto(mac, item) {
+  if (!mac || !item) return;
+  item.mac = mac;
+  var idx = -1;
+  for (var i = 0; i < _descAcompLista.length; i++) {
+    if (_descAcompLista[i] && _descAcompLista[i].mac === mac) { idx = i; break; }
+  }
+  if (idx >= 0) _descAcompLista[idx] = item; else _descAcompLista.push(item);
+  _descAcompItemUltimoSalvo[mac] = JSON.stringify(item);
+  try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
+  if (typeof descargaAcompRenderizar === 'function') {
+    var tab = document.getElementById('tab-descargaAcomp-content');
+    if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
+  }
+  _gvRedesenharSeAtivo();
+}
+
+// ── Formato antigo (blob único em 'descarga_acomp_lista'), mantido só para
+// migração de dados já gravados antes desta correção — ver _descAcompListaCarregarSupabase.
+// Não é mais gravado por este app (_descAcompListaSalvar agora grava por item).
 function _descAcompListaAplicarDadosRemotos(valorStr) {
   if (!valorStr) return;
-  if (_descAcompListaSalvandoLocal) return; // edição local em andamento — não sobrescrever
   try {
-    _descAcompLista = JSON.parse(valorStr);
+    var remoto = JSON.parse(valorStr);
   } catch(e) { return; }
+  var existentes = {};
+  _descAcompLista.forEach(function(m){ if (m && m.mac) existentes[m.mac] = true; });
+  remoto.forEach(function(item) {
+    if (item && item.mac && !existentes[item.mac]) _descAcompLista.push(item);
+  });
 
   // Limpeza automática: remover finalizados há mais de 3 dias
   var agora = new Date();
@@ -14444,26 +14503,54 @@ function _descAcompListaAplicarDadosRemotos(valorStr) {
     var tab = document.getElementById('tab-descargaAcomp-content');
     if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
   }
-  // V177 — a lista (_descAcompLista) chegando de outra máquina atualizava a aba
-  // Acompanhamento IN, mas nunca avisava o Painel Executivo. Como o Executado (IN)
-  // hoje usa o peso e a elegibilidade de 72h desta lista (ver _inPesoPorMacTodos /
-  // _inItemAcompPorMac), quem estivesse com o Painel aberto ficava com o número
-  // antigo até trocar de aba — exatamente o sintoma de "cada máquina mostra um
-  // total diferente e não se atualiza sozinho".
   _gvRedesenharSeAtivo();
 }
 
-// Carrega a lista do Supabase (chamado no início do app; via realtime usa-se o
-// payload direto, ver _descAcompListaAplicarDadosRemotos)
+// Carrega a lista do Supabase: primeiro migra o que existir no blob antigo (uma
+// vez por sessão, sem nunca sobrescrever um item que já exista localmente),
+// depois lê cada item já no formato novo (uma linha por MAC/MEC) — mesmo padrão
+// de _acompOutCarregarSupabase.
+var _descAcompListaMigracaoFeita = false;
+var _descAcompListaCargaFeita = false;
 function _descAcompListaCarregarSupabase() {
   try {
+    var pMigracao = _descAcompListaMigracaoFeita ? Promise.resolve() :
     fetch(SB_URL + '/configuracoes?chave=eq.descarga_acomp_lista&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
-      if (data && data.length && data[0].valor) {
-        _descAcompListaAplicarDadosRemotos(data[0].valor);
-      }
+      _descAcompListaMigracaoFeita = true;
+      if (!data || !data.length || !data[0].valor) return;
+      if (typeof _descAcompListaAplicarDadosRemotos === 'function') _descAcompListaAplicarDadosRemotos(data[0].valor);
     }).catch(function(){});
+
+    var pItens = _sbLerCelulasPaginado('desc_acomp_item:', function(row) {
+      var chave = String(row.chave || '');
+      if (chave.indexOf('desc_acomp_item:') !== 0) return;
+      var mac = chave.slice('desc_acomp_item:'.length);
+      // edição local recente vence a leitura em trânsito; o "false" segura a
+      // marca d'água para que a linha volte a ser oferecida no ciclo seguinte
+      if (_descAcompItemLocalMaisNovo(mac)) return false;
+      try {
+        var item = JSON.parse(row.valor);
+        item.mac = mac;
+        var idx = -1;
+        for (var i = 0; i < _descAcompLista.length; i++) {
+          if (_descAcompLista[i] && _descAcompLista[i].mac === mac) { idx = i; break; }
+        }
+        if (idx >= 0) _descAcompLista[idx] = item; else _descAcompLista.push(item);
+        _descAcompItemUltimoSalvo[mac] = row.valor;
+      } catch(e) {}
+    }, _descAcompListaCargaFeita);
+
+    Promise.all([pMigracao, pItens]).then(function() {
+      _descAcompListaCargaFeita = true;
+      try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
+      if (typeof descargaAcompRenderizar === 'function') {
+        var tab = document.getElementById('tab-descargaAcomp-content');
+        if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
+      }
+      _gvRedesenharSeAtivo();
+    });
   } catch(e) {}
 }
 
@@ -14760,6 +14847,7 @@ function ROTA7Diag() {
   var d = (typeof _gvColetarDadosIN === 'function') ? _gvColetarDadosIN() : {};
   console.log('── ROTA7 · diagnóstico Descarga (IN) ─────────────────────');
   console.log('Registros de Acompanhamento IN em memória:', total, '| com Hora Fim:', comFim);
+  console.log('Itens na lista (_descAcompLista):', (_descAcompLista || []).length);
   console.log('Plano do dia:', Math.round(d.pesoPlano || 0), 'kg');
   console.log('Executado   :', Math.round(d.pesoExecutado || 0), 'kg');
   console.log('Programado  :', Math.round(d.pesoProgramado || 0), 'kg');
@@ -14775,6 +14863,15 @@ function ROTA7Diag() {
     _sbIncrementalOk['desc_acomp_cel:'] = _diagOk;
     console.log('Linhas desc_acomp_cel no Supabase (leitura paginada completa):', n);
     console.log('Se este número for maior que o de registros em memória, a leitura antiga estava sendo cortada.');
+  });
+  // V177 — mesma checagem para a lista (desc_acomp_item:), agora gravada por item.
+  var _diagMarcaLista = _sbMarcaDagua['desc_acomp_item:'];
+  var _diagOkLista    = _sbIncrementalOk['desc_acomp_item:'];
+  _sbLerCelulasPaginado('desc_acomp_item:', function(){}).then(function(n) {
+    _sbMarcaDagua['desc_acomp_item:']    = _diagMarcaLista;
+    _sbIncrementalOk['desc_acomp_item:'] = _diagOkLista;
+    console.log('Linhas desc_acomp_item no Supabase (leitura paginada completa):', n);
+    console.log('Se este número for maior que o de itens em memória, a lista local ainda não convergiu.');
   });
   return 'diagnóstico enviado ao Console';
 }
