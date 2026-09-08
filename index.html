@@ -20816,7 +20816,10 @@ function histRelOutExcluirSelecionados() {
 
    · Exclusão Ocor.Aberta ......... _relOcorIgnorar(r)         (S = Ocor.Aberta e AQ ≠ SIM)
        aplicada só em Disponível e Intermediário. Carregando e Fila de Descarga
-       somam a carga inteira (ver RO_POSICOES_SEM_EXCLUSAO_OCOR).
+       somam a carga inteira (ver RO_POSICOES_SEM_EXCLUSAO_OCOR). O peso excluído
+       não some: vai para a linha "Não classificado", junto das linhas com Posição
+       fora das quatro etapas, de modo que o Total do Terminal feche com o card
+       "Peso Total Armazém" da tela Prioridade de Carregamento.
    · Situação de prazo ............ _cargaCriticaSituacaoDe(r) (coluna AH)
    · Agendamento tem prioridade ... r.agend === 'SIM' cai em Agend, não no prazo
    · Etapa / posição .............. r.posicao (derivada de AC/AE/AL/AM na importação)
@@ -20852,6 +20855,13 @@ var RO_POSICOES_SEM_EXCLUSAO_OCOR = {
   'Fila de descarga': true,
   'Carregando': true
 };
+
+// V184 — linha do que não entra nas quatro etapas (posição fora do previsto ou
+// Ocor.Aberta descartada em Disponível/Intermediário). Não é uma etapa
+// operacional: existe para o Total do Terminal fechar com o peso bruto do
+// armazém e para esse peso ficar auditável em vez de sumir da conta.
+var RO_RESIDUO_KEY = 'Não classificado';
+var RO_RESIDUO_COR = '#6b7280';
 
 // Volume — coluna I do TMS, guardada em r.vols como texto. Mesmo parse já
 // usado nas demais telas (Resumo de Malha, Consolidação, Carga Crítica).
@@ -20920,23 +20930,36 @@ function resumoOperRenderizar() {
   RO_POSICOES.forEach(function(p) {
     etapa[p] = { atrasado: 0, hoje: 0, noPrazo: 0, agendamento: 0, ctrcs: 0, peso: 0, vol: 0, valor: 0 };
   });
+  // V184 — BALDE DO RESTANTE, para o total fechar com "Peso Total Armazém".
+  // Duas coisas escapavam da soma desta tela e não apareciam em lugar nenhum:
+  //   1) linhas cuja Posição não é nenhuma das quatro (coluna de disponibilidade
+  //      com valor fora do previsto) — antes davam "return" e sumiam;
+  //   2) linhas de Ocor.Aberta sem agendamento descartadas em Disponível e
+  //      Intermediário — exclusão correta para aquelas etapas, mas o peso
+  //      simplesmente evaporava do Total do Terminal.
+  // Por isso o card marcava 531.043 kg enquanto a Prioridade de Carregamento,
+  // que soma o relatório bruto linha a linha, marcava 587.105 kg.
+  // O que sai das quatro etapas agora cai aqui, em vez de desaparecer: as etapas
+  // mantêm exatamente os mesmos números de antes e o total passa a fechar.
+  var residuo = { atrasado: 0, hoje: 0, noPrazo: 0, agendamento: 0, ctrcs: 0, peso: 0, vol: 0, valor: 0 };
   relData.forEach(function(r) {
     var pos = String(r.posicao || '').trim();
     var c = etapa[pos];
-    if (!c) return; // posição "—" (sem classificação) fica fora da tabela
-  // Ocor.Aberta — a exclusão é POR ETAPA, seguindo a tela dona de cada fluxo:
-  //   Disponível / Intermediário → Planejamento OUT e Painel Executivo excluem
-  //        Ocor.Aberta sem agendamento (_relOcorIgnorar).
-  //   Fila de Descarga → a tela Descarga soma a fila INTEIRA, sem essa exclusão
-  //        (_descLinhaAtendeCriterio: disp = Patio ou Em descarregamento).
-  //        Era essa diferença que fazia o peso da fila desta tela ficar abaixo do
-  //        card "Peso Total na Fila" da tela Descarga; agora as duas fecham igual.
-  //   Carregando → V177: passa a somar a carga INTEIRA também. A carga já está em
-  //        cima da carreta sendo carregada; a ocorrência em aberto na coluna S não
-  //        tira o peso de dentro do veículo, então descartá-la subavaliava o kg
-  //        real do que está sendo carregado no terminal. Mudança restrita a esta
-  //        etapa — Disponível e Intermediário seguem com a regra anterior.
-  if (!RO_POSICOES_SEM_EXCLUSAO_OCOR[pos] && typeof _relOcorIgnorar === 'function' && _relOcorIgnorar(r)) return;
+    // Ocor.Aberta — a exclusão é POR ETAPA, seguindo a tela dona de cada fluxo:
+    //   Disponível / Intermediário → Planejamento OUT e Painel Executivo excluem
+    //        Ocor.Aberta sem agendamento (_relOcorIgnorar).
+    //   Fila de Descarga → a tela Descarga soma a fila INTEIRA, sem essa exclusão
+    //        (_descLinhaAtendeCriterio: disp = Patio ou Em descarregamento).
+    //        Era essa diferença que fazia o peso da fila desta tela ficar abaixo do
+    //        card "Peso Total na Fila" da tela Descarga; agora as duas fecham igual.
+    //   Carregando → V177: soma a carga INTEIRA também. A carga já está em cima da
+    //        carreta sendo carregada; a ocorrência em aberto na coluna S não tira o
+    //        peso de dentro do veículo, então descartá-la subavaliava o kg real do
+    //        que está sendo carregado. Disponível e Intermediário seguem a regra
+    //        anterior.
+    var excluidoPorOcor = !RO_POSICOES_SEM_EXCLUSAO_OCOR[pos] &&
+                          typeof _relOcorIgnorar === 'function' && _relOcorIgnorar(r);
+    if (!c || excluidoPorOcor) c = residuo;
     c.ctrcs++;
     c.peso  += Math.max(0, Number(r.peso) || 0);
     c.vol   += _roVol(r);
@@ -20949,8 +20972,8 @@ function resumoOperRenderizar() {
   });
 
   var total = { atrasado: 0, hoje: 0, noPrazo: 0, agendamento: 0, ctrcs: 0, peso: 0, vol: 0, valor: 0 };
-  RO_POSICOES.forEach(function(p) {
-    var c = etapa[p];
+  RO_POSICOES.concat([RO_RESIDUO_KEY]).forEach(function(p) {
+    var c = (p === RO_RESIDUO_KEY) ? residuo : etapa[p];
     total.atrasado += c.atrasado; total.hoje += c.hoje; total.noPrazo += c.noPrazo;
     total.agendamento += c.agendamento; total.ctrcs += c.ctrcs;
     total.peso += c.peso; total.vol += c.vol; total.valor += c.valor;
@@ -20986,7 +21009,7 @@ function resumoOperRenderizar() {
       '<div style="font-size:10.5px;color:#c9c9c9;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">R$ ' +
         _roMoeda(total.valor) + '</div>' +
       '<div style="height:2px;background:#e5e5e5;opacity:.55;border-radius:2px;margin-top:10px"></div>' +
-      '<div style="font-size:10px;color:#6b6b6b;margin-top:6px">Soma das 4 etapas</div>' +
+      '<div style="font-size:10px;color:#6b6b6b;margin-top:6px">Peso bruto do armazém</div>' +
     '</div>';
   }
 
@@ -21013,6 +21036,23 @@ function resumoOperRenderizar() {
         '<td style="' + tdNum + '">' + _roMoeda(c.valor) + '</td>' +
       '</tr>';
     }).join('');
+
+    // V184 — linha do restante. Só aparece quando existe peso fora das quatro
+    // etapas, para não poluir a tabela quando o relatório vier todo classificado.
+    if (residuo.ctrcs > 0) {
+      var icdR = _roIcdPct(residuo);
+      linhas += '<tr style="background:#101010">' +
+        '<td style="padding:9px 8px;font-size:12px;font-weight:600;color:#9a9a9a;white-space:nowrap;border-right:1px solid #232323" title="Linhas com Posição fora das quatro etapas + Ocor.Aberta sem agendamento descartada em Disponível e Intermediário">' + RO_RESIDUO_KEY + '</td>' +
+        '<td style="' + tdNum + ';color:#ef4444;font-weight:700">' + _roInt(residuo.atrasado) + '</td>' +
+        '<td style="' + tdNum + ';color:#f59e0b;font-weight:700">' + _roInt(residuo.hoje) + '</td>' +
+        '<td style="' + tdNum + ';color:#9a9a9a">' + _roInt(residuo.noPrazo) + '</td>' +
+        '<td style="' + tdNum + ';color:#d97706;font-weight:700">' + _roInt(residuo.agendamento) + '</td>' +
+        '<td style="' + tdNum + ';color:' + _roIcdCor(icdR) + ';font-weight:800;border-right:1px solid #232323">' + icdR + '%</td>' +
+        '<td style="' + tdNum + ';font-weight:700;color:' + RO_RESIDUO_COR + '">' + _roKg(residuo.peso) + '</td>' +
+        '<td style="' + tdNum + '">' + _roInt(residuo.vol) + '</td>' +
+        '<td style="' + tdNum + '">' + _roMoeda(residuo.valor) + '</td>' +
+      '</tr>';
+    }
 
     var icdTotal = _roIcdPct(total);
     var linhaTotal =
@@ -21050,7 +21090,7 @@ function resumoOperRenderizar() {
           '</table>' +
         '</div>' +
         '<div style="font-size:10px;color:#6b6b6b;margin-top:10px;padding-top:8px;border-top:1px solid #262626">' +
-          'Atrasado / Hoje / Prazo / Agend em CTRCs · Peso = coluna M · Volume = coluna I · Valor = coluna P · Ocor.Aberta sem agendamento excluída em Disponível e Intermediário; Carregando e Fila de Descarga somam a carga inteira' +
+          'Atrasado / Hoje / Prazo / Agend em CTRCs · Peso = coluna M · Volume = coluna I · Valor = coluna P · Ocor.Aberta sem agendamento excluída em Disponível e Intermediário; Carregando e Fila de Descarga somam a carga inteira · o que sai das etapas vai para "Não classificado", então o Total Geral fecha com o peso bruto do armazém' +
         '</div>' +
       '</div>';
   }
