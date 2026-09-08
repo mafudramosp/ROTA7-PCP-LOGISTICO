@@ -13728,6 +13728,15 @@ var _descMacRanking = [];
 // precisa rastrear todo MAC que entrou na fila, não só os que o card da tela
 // Descarga decide exibir.
 var _descMacRankingCompleto = [];
+// V183 — peso INTEGRAL (carga inteira) por MAC/MEC, chaveado em maiúsculas.
+// Preenchido por descargaRenderizar a cada render, a partir do relatório inteiro.
+// Diferente de "pesoTotal", que é só o pendente na fila. Ver o comentário longo
+// em descargaRenderizar para o motivo de existirem os dois.
+var _descPesoIntegralPorMac = {};
+function _descPesoIntegralDe(mac) {
+  var k = String(mac == null ? '' : mac).trim().toUpperCase();
+  return (k && _descPesoIntegralPorMac[k]) || 0;
+}
 var _descSort = {col: null, asc: false};
 
 // ═══════════ FILA DE COLETAS ═══════════
@@ -13822,13 +13831,9 @@ function _descMontarFilaColetas() {
   // linhas do MEC, então CTRC já endereçado (AC>0) ou já planejado (AE
   // preenchida) continuava contando e inflava a quantidade de coletas na fila.
   var mecMap = {};
-  // V182 — mesmo tratamento das transferências: peso INTEGRAL do MEC (todas as
-  // linhas elegíveis), acumulado antes do filtro de fila e no mesmo laço.
-  var mecPesoIntegral = {};
   _relData.forEach(function(r) {
     var mec = String(r.mac || '').trim();
     if (!mec || !mecsElegiveis[mec]) return;
-    mecPesoIntegral[mec] = (mecPesoIntegral[mec] || 0) + (r.peso || 0);
     if (!_descLinhaAtendeCriterio(r)) return;
 
     var dtA = _descColetaParseData(r.dtColA);
@@ -13859,8 +13864,7 @@ function _descMontarFilaColetas() {
   // Pontuação de prioridade das Coletas
   var _descColetaTodosCalculados = Object.keys(mecMap).map(function(k) {
     var m = mecMap[k];
-    // V182 — campo NOVO e adicional; "peso" (pendente) segue intocado.
-    m.pesoIntegral = mecPesoIntegral[k] || m.peso || 0;
+    m.pesoIntegral = _descPesoIntegralDe(k) || m.peso || 0;
     Object.keys(m._ctrcs).forEach(function(c) {
       m.ctrcs++;
       if (m._ctrcs[c] === 'Atrasado') m.atras++;
@@ -13890,6 +13894,33 @@ function _descMontarFilaColetas() {
 function descargaRenderizar() {
   if (!_relData || !_relData.length) return;
 
+  // ── V183 · PESO INTEGRAL POR MAC/MEC ──────────────────────────────────────
+  // Peso da CARGA INTEIRA de cada MAC/MEC, somando TODAS as linhas do relatório,
+  // sem nenhum filtro de fila ou de elegibilidade.
+  //
+  // Por que existe: "pesoTotal" (adiante) só soma as linhas que ainda estão na
+  // fila, porque é isso que a tela Descarga precisa mostrar — o que falta
+  // descarregar. Só que o Acompanhamento IN e o Executado do Painel precisam do
+  // peso da carga, e conforme o conferente baixa os CTRCs as linhas saem da fila
+  // e esse número encolhe até sumir. Foi assim que o MAC 10891 ficou registrado
+  // com 551 kg em vez dos 16.118 kg do TMS.
+  //
+  // A V182 tentou resolver acumulando dentro dos laços que já existiam, mas eles
+  // rodam DEPOIS dos filtros: um MAC totalmente baixado (marcado "Saiu da fila")
+  // não entra em nenhum dos dois, e era exatamente o caso do 10891. Por isso o
+  // cálculo saiu para cá, antes de qualquer filtro, cobrindo Transferências e
+  // Coletas de uma vez só.
+  //
+  // Custo: uma varredura de _relData por render — a mesma ordem de grandeza dos
+  // filtros que já rodam logo abaixo, alguns milissegundos. Em troca, some a
+  // necessidade de acumuladores espalhados pelos laços gated.
+  _descPesoIntegralPorMac = {};
+  _relData.forEach(function(r) {
+    var k = String((r && r.mac) || '').trim().toUpperCase();
+    if (!k || k === '—') return;
+    _descPesoIntegralPorMac[k] = (_descPesoIntegralPorMac[k] || 0) + ((r && r.peso) || 0);
+  });
+
   // Somente Transferências (exclui Coletas) — regra atual da tela Descarga
   // Ocorrência Aberta (coluna S) NÃO é mais motivo de exclusão nesta tela
   var dataHub = _relData.filter(function(r){ return (r.etiq||'') === 'Reembarque'; });
@@ -13909,20 +13940,9 @@ function descargaRenderizar() {
 
   // Build mac map — consolidando linhas duplicadas da coluna W
   var macMap = {};
-  // V182 — PESO TOTAL DO MAC (todas as linhas), separado do peso PENDENTE.
-  // "pesoTotal" abaixo só soma as linhas que ainda atendem ao critério de fila,
-  // porque é isso que a tela Descarga precisa mostrar (o que falta descarregar).
-  // Mas o Acompanhamento IN e o Executado do Painel precisam do peso da CARGA
-  // INTEIRA: conforme o conferente vai baixando os CTRCs, as linhas saem da fila
-  // e "pesoTotal" encolhe até quase zero — foi assim que o MAC 10891 apareceu com
-  // 551 kg em vez dos 16.118 kg do relatório. Acumulado no MESMO laço, antes do
-  // filtro de fila: nenhuma passada extra sobre o relatório, custo desprezível.
-  var macPesoIntegral = {};
   dataHub.forEach(function(r) {
     var mac = r.mac && r.mac.trim();
-    if (!mac || mac === '—') return;
-    macPesoIntegral[mac] = (macPesoIntegral[mac] || 0) + (r.peso || 0);
-    if (!_descLinhaNaFila(r)) return;
+    if (!mac || mac === '—' || !_descLinhaNaFila(r)) return;
     if (!macMap[mac]) macMap[mac] = { mac:mac, dest:r.macDest&&r.macDest.trim()?r.macDest.trim():(r.destino||'—'), atras:0, hoje:0, ctrcs:0, menorDt:null, menorDtStr:'—', _ctrcs:{}, remetente:r.remetente||'', _isAN:r.isAN||false, _isColeta:false, pesoTotal:0, disp:r.disp||'Patio' };
     var m = macMap[mac];
     m.pesoTotal = (m.pesoTotal||0) + (r.peso||0);
@@ -13953,9 +13973,7 @@ function descargaRenderizar() {
   // 3º MAC com data mais antiga (coluna R) há mais de 36h da hora atual
   var _descMacTodosCalculados = Object.values(macMap).map(function(m) {
     m.atras=0; m.hoje=0; m.ctrcs=0; m.agendCount=0;
-    // V182 — campo NOVO e adicional. "pesoTotal" continua sendo o peso pendente
-    // usado pela fila da tela Descarga; nada ali muda.
-    m.pesoIntegral = macPesoIntegral[m.mac] || m.pesoTotal || 0;
+    m.pesoIntegral = _descPesoIntegralDe(m.mac) || m.pesoTotal || 0;
     Object.values(m._ctrcs).forEach(function(info){
       m.ctrcs++;
       if(info.sit==='Atrasado') m.atras++;
@@ -14688,6 +14706,14 @@ function _descAcompListaMerge() {
       item.tipo = mapaAtual[item.mac].tipo || item.tipo;
     } else {
       item.ativo = false; // saiu da fila → marca mas NÃO remove
+      // V183 — ESTE ERA O PONTO QUE FALTAVA. Um MAC totalmente descarregado sai
+      // da fila e some dos rankings, então caía aqui e o peso gravado nunca mais
+      // era revisto — ficava congelado na fração que ainda estava pendente no
+      // último merge (o MAC 10891, com 551 kg dos 16.118 kg reais). As linhas
+      // dele, porém, CONTINUAM no relatório, agora como já baixadas: o peso
+      // integral segue disponível e é reposto aqui.
+      var integral = _descPesoIntegralDe(item.mac);
+      if (integral > 0) item.pesoTotal = integral;
     }
   });
 
@@ -18514,6 +18540,11 @@ function _inPesoPorMacTodos() {
   }
   ((typeof _descAcompLista !== 'undefined' && _descAcompLista) ? _descAcompLista : [])
     .forEach(function(m) { reg(m && m.mac, m && m.pesoTotal); });
+  // V183 — peso integral direto do relatório: cobre inclusive MAC/MEC que já saiu
+  // da fila, cujo valor na lista pode estar defasado até o próximo merge.
+  if (typeof _descPesoIntegralPorMac !== 'undefined' && _descPesoIntegralPorMac) {
+    Object.keys(_descPesoIntegralPorMac).forEach(function(k) { reg(k, _descPesoIntegralPorMac[k]); });
+  }
   ((typeof _descMacRankingCompleto !== 'undefined' && _descMacRankingCompleto) ? _descMacRankingCompleto : [])
     .forEach(function(m) { reg(m && m.mac, m && (m.pesoIntegral || m.pesoTotal)); });
   ((typeof _descColetaRankingCompleto !== 'undefined' && _descColetaRankingCompleto) ? _descColetaRankingCompleto : [])
