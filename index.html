@@ -20695,6 +20695,8 @@ function histRelOutExcluirSelecionados() {
    os números não divergirem entre as duas telas quando a regra mudar:
 
    · Exclusão Ocor.Aberta ......... _relOcorIgnorar(r)         (S = Ocor.Aberta e AQ ≠ SIM)
+       aplicada só em Disponível e Intermediário. Carregando e Fila de Descarga
+       somam a carga inteira (ver RO_POSICOES_SEM_EXCLUSAO_OCOR).
    · Situação de prazo ............ _cargaCriticaSituacaoDe(r) (coluna AH)
    · Agendamento tem prioridade ... r.agend === 'SIM' cai em Agend, não no prazo
    · Etapa / posição .............. r.posicao (derivada de AC/AE/AL/AM na importação)
@@ -20720,6 +20722,15 @@ var RO_POSICAO_COR = {
   'Descarregado': '#60a5fa',
   'Disponível': '#3fb950',
   'Fila de descarga': '#94a3b8'
+};
+
+// V177 — Etapas que somam a carga INTEIRA, sem descartar Ocor.Aberta (coluna S).
+// Ver o comentário no laço de agregação em resumoOperRenderizar para o porquê de
+// cada uma. Disponível e Intermediário ficam DE FORA daqui de propósito: seguem
+// com a exclusão de Ocor.Aberta sem agendamento, igual ao Planejamento OUT.
+var RO_POSICOES_SEM_EXCLUSAO_OCOR = {
+  'Fila de descarga': true,
+  'Carregando': true
 };
 
 // Volume — coluna I do TMS, guardada em r.vols como texto. Mesmo parse já
@@ -20793,14 +20804,19 @@ function resumoOperRenderizar() {
     var pos = String(r.posicao || '').trim();
     var c = etapa[pos];
     if (!c) return; // posição "—" (sem classificação) fica fora da tabela
-    // Ocor.Aberta — a exclusão é POR ETAPA, seguindo a tela dona de cada fluxo:
-    //   OUT (Carregando / Intermediário / Disponível) → Planejamento OUT e Painel
-    //        Executivo excluem Ocor.Aberta sem agendamento (_relOcorIgnorar).
-    //   IN  (Fila de Descarga) → a tela Descarga soma a fila INTEIRA, sem essa
-    //        exclusão (_descLinhaAtendeCriterio: disp = Patio ou Em descarregamento).
-    // Era exatamente essa diferença que fazia o peso da fila desta tela ficar abaixo
-    // do card "Peso Total na Fila" da tela Descarga. Agora as duas fecham no mesmo kg.
-    if (pos !== 'Fila de descarga' && typeof _relOcorIgnorar === 'function' && _relOcorIgnorar(r)) return;
+  // Ocor.Aberta — a exclusão é POR ETAPA, seguindo a tela dona de cada fluxo:
+  //   Disponível / Intermediário → Planejamento OUT e Painel Executivo excluem
+  //        Ocor.Aberta sem agendamento (_relOcorIgnorar).
+  //   Fila de Descarga → a tela Descarga soma a fila INTEIRA, sem essa exclusão
+  //        (_descLinhaAtendeCriterio: disp = Patio ou Em descarregamento).
+  //        Era essa diferença que fazia o peso da fila desta tela ficar abaixo do
+  //        card "Peso Total na Fila" da tela Descarga; agora as duas fecham igual.
+  //   Carregando → V177: passa a somar a carga INTEIRA também. A carga já está em
+  //        cima da carreta sendo carregada; a ocorrência em aberto na coluna S não
+  //        tira o peso de dentro do veículo, então descartá-la subavaliava o kg
+  //        real do que está sendo carregado no terminal. Mudança restrita a esta
+  //        etapa — Disponível e Intermediário seguem com a regra anterior.
+  if (!RO_POSICOES_SEM_EXCLUSAO_OCOR[pos] && typeof _relOcorIgnorar === 'function' && _relOcorIgnorar(r)) return;
     c.ctrcs++;
     c.peso  += Math.max(0, Number(r.peso) || 0);
     c.vol   += _roVol(r);
@@ -20914,7 +20930,7 @@ function resumoOperRenderizar() {
           '</table>' +
         '</div>' +
         '<div style="font-size:10px;color:#6b6b6b;margin-top:10px;padding-top:8px;border-top:1px solid #262626">' +
-          'Atrasado / Hoje / Prazo / Agend em CTRCs · Peso = coluna M · Volume = coluna I · Valor = coluna P · Ocor.Aberta sem agendamento excluída nas etapas OUT; Fila de Descarga soma a fila inteira, igual à tela Descarga' +
+          'Atrasado / Hoje / Prazo / Agend em CTRCs · Peso = coluna M · Volume = coluna I · Valor = coluna P · Ocor.Aberta sem agendamento excluída em Disponível e Intermediário; Carregando e Fila de Descarga somam a carga inteira' +
         '</div>' +
       '</div>';
   }
