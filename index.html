@@ -7951,6 +7951,34 @@ function _relAplicarDados(registros, ts, forcar) {
   if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
   if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
   if (typeof cgRenderizar === 'function' && _cgData) setTimeout(function(){ cgRenderizar(_cgData); }, 400);
+  // V180 — TELAS QUE FICAVAM PARADAS QUANDO O RELATÓRIO VINHA DE OUTRA MÁQUINA.
+  //
+  // Até aqui só relFiltrar (que arrasta o Resumo Operacional pelo hook do final
+  // do arquivo), hub, frotas e Consolidação eram repintados. Descarga, Carga
+  // Crítica e Painel Executivo NÃO — ficavam com os números do relatório
+  // anterior até o usuário trocar de aba e voltar. Como quem importa renderiza
+  // tudo localmente (ver relProcessar) e quem RECEBE não renderizava, as
+  // máquinas divergiam: exatamente o "cada um carregando informações
+  // individuais".
+  //
+  // descargaRenderizar precisa rodar mesmo com a aba fechada: além de desenhar,
+  // é ele que remonta _descMacRankingCompleto/_descColetaRankingCompleto e chama
+  // _descAcompListaMerge(). Sem isso, a máquina que recebe o relatório nunca
+  // incorpora os MACs/MECs novos à lista do Acompanhamento IN — e o peso
+  // Executado do Painel, que sai dessa lista, continuava divergindo.
+  // As outras duas são só desenho, então respeitam a aba ativa.
+  setTimeout(function() {
+    try { if (typeof descargaRenderizar === 'function') descargaRenderizar(); }
+    catch (e) { console.warn('[rel] descargaRenderizar falhou:', e); }
+    try {
+      if (typeof cargaCriticaRenderizar === 'function') {
+        var tabCC = document.getElementById('tab-cargaCritica-content');
+        if (tabCC && tabCC.classList.contains('active')) cargaCriticaRenderizar();
+      }
+    } catch (e) { console.warn('[rel] cargaCriticaRenderizar falhou:', e); }
+    try { if (typeof _gvRedesenharSeAtivo === 'function') _gvRedesenharSeAtivo(); }
+    catch (e) { console.warn('[rel] painel executivo falhou:', e); }
+  }, 500);
   if (forcar !== true) showToast('🔄 Relatório atualizado automaticamente (' + ts.toLocaleString('pt-BR') + ')', 'info');
   if (typeof _relSalvarLocal === 'function') _relSalvarLocal();
 }
