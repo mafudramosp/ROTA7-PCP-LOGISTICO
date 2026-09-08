@@ -3877,12 +3877,12 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">DISPONÍVEL</div>
       <div class="hub-kpi-val" id="pc-kpi-disp">—</div>
-      <div style="font-size:10px;color:#ffffff">Peso operacional</div>
+      <div style="font-size:10px;color:#ffffff" title="Linhas com Equipamento (coluna AC) preenchido, esteja a mercadoria já planejada ou não, excluindo Ocor.Aberta sem agendamento. No Resumo Operacional isto aparece dividido em duas etapas: Disponível (ainda não planejada) e Carregando (já planejada).">Disponível + planejado · sem Ocor.Aberta</div>
     </div>
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">EM DESCARREGAMENTO</div>
       <div class="hub-kpi-val" id="pc-kpi-desc">—</div>
-      <div style="font-size:10px;color:#ffffff">Peso operacional</div>
+      <div style="font-size:10px;color:#ffffff" title="Somente linhas com disponibilidade 'Em descarregamento'. Não inclui as que estão em 'Patio' — por isso este card é menor que a Fila de Descarga do Resumo Operacional, que soma as duas.">Só 'Em descarregamento' (sem Patio)</div>
     </div>
 
     <div class="hub-kpi-card" style="">
@@ -4013,7 +4013,9 @@ document.addEventListener('DOMContentLoaded', function() {
   <!-- Totalizadores -->
   <div id="rel-stats" style="display:none;gap:10px;margin-bottom:12px;flex-wrap:wrap;flex-shrink:0">
     <div class="rel-stat-card"><div class="rel-stat-label">Total CTRCs</div><div class="rel-stat-val" id="rel-s-total">—</div></div>
-    <div class="rel-stat-card"><div class="rel-stat-label">Peso total (kg)</div><div class="rel-stat-val" id="rel-s-peso">—</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label" title="Peso das linhas que entram no planejamento: todo o relatório MENOS Ocor.Aberta sem agendamento. Carga com ocorrência em aberto não pode ser planejada, por isso ela sai desta tela.">Peso total (kg) · sem Ocor.Aberta</div><div class="rel-stat-val" id="rel-s-peso">—</div></div>
+    <div class="rel-stat-card" style="border-left:3px solid #f59e0b"><div class="rel-stat-label" title="Linhas que atendem a todos os filtros da tela mas saem do planejamento por terem Ocor.Aberta sem agendamento. É exatamente a diferença entre o total desta tela e o peso bruto do relatório.">Ocor.Aberta excluída</div><div class="rel-stat-val" id="rel-s-ocor">—</div></div>
+    <div class="rel-stat-card" style="border-left:3px solid #16a34a"><div class="rel-stat-label" title="Peso total + Ocor.Aberta excluída. Este é o número que bate com o Total do Terminal (Resumo Operacional) e com o Peso Total Armazém (Prioridade de Carregamento).">Peso bruto · = Resumo Operacional</div><div class="rel-stat-val" id="rel-s-bruto">—</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Valor total</div><div class="rel-stat-val" id="rel-s-valor">—</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Volumes</div><div class="rel-stat-val" id="rel-s-vols">—</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Total de Notas</div><div class="rel-stat-val" id="rel-s-notas">—</div></div>
@@ -5307,13 +5309,16 @@ function relGetDestsProgramados() {
   return set;
 }
 
+// V185 — linhas que os filtros deixariam passar mas saem por Ocor.Aberta sem
+// agendamento. Guardadas para os cards de reconciliação: sem elas, a tela mostra
+// "3.884 registros" no cabeçalho e "3.469 CTRCs" no card, sem explicar a diferença,
+// e o peso nunca fecha com o Resumo Operacional / Prioridade de Carregamento.
+var _relExcluidosOcor = [];
+
 function relFiltrar() {
   var search=(document.getElementById('rel-search').value||'').toLowerCase();
+  _relExcluidosOcor = [];
   _relFilt=_relData.filter(function(r){
-    // Ocor.Aberta sem Agendamento = SIM não entra no Planejamento OUT. Sai da
-    // tabela e, por consequência, dos totalizadores, do Exportar Excel e da
-    // Impressão — todos derivam de _relFilt.
-    if (_relOcorIgnorar(r)) return false;
     // Filtro do card clicado
     if (_relCardFilter === 'crit' && r.cliente !== '⚠ Cliente critico') return false;
     if (_relCardFilter === 'plan' && r.disp !== 'Planejado') return false;
@@ -5325,6 +5330,13 @@ function relFiltrar() {
       var hay=(r.ctrc+r.remetente+r.destinatario+r.origem+r.destino+r.mac+r.frotaPlan).toLowerCase();
       if(hay.indexOf(search)===-1) return false;
     }
+    // Ocor.Aberta sem Agendamento = SIM não entra no Planejamento OUT. Sai da
+    // tabela e, por consequência, dos totalizadores, do Exportar Excel e da
+    // Impressão — todos derivam de _relFilt.
+    // V185 — a checagem passou para o FIM (o resultado é o mesmo, é tudo "E"),
+    // para que aqui já se saiba que a linha atendia a todos os outros filtros.
+    // Só assim os cards de reconciliação respeitam o filtro ativo na tela.
+    if (_relOcorIgnorar(r)) { _relExcluidosOcor.push(r); return false; }
     return true;
   });
   // Ordenação
@@ -5383,6 +5395,19 @@ function relRenderizar() {
   document.getElementById('rel-s-vols').textContent=totVols.toLocaleString('pt-BR',{maximumFractionDigits:0});
   document.getElementById('rel-s-notas').textContent=notasSet.size.toLocaleString('pt-BR');
   document.getElementById('rel-s-critentrega').textContent=totCritCount.toLocaleString('pt-BR');
+
+  // V185 — cards de reconciliação: quanto saiu por Ocor.Aberta e qual o bruto.
+  // O bruto é a soma dos dois e é o número que fecha com o Total do Terminal do
+  // Resumo Operacional e com o Peso Total Armazém da Prioridade de Carregamento.
+  var pesoOcor = 0, qtdOcor = (_relExcluidosOcor || []).length;
+  for (var iO = 0; iO < qtdOcor; iO++) pesoOcor += (_relExcluidosOcor[iO].peso || 0);
+  var elOcor = document.getElementById('rel-s-ocor');
+  if (elOcor) {
+    elOcor.textContent = pesoOcor.toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' kg';
+    elOcor.title = qtdOcor.toLocaleString('pt-BR') + ' linha(s) fora do planejamento';
+  }
+  var elBruto = document.getElementById('rel-s-bruto');
+  if (elBruto) elBruto.textContent = (totPeso + pesoOcor).toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' kg';
 
   // Thead
   var thead=document.getElementById('rel-thead');
