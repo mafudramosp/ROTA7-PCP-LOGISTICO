@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V186--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V187--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -3421,15 +3421,25 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
   // _relData, sem deduplicar por CTRC e sem descartar Ocor.Aberta, usando a
   // classificação r.disp, que já aplica os parâmetros das colunas AC/AE/AL/AM.
   if (typeof _relData !== 'undefined' && _relData && _relData.length) {
-    var pcTotal = 0, pcDesc = 0;
+    var pcTotal = 0, pcDesc = 0, pcPatio = 0;
     for (var iPc = 0; iPc < _relData.length; iPc++) {
       var rPc = _relData[iPc];
       pcTotal += rPc.peso || 0;
-      if (String(rPc.disp || '').trim().toLowerCase() === 'em descarregamento') pcDesc += rPc.peso || 0;
+      var dPc = String(rPc.disp || '').trim().toLowerCase();
+      if (dPc === 'em descarregamento') pcDesc += rPc.peso || 0;
+      else if (dPc === 'patio') pcPatio += rPc.peso || 0;
     }
     var fmtKgPc = function(v){ return v.toLocaleString('pt-BR',{maximumFractionDigits:0})+' kg'; };
     setEl('pc-kpi-total', fmtKgPc(pcTotal));
-    setEl('pc-kpi-desc',  fmtKgPc(pcDesc));
+    // V187 — sem descarga ativa (pcDesc = 0), mostra a fila de descarga
+    // (Patio) em vez de "0 kg". Ver mesma regra em hubRenderizar().
+    if (pcDesc > 0) {
+      setEl('pc-kpi-desc', fmtKgPc(pcDesc));
+      setEl('pc-kpi-desc-sub', "Só 'Em descarregamento' (sem Patio)");
+    } else {
+      setEl('pc-kpi-desc', fmtKgPc(pcPatio));
+      setEl('pc-kpi-desc-sub', 'Sem descarga ativa · fila de descarga (Pátio)');
+    }
   }
 
   // Card 1 — Carretas necessárias (usa peso Disponível do _relData se disponível)
@@ -3882,7 +3892,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">EM DESCARREGAMENTO</div>
       <div class="hub-kpi-val" id="pc-kpi-desc">—</div>
-      <div style="font-size:10px;color:#ffffff" title="Somente linhas com disponibilidade 'Em descarregamento'. Não inclui as que estão em 'Patio' — por isso este card é menor que a Fila de Descarga do Resumo Operacional, que soma as duas.">Só 'Em descarregamento' (sem Patio)</div>
+      <div style="font-size:10px;color:#ffffff" id="pc-kpi-desc-sub" title="Somente linhas com disponibilidade 'Em descarregamento'. Não inclui as que estão em 'Patio' — por isso este card é menor que a Fila de Descarga do Resumo Operacional, que soma as duas.">Só 'Em descarregamento' (sem Patio)</div>
     </div>
 
     <div class="hub-kpi-card" style="">
@@ -6215,7 +6225,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V186';
+var ROTA7_VERSAO = 'V187';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -13380,9 +13390,18 @@ function hubRenderizar() {
   setEl('hub-kpi-disp',  fmtKg(pesoDisp));
   setEl('hub-kpi-desc',  fmtKg(pesoDescCard));
   // Espelhar valores na aba Prioridades de Carregamento
+  // V187 — só aqui (pc-kpi-desc): sem descarga ativa, mostra a fila de
+  // descarga (Patio) em vez de 0 kg. O card do hub (hub-kpi-desc, acima)
+  // continua só com a descarga em andamento — não foi pedido para ele.
   setEl('pc-kpi-total', fmtKg(pesoTotal));
   setEl('pc-kpi-disp',  fmtKg(pesoDisp));
-  setEl('pc-kpi-desc',  fmtKg(pesoDescCard));
+  if (pesoDescCard > 0) {
+    setEl('pc-kpi-desc', fmtKg(pesoDescCard));
+    setEl('pc-kpi-desc-sub', "Só 'Em descarregamento' (sem Patio)");
+  } else {
+    setEl('pc-kpi-desc', fmtKg(pesoPatio));
+    setEl('pc-kpi-desc-sub', 'Sem descarga ativa · fila de descarga (Pátio)');
+  }
 
   // Eficiência TIME-A: Em descarregamento ÷ (Em descarregamento + Pátio)
   var eficA = (pesoDesc + pesoPatio) > 0 ? Math.round(pesoDesc / (pesoDesc + pesoPatio) * 100) : 0;
