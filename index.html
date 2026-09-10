@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V187--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V190--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1220,8 +1220,9 @@
      então a versão "compat" é a única que funciona aqui — a modular exige
      import/ESM. Carregado sempre, mas SÓ inicializa se FB_CONFIG.projectId
      estiver preenchido. -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<!-- V190 — SDK do Firebase removido. O relatório TMS voltou para o Supabase
+     (ver FB_CONFIG mais abaixo); com a assinatura paga não há mais motivo para
+     manter um segundo banco. São dois scripts externos a menos no carregamento. -->
 
 <style>
 .frota-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.06); }
@@ -2246,6 +2247,7 @@ function _gradeAtualizarComMalha(rows) {
       <button id="gv-btn-out" onclick="gestaoVistaTrocarVisao('out')" style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Carregamento (OUT)</button>
       <button id="gv-btn-fp" onclick="gestaoVistaTrocarVisao('fp')" style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Frotas Programadas</button>
       <button id="gv-btn-ext" onclick="gestaoVistaTrocarVisao('extrato')" style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Extrato do Dia</button>
+      <button id="gv-btn-cx" onclick="gestaoVistaTrocarVisao('capexec')" style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif">Capacidade X Executado</button>
 
       <div id="gv-filtro-ativo" style="margin-left:8px"></div>
     </div>
@@ -2304,6 +2306,16 @@ function _gradeAtualizarComMalha(rows) {
       <div id="ext-cards-topo" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px"></div>
       <div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Resumo Consolidado por Processo</div>
       <div id="ext-processos"></div>
+    </div>
+
+    <!-- Container para visao Capacidade X Executado (capacidade HC x executado IN+OUT, por turno e consolidado) -->
+    <div id="gv-capexec-container" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <div id="cx-nav-visao" style="display:flex;gap:8px"></div>
+        <div id="cx-nav-dia" style="display:flex;align-items:center;gap:8px"></div>
+      </div>
+      <div id="cx-cards-topo" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px"></div>
+      <div id="cx-conteudo"></div>
     </div>
 
     <!-- Tooltip flutuante (popup ao passar o mouse) -->
@@ -3837,6 +3849,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof _cargaCriticaHistoricoCarregarSupabase === 'function') setTimeout(_cargaCriticaHistoricoCarregarSupabase, 1500);
   // Carregar Extrato do Dia (Gestão à Vista) do Supabase — compartilhado entre usuários
   if (typeof _gvExtratoHistCarregarSupabase === 'function') setTimeout(_gvExtratoHistCarregarSupabase, 1550);
+  // Carregar histórico Capacidade X Executado do Supabase — compartilhado entre usuários
+  if (typeof _gvCapExecHistCarregarSupabase === 'function') setTimeout(_gvCapExecHistCarregarSupabase, 1560);
   if (typeof _deletedIdsCarregarSupabase === 'function') setTimeout(_deletedIdsCarregarSupabase, 1000);
   // Carregar Acompanhamento OUT (Carregamento) do Supabase para compartilhamento entre usuários
   if (typeof _acompOutCarregarSupabase === 'function') setTimeout(_acompOutCarregarSupabase, 1600);
@@ -6225,7 +6239,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V187';
+var ROTA7_VERSAO = 'V190';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -6706,22 +6720,42 @@ function _gsGravar(chave, valor) {
 // Firestore, não esta chave. Ver Passo 4 do passo a passo.
 // measurementId fica aqui só por completude: o SDK de Analytics não é
 // carregado, então ele não é usado para nada.
-var FB_CONFIG = {
-  apiKey: 'AIzaSyD3O0Wbsq1y_g_sVMTKe0mGVV7vRNNEklc',
-  authDomain: 'rota7-pcp-gru.firebaseapp.com',
-  projectId: 'rota7-pcp-gru',
-  storageBucket: 'rota7-pcp-gru.firebasestorage.app',
-  messagingSenderId: '490201642423',
-  appId: '1:490201642423:web:47718a1084ce140d272432',
-  measurementId: 'G-TGJYDCJ8YM'
-};
+// V190 — FIRESTORE DESLIGADO. Tudo passa a viver no Supabase.
+//
+// _fbIniciar() sai na primeira linha quando não há projectId, então _fbPronto
+// nunca fica true, _fbLigado() é sempre false e nenhuma leitura ou gravação
+// chega a tocar no Firestore. As funções _fb* abaixo continuam no arquivo,
+// dormentes: apagá-las mexeria em oito pontos de chamada sem nenhum ganho de
+// comportamento. Nada foi apagado do projeto rota7-pcp-gru.
+//
+// PARA REVERTER: devolva as credenciais a este objeto e as chaves às listas
+// FB_CHAVES/FB_PREFIXOS, e recoloque os dois <script> do SDK no topo.
+var FB_CONFIG = {};
 
 // Chaves que passam a morar no Firestore. Comece com o relatório, que é a
 // origem do gasto, e só acrescente outras depois de medir.
 // Para VOLTAR ATRÁS: esvazie as duas listas abaixo e republique. A cópia no
 // Supabase continua intacta — nada é apagado de lá em nenhum momento.
-var FB_CHAVES = ['tms_relatorio'];          // formato antigo, parte única
-var FB_PREFIXOS = ['tms_relatorio_'];       // pega tms_relatorio_0..N e _meta
+// V189 — RELATÓRIO TMS DEVOLVIDO AO SUPABASE.
+//
+// Enquanto estas listas tinham conteúdo, o relatório era gravado e lido no
+// Firestore, não no Supabase. As duas pontas têm queda para o Supabase quando o
+// Firestore recusa — MENOS uma: se a gravação passa mas falta uma parte na
+// leitura, _fbCarregarRelatorio devolve null sem cair para lugar nenhum. A tela
+// então segue com o cache local do próprio aparelho, e cada máquina fica vendo
+// a sua última importação. Era o efeito relatado: "salvo local, invisível para
+// os outros".
+//
+// O motivo do desvio (egresso de 2,46 MB × 24 máquinas) já foi resolvido por
+// outros caminhos desde então: watermark incremental (V151), divisão estável
+// por chave — só o bloco alterado é rebaixado (V170) — e a publicação do
+// Realtime sem a coluna "valor". O custo no Supabase hoje é uma fração do que
+// era quando o desvio foi criado.
+//
+// V190 — decisão fechada: o relatório fica no Supabase. Estas listas
+// permanecem vazias e o Firestore está desligado em FB_CONFIG.
+var FB_CHAVES = [];
+var FB_PREFIXOS = [];
 
 var _fbDb = null;
 var _fbPronto = false;
@@ -7100,6 +7134,12 @@ function sbInicializarRealtime() {
         } else if (chave === GV_EXTRATO_HIST_KEY) {
           // Extrato do Dia (Gestão à Vista) mudou em outra máquina — recarrega e mescla
           if (typeof _gvExtratoHistCarregarSupabase === 'function') _gvExtratoHistCarregarSupabase();
+        } else if (chave === GV_CAPEXEC_HIST_KEY) {
+          // V190 — antes só rebaixava com a tela aberta, para poupar egresso. Com
+          // a assinatura paga isso deixa de compensar: quem abrir a tela depois
+          // encontrava histórico velho até o próximo ciclo. Agora acompanha as
+          // demais chaves e recarrega assim que outra máquina grava.
+          if (typeof _gvCapExecHistCarregarSupabase === 'function') _gvCapExecHistCarregarSupabase();
         } else if (chave === 'prog_deleted_ids') {
           // Alguém excluiu um registro em Recurso Programado em outra máquina — sincroniza aqui também
           if (typeof _deletedIdsCarregarSupabase === 'function') _deletedIdsCarregarSupabase();
@@ -7981,7 +8021,10 @@ function _relAplicarDados(registros, ts, forcar) {
   _relDataTs = ts;
   _relSupabaseTs = ts;
   var u = document.getElementById('rel-updated');
-  if (u) u.textContent = 'Sincronizado: '+ts.toLocaleString('pt-BR')+' · '+_relData.length+' registros';
+  if (u) {
+    u.textContent = 'Sincronizado: '+ts.toLocaleString('pt-BR')+' · '+_relData.length+' registros';
+    u.style.color = '#94a3b8';   // volta do âmbar de alerta ao normal
+  }
   relFiltrar();
   if (typeof hubRenderizar === 'function') setTimeout(hubRenderizar, 200);
   if (typeof frotasRenderizar === 'function') setTimeout(frotasRenderizar, 300);
@@ -8018,6 +8061,25 @@ function _relAplicarDados(registros, ts, forcar) {
   if (typeof _relSalvarLocal === 'function') _relSalvarLocal();
 }
 
+// V189 — o relatório podia deixar de carregar por meia dúzia de motivos, e todos
+// eram silenciosos: a tela seguia mostrando "(cache local)" com a data de uma
+// importação antiga, sem nada indicando que a carga tinha falhado. Foi isso que
+// deixou o problema sem diagnóstico. Agora toda saída que NÃO aplica dados
+// escreve o motivo no mesmo rótulo, em âmbar. É só texto — não altera cálculo,
+// dado nem fluxo de gravação.
+function _relAvisoCarga(motivo) {
+  try {
+    var u = document.getElementById('rel-updated');
+    if (!u) return;
+    var base = (_relDataTs && _relData && _relData.length)
+      ? 'Cache local de ' + _relDataTs.toLocaleString('pt-BR') + ' · ' + _relData.length + ' registros'
+      : 'Sem relatório carregado';
+    u.textContent = base + ' — ' + motivo;
+    u.style.color = '#f0b429';
+    console.warn('[rel] ' + motivo);
+  } catch (e) {}
+}
+
 function sbCarregarRelatorio(forcar) {
   try {
     // V165 — se o relatório foi roteado para o Firestore, a leitura vai por lá.
@@ -8049,7 +8111,10 @@ function sbCarregarRelatorio(forcar) {
         headers: _sbCabecalhoLeitura()
       }).then(function(r2){ return r2.json(); });
     }).then(function(rows) {
-      if (!rows || !rows.length) return;
+      if (rows === null || rows === undefined) return;   // corte de versão: nada mudou, sem alerta
+      // PostgREST devolve {message:...} em erro de permissão/RLS — isso precisa aparecer.
+      if (rows.message) { _relAvisoCarga('o banco recusou a leitura: ' + rows.message); return; }
+      if (!rows.length) { _relAvisoCarga('relatório não encontrado no banco — reimporte o Excel do TMS'); return; }
 
       var metaRow = rows.find(function(r){ return r.chave === 'tms_relatorio_meta'; });
       var relRow  = rows.find(function(r){ return r.chave === 'tms_relatorio'; });
@@ -8137,7 +8202,10 @@ function sbCarregarRelatorio(forcar) {
         })).then(function(partes) {
           var data = [];
           partes.forEach(function(p){ if (p && p.length) data = data.concat(p); });
-          if (!data || data.length < chaves.length) return;
+          if (!data || data.length < chaves.length) {
+            _relAvisoCarga('leitura incompleta (' + ((data && data.length) || 0) + ' de ' + chaves.length + ' partes) — nova tentativa em 120s');
+            return;
+          }
           // Guarda o que veio e remonta juntando com os blocos já em memória.
           data.forEach(function(d) {
             _relBlocosCache[d.chave] = {
@@ -8148,16 +8216,16 @@ function sbCarregarRelatorio(forcar) {
           var todos = [];
           for (var k = 0; k < totalChunks; k++) {
             var reg = _relBlocosCache['tms_relatorio_' + k];
-            if (!reg) { todos = null; break; }        // faltou bloco: não aplica nada
+            if (!reg) { todos = null; break; }        // faltou bloco: não aplica nada (avisado abaixo)
             try { todos = todos.concat(JSON.parse(reg.valor)); } catch(e){}
           }
-          if (!todos) return;
+          if (!todos) { _relAvisoCarga('falta uma parte do relatório no banco — reimporte o Excel do TMS'); return; }
           // Confere o total combinado contra o que foi gravado no metadado (meta.n) —
           // pegava chunk com conteúdo truncado/corrompido sem avisar, mesmo com a
           // quantidade de PARTES certa (a checagem acima só conta partes, não registros).
           if (meta && typeof meta.n === 'number' && todos.length < meta.n) {
             // V180 — aviso removido a pedido (ver acima).
-            console.warn('[rel] carga parcial: ' + todos.length + ' de ' + meta.n + ' registros');
+            _relAvisoCarga('carga parcial (' + todos.length + ' de ' + meta.n + ' registros) — nova tentativa em 120s');
             return;
           }
           _relAplicarDados(todos, ts, forcar);
@@ -8166,11 +8234,13 @@ function sbCarregarRelatorio(forcar) {
           // tela ficava em branco sem ninguém saber por quê. Os dados em memória
           // são preservados (a mescla da V178 já garante isso) e a tela é
           // repintada com o que houver.
-          console.warn('[rel] leitura das partes falhou:', e);
+          _relAvisoCarga('falha de rede ao ler o relatório: ' + (e && e.message ? e.message : e));
           if (typeof _relPintarQuandoPronto === 'function') _relPintarQuandoPronto();
         });
       }
-    }).catch(function(){});
+    }).catch(function(e){
+      _relAvisoCarga('não foi possível falar com o banco: ' + (e && e.message ? e.message : e));
+    });
   } catch(e) {}
 }
 
@@ -18117,12 +18187,13 @@ function gestaoVistaTrocarVisao(visao) {
   var btnOut = document.getElementById('gv-btn-out');
   var btnFp = document.getElementById('gv-btn-fp');
   var btnExt = document.getElementById('gv-btn-ext');
+  var btnCx = document.getElementById('gv-btn-cx');
   if (btnIn && btnOut && btnFp) {
-    [btnIn, btnOut, btnFp, btnExt].forEach(function(b) {
+    [btnIn, btnOut, btnFp, btnExt, btnCx].forEach(function(b) {
       if (!b) return;
       b.style.background = '#1a1a1a'; b.style.color = '#9a9a9a'; b.style.borderColor = '#2f2f2f';
     });
-    var sel = (visao === 'in') ? btnIn : (visao === 'out') ? btnOut : (visao === 'extrato') ? btnExt : btnFp;
+    var sel = (visao === 'in') ? btnIn : (visao === 'out') ? btnOut : (visao === 'extrato') ? btnExt : (visao === 'capexec') ? btnCx : btnFp;
     if (sel) { sel.style.background = '#e8e8e8'; sel.style.color = '#111'; sel.style.borderColor = '#e8e8e8'; }
   }
   gestaoVistaRenderizar();
@@ -18451,6 +18522,418 @@ function gvExtratoRenderizar() {
     _gvExtratoProcesso('Carregamento (OUT)', e.out, kg, e.pctCapacidadeOut, e.capacidadeOutKg) +
     _gvExtratoProcesso('Programação de Frotas', e.fp, qtd);
 }
+
+// ═══════════ CAPACIDADE X EXECUTADO — por turno e consolidado ═══════════
+// Tela nova, isolada. Não altera nenhuma função existente: só LÊ as fontes que
+// os outros dashboards já mantêm.
+//
+//   Capacidade -> Lista de Presença (_lpDados), exatamente a mesma fórmula do
+//                 card META daquela tela: (Ajudante + Terceiros) × meta × atuação.
+//                 A diferença é que aqui a soma é POR TURNO, em vez de somar os
+//                 três de uma vez como faz _gvCapacidadeHC (que fica intacta).
+//   Executado  -> _gvFluxoFilaIN().linhas[t].executado   (Descarga IN)
+//               + _gvFluxoFilaOUT().linhas[t].executado  (Carregamento OUT)
+//
+// Por que existe histórico próprio: _gvFluxoFilaIN/OUT só sabem calcular a
+// janela operacional CORRENTE — não recebem data. Então dia anterior só pode ser
+// exibido a partir de um snapshot gravado. A chave abaixo segue o mesmo molde do
+// gv_extrato_hist: localStorage para abrir na hora + Supabase para todo mundo ver
+// o mesmo número.
+var GV_CX_TURNOS = ['1º Turno', '2º Turno', '3º Turno'];
+var GV_CAPEXEC_HIST_KEY = 'gv_capexec_hist';
+var _gvCxVisao = 'turnos';        // 'turnos' | 'consolidado'
+var _gvCxDataISO = null;          // null = dia operacional corrente
+var _gvCxUltimoEnviado = '';      // assinatura do último upload feito por esta máquina
+var _gvCxUltimoEnvioTs = 0;       // carimbo do último upload (janela de 10 min)
+
+// Capacidade de UM turno, em toneladas. Espelha _gvCapacidadeHC sem tocá-la.
+function _gvCapacidadeHCTurno(dataISO, turno, fluxo) {
+  try {
+    if (typeof _lpDados === 'undefined' || !_lpDados || !_lpDados.dias) return 0;
+    var dia = _lpDados.dias[dataISO];
+    if (!dia) return 0;
+    var atuacao = _lpNum((_lpDados.metas || {}).atuacao);
+    var fluxos = fluxo ? [fluxo] : ['inbound', 'outbound'];
+    var total = 0;
+    fluxos.forEach(function(fx) {
+      var dados = (dia[fx] && dia[fx][turno]) ? dia[fx][turno] : {};
+      ['Ajudante', 'Terceiros'].forEach(function(f) {
+        total += _lpNum(dados[f]) * _lpMetaDe(f) * atuacao;
+      });
+    });
+    return total;
+  } catch (e) { return 0; }
+}
+
+// Executado do turno dentro de um retorno de _gvFluxoFilaIN/_gvFluxoFilaOUT.
+function _gvCxExecDoTurno(fluxo, turno) {
+  if (!fluxo || !fluxo.linhas) return 0;
+  var achado = 0;
+  fluxo.linhas.forEach(function(l) {
+    if (l && l.turno === turno) achado = l.executado || 0;
+  });
+  return achado;
+}
+
+// Fotografia do dia operacional corrente, já em kg e arredondada.
+function _gvCapExecColeta() {
+  var dataISO = _gvExtratoDataISO(0);
+  var fIn  = (typeof _gvFluxoFilaIN  === 'function') ? _gvFluxoFilaIN()  : null;
+  var fOut = (typeof _gvFluxoFilaOUT === 'function') ? _gvFluxoFilaOUT() : null;
+  var turnos = {};
+  GV_CX_TURNOS.forEach(function(t) {
+    turnos[t] = {
+      capIn:   Math.round(_gvCapacidadeHCTurno(dataISO, t, 'inbound')  * 1000),
+      capOut:  Math.round(_gvCapacidadeHCTurno(dataISO, t, 'outbound') * 1000),
+      execIn:  Math.round(_gvCxExecDoTurno(fIn,  t)),
+      execOut: Math.round(_gvCxExecDoTurno(fOut, t))
+    };
+  });
+  return { data: dataISO, turnos: turnos, ts: new Date().toISOString() };
+}
+
+// ── Histórico (localStorage + Supabase) ──
+function _gvCapExecHistLer() {
+  try { return JSON.parse(localStorage.getItem(GV_CAPEXEC_HIST_KEY) || '{}') || {}; }
+  catch (e) { return {}; }
+}
+
+function _gvCapExecHistGravarLocal(h) {
+  try {
+    var chaves = Object.keys(h).sort();
+    while (chaves.length > 60) { delete h[chaves.shift()]; }   // mantém 60 dias
+    localStorage.setItem(GV_CAPEXEC_HIST_KEY, JSON.stringify(h));
+  } catch (e) {}
+}
+
+// Guarda o dia corrente. O localStorage é atualizado sempre (é de graça); o
+// Supabase só recebe quando os números do dia realmente mudaram e no máximo uma
+// vez a cada 10 min — mesma disciplina do bloco do relatório: gravação que não
+// muda nada é tráfego jogado fora e ainda dispara Realtime nas outras máquinas.
+function _gvCapExecHistSalvar(dados) {
+  if (!dados || !dados.data) return;
+  try {
+    var h = _gvCapExecHistLer();
+    h[dados.data] = dados;
+    _gvCapExecHistGravarLocal(h);
+    // V190 — a janela de 10 minutos entre gravações saiu: era contenção de
+    // egresso, e segurava o número por até 10 min antes de chegar aos outros.
+    // A comparação de conteúdo continua — regravar algo idêntico não poupa só
+    // banda, evita acordar as outras máquinas via Realtime sem motivo.
+    var assinatura = JSON.stringify(dados.turnos);
+    if (assinatura === _gvCxUltimoEnviado) return;
+    _gvCxUltimoEnviado = assinatura;
+    _gvCxUltimoEnvioTs = Date.now();
+    _gvCapExecHistSalvarSupabase(dados.data);
+  } catch (e) {}
+}
+
+// Lê o que está no servidor, mescla e regrava. A leitura antes da escrita evita
+// que uma máquina com histórico local incompleto apague dias anteriores gravados
+// por outra — o dia CORRENTE é o único em que o local vence, porque é o que esta
+// máquina acabou de calcular.
+function _gvCapExecHistSalvarSupabase(diaCorrente) {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.' + GV_CAPEXEC_HIST_KEY + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      var remoto = {};
+      if (data && data.length && data[0].valor) {
+        try { remoto = JSON.parse(data[0].valor) || {}; } catch (e) { remoto = {}; }
+      }
+      var local = _gvCapExecHistLer();
+      var h = Object.assign({}, remoto, {});
+      Object.keys(local).forEach(function(d) { if (!h[d]) h[d] = local[d]; });
+      if (diaCorrente && local[diaCorrente]) h[diaCorrente] = local[diaCorrente];
+      _gvCapExecHistGravarLocal(h);
+      return fetch(SB_URL + '/configuracoes', {
+        method: 'POST',
+        headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body: JSON.stringify({ chave: GV_CAPEXEC_HIST_KEY, valor: JSON.stringify(h) })
+      });
+    }).catch(function(){});
+  } catch (e) {}
+}
+
+// Busca o histórico compartilhado e mescla (nunca perde snapshot: dia que só
+// existe de um lado permanece). O dia corrente local é preservado — ele se
+// recalcula sozinho a cada render e já regrava depois.
+function _gvCapExecHistCarregarSupabase() {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.' + GV_CAPEXEC_HIST_KEY + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (!data || !data.length || !data[0].valor) return;
+      var remoto = JSON.parse(data[0].valor) || {};
+      var local = _gvCapExecHistLer();
+      var h = Object.assign({}, local, remoto);
+      var hojeISO = _gvExtratoDataISO(0);
+      if (local[hojeISO]) h[hojeISO] = local[hojeISO];
+      _gvCapExecHistGravarLocal(h);
+      if (typeof _gvVisaoAtual !== 'undefined' && _gvVisaoAtual === 'capexec') {
+        var tab = document.getElementById('tab-gestaoVista-content');
+        if (tab && tab.classList.contains('active') && typeof gvCapExecRenderizar === 'function') gvCapExecRenderizar();
+      }
+    }).catch(function(){});
+  } catch (e) {}
+}
+
+// ── Navegação de dia / sub-visão ──
+function _gvCxDataAtual() { return _gvCxDataISO || _gvExtratoDataISO(0); }
+
+function _gvCxISOParaData(iso) {
+  var p = String(iso || '').split('-');
+  return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+}
+
+function _gvCxISOParaBR(iso) {
+  var p = String(iso || '').split('-');
+  return p.length === 3 ? (p[2] + '/' + p[1] + '/' + p[0]) : iso;
+}
+
+function gvCapExecTrocarVisao(v) { _gvCxVisao = v; gvCapExecRenderizar(); }
+
+function gvCapExecIrParaData(iso) {
+  if (!iso) return;
+  _gvCxDataISO = (iso === _gvExtratoDataISO(0)) ? null : iso;
+  gvCapExecRenderizar();
+}
+
+function gvCapExecDeslocarDia(delta) {
+  var d = _gvCxISOParaData(_gvCxDataAtual());
+  d.setDate(d.getDate() + delta);
+  var iso = _gvDataISO(d);
+  if (iso > _gvExtratoDataISO(0)) return;   // não navega para o futuro
+  gvCapExecIrParaData(iso);
+}
+
+// ── Componentes visuais ──
+function _gvCxKg(v) { return Math.round(v || 0).toLocaleString('pt-BR') + ' kg'; }
+
+function _gvCxCor(pct) {
+  return pct >= 90 ? '#3fb950' : (pct >= 60 ? '#f0b429' : '#ef4444');
+}
+
+// Normaliza um registro (histórico ou recém-coletado) para uso na tela.
+function _gvCxNumerosDe(reg) {
+  var t = (reg && reg.turnos) || {};
+  var linhas = GV_CX_TURNOS.map(function(nome) {
+    var r = t[nome] || {};
+    var capIn = r.capIn || 0, capOut = r.capOut || 0;
+    var execIn = r.execIn || 0, execOut = r.execOut || 0;
+    var cap = capIn + capOut, exec = execIn + execOut;
+    return {
+      turno: nome, capIn: capIn, capOut: capOut, cap: cap,
+      execIn: execIn, execOut: execOut, exec: exec,
+      pct: cap ? (exec / cap * 100) : 0,
+      saldo: cap - exec
+    };
+  });
+  var tot = { turno: 'Total', capIn: 0, capOut: 0, cap: 0, execIn: 0, execOut: 0, exec: 0 };
+  linhas.forEach(function(l) {
+    tot.capIn += l.capIn; tot.capOut += l.capOut; tot.cap += l.cap;
+    tot.execIn += l.execIn; tot.execOut += l.execOut; tot.exec += l.exec;
+  });
+  tot.pct = tot.cap ? (tot.exec / tot.cap * 100) : 0;
+  tot.saldo = tot.cap - tot.exec;
+  return { linhas: linhas, total: tot };
+}
+
+function _gvCxMini(rotulo, valor, cor) {
+  return '<div style="background:#0f0f0f;border:1px solid #242424;border-radius:6px;padding:8px 10px">' +
+    '<div style="font-size:9.5px;color:#8a8a8a;text-transform:uppercase;letter-spacing:.04em">' + rotulo + '</div>' +
+    '<div style="font-size:13px;font-weight:700;color:' + (cor || '#e5e5e5') + ';margin-top:2px">' + valor + '</div>' +
+  '</div>';
+}
+
+function _gvCxCardTurno(l) {
+  // Duas leituras diferentes de propósito: o ponteiro do relógio não tem para
+  // onde ir além de 100%, mas o SELO tem de mostrar o número real. Turno que
+  // executou acima da capacidade (saldo negativo) apareceria como "100%" e a
+  // superação sumiria justamente de quem precisa vê-la.
+  var pctReal = Math.round(l.pct);
+  var pct = Math.max(0, Math.min(100, pctReal));
+  var cor = _gvCxCor(pctReal);
+  var semCap = (l.cap <= 0);
+  return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:8px;padding:16px 18px;box-sizing:border-box">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+      '<span style="font-size:14px;font-weight:700;color:#fff">' + l.turno + '</span>' +
+      '<span style="font-size:10.5px;font-weight:800;color:' + cor + ';border:1px solid ' + cor + ';border-radius:4px;padding:2px 8px">' + pctReal + '%</span>' +
+    '</div>' +
+    _gvGaugeSvg(pct, cor, 'Executado ÷ Capacidade', pctReal + '%') +
+    (semCap ? '<div style="font-size:10px;color:#f0b429;text-align:center;margin-top:4px">Sem HC lançado na Lista de Presença</div>' : '') +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">' +
+      _gvCxMini('Capacidade', _gvCxKg(l.cap), '#ffffff') +
+      _gvCxMini('Executado', _gvCxKg(l.exec), cor) +
+      _gvCxMini('Exec. IN', _gvCxKg(l.execIn), '#3fb950') +
+      _gvCxMini('Exec. OUT', _gvCxKg(l.execOut), '#f0b429') +
+    '</div>' +
+  '</div>';
+}
+
+function _gvCxTabela(n) {
+  var thTxt  = 'padding:8px 14px;text-align:left;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
+  var thNum  = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
+  var tdNum  = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#e5e5e5;white-space:nowrap';
+  var tdTot  = 'padding:10px 14px;text-align:right;font-size:13px;font-weight:800;color:#fff;white-space:nowrap;border-top:2px solid #3a3a3a;background:#1b1b1b';
+  var fmt = function(v) { return Math.round(v || 0).toLocaleString('pt-BR'); };
+
+  var corpo = n.linhas.map(function(l, i) {
+    var zebra = (i % 2 === 0) ? '#121212' : '#161616';
+    var pct = Math.round(l.pct);
+    return '<tr style="background:' + zebra + '">' +
+      '<td style="padding:9px 14px;font-size:12.5px;font-weight:600;color:#d0d0d0;white-space:nowrap;border-right:1px solid #232323">' + l.turno + '</td>' +
+      '<td style="' + tdNum + '">' + fmt(l.cap) + '</td>' +
+      '<td style="' + tdNum + ';color:#4ade80">' + fmt(l.execIn) + '</td>' +
+      '<td style="' + tdNum + ';color:#f0b429">' + fmt(l.execOut) + '</td>' +
+      '<td style="' + tdNum + ';font-weight:700">' + fmt(l.exec) + '</td>' +
+      '<td style="' + tdNum + ';color:' + (l.saldo < 0 ? '#ef4444' : '#9a9a9a') + '">' + fmt(l.saldo) + '</td>' +
+      '<td style="' + tdNum + ';color:' + _gvCxCor(pct) + ';font-weight:800">' + pct + '%</td>' +
+    '</tr>';
+  }).join('');
+
+  var t = n.total;
+  var pctT = Math.round(t.pct);
+  var total =
+    '<tr>' +
+      '<td style="padding:10px 14px;font-size:13px;font-weight:800;color:#fff;border-top:2px solid #3a3a3a;background:#1b1b1b;border-right:1px solid #232323">Total</td>' +
+      '<td style="' + tdTot + '">' + fmt(t.cap) + '</td>' +
+      '<td style="' + tdTot + ';color:#4ade80">' + fmt(t.execIn) + '</td>' +
+      '<td style="' + tdTot + ';color:#f0b429">' + fmt(t.execOut) + '</td>' +
+      '<td style="' + tdTot + '">' + fmt(t.exec) + '</td>' +
+      '<td style="' + tdTot + ';color:' + (t.saldo < 0 ? '#ef4444' : '#9a9a9a') + '">' + fmt(t.saldo) + '</td>' +
+      '<td style="' + tdTot + ';color:' + _gvCxCor(pctT) + '">' + pctT + '%</td>' +
+    '</tr>';
+
+  return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 18px;box-sizing:border-box">' +
+    '<div style="font-size:12px;font-weight:800;color:#e5e5e5;margin-bottom:2px">Capacidade x Executado — por turno</div>' +
+    '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">KG · Capacidade: HC Ajudante + Terceiros (Lista de Presença) · Executado: Descarga IN + Carregamento OUT</div>' +
+    '<div style="overflow-x:auto">' +
+      '<table style="width:100%;border-collapse:collapse;min-width:760px">' +
+        '<thead>' +
+          '<tr><th colspan="7" style="padding:7px 14px;text-align:center;font-size:10.5px;font-weight:800;color:#e8b339;text-transform:uppercase;letter-spacing:.1em;background:#000;border-bottom:1px solid #2b2b2b">Capacidade x Executado (kg)</th></tr>' +
+          '<tr>' +
+            '<th style="' + thTxt + '">Turno</th>' +
+            '<th style="' + thNum + '">Capacidade</th>' +
+            '<th style="' + thNum + '">Exec. IN</th>' +
+            '<th style="' + thNum + '">Exec. OUT</th>' +
+            '<th style="' + thNum + '">Executado</th>' +
+            '<th style="' + thNum + '">Saldo</th>' +
+            '<th style="' + thNum + '">% Executado</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' + corpo + total + '</tbody>' +
+      '</table>' +
+    '</div>' +
+  '</div>';
+}
+
+function _gvCxConsolidado(n) {
+  var t = n.total;
+  var pctReal = Math.round(t.pct);
+  var pct = Math.max(0, Math.min(100, pctReal));   // só o ponteiro é limitado
+  var cor = _gvCxCor(pctReal);
+  var pctIn  = t.cap ? Math.round(t.execIn  / t.cap * 100) : 0;
+  var pctOut = t.cap ? Math.round(t.execOut / t.cap * 100) : 0;
+
+  var relogio =
+    '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:8px;padding:22px 20px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center">' +
+      '<div style="font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:.04em;margin-bottom:14px;text-align:center">% Executado sobre a Capacidade — Dia consolidado</div>' +
+      _gvGaugeSvg(pct, cor, 'Executado ÷ Capacidade', pctReal + '%') +
+    '</div>';
+
+  var detalhe =
+    '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:8px;padding:22px 24px;box-sizing:border-box">' +
+      '<div style="font-size:12px;font-weight:800;color:#e5e5e5;margin-bottom:16px">Consolidado do dia — 1º + 2º + 3º Turno</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        _gvCxMini('Capacidade total', _gvCxKg(t.cap), '#ffffff') +
+        _gvCxMini('Executado total', _gvCxKg(t.exec), cor) +
+        _gvCxMini('Executado IN (Descarga)', _gvCxKg(t.execIn), '#3fb950') +
+        _gvCxMini('Executado OUT (Carregamento)', _gvCxKg(t.execOut), '#f0b429') +
+        _gvCxMini('Capacidade Inbound', _gvCxKg(t.capIn), '#9a9a9a') +
+        _gvCxMini('Capacidade Outbound', _gvCxKg(t.capOut), '#9a9a9a') +
+      '</div>' +
+      '<div style="font-size:10px;color:#8a8a8a;text-transform:uppercase;letter-spacing:.05em;margin-top:16px">Composição da capacidade utilizada — verde: IN · âmbar: OUT · cinza: ociosa</div>' +
+      _gvExtratoBarra(pctIn, pctOut) +
+      '<div style="display:flex;gap:18px;margin-top:12px;font-size:11px;color:#8a8a8a">' +
+        '<span>Saldo de capacidade: <b style="color:' + (t.saldo < 0 ? '#ef4444' : '#e5e5e5') + '">' + _gvCxKg(t.saldo) + '</b></span>' +
+        '<span>Turnos com HC lançado: <b style="color:#e5e5e5">' + n.linhas.filter(function(l){ return l.cap > 0; }).length + ' de 3</b></span>' +
+      '</div>' +
+    '</div>';
+
+  return '<div style="display:grid;grid-template-columns:340px 1fr;gap:16px;margin-bottom:16px;align-items:stretch">' + relogio + detalhe + '</div>' +
+    _gvCxTabela(n);
+}
+
+function gvCapExecRenderizar() {
+  var navVisao = document.getElementById('cx-nav-visao');
+  var navDia = document.getElementById('cx-nav-dia');
+  var topo = document.getElementById('cx-cards-topo');
+  var conteudo = document.getElementById('cx-conteudo');
+  if (!topo || !conteudo) return;
+
+  // Sempre arquiva o dia corrente, mesmo com a tela exibindo um dia anterior —
+  // é isso que faz o histórico existir amanhã.
+  var hojeISO = _gvExtratoDataISO(0);
+  var hojeDados = _gvCapExecColeta();
+  _gvCapExecHistSalvar(hojeDados);
+
+  var dataISO = _gvCxDataAtual();
+  var reg = (dataISO === hojeISO) ? hojeDados : _gvCapExecHistLer()[dataISO];
+  var aviso = '';
+  if (!reg) {
+    aviso = 'Sem histórico salvo para ' + _gvCxISOParaBR(dataISO) + '. O histórico começa no dia em que esta tela passou a ser usada.';
+    reg = { data: dataISO, turnos: {} };
+  }
+  var n = _gvCxNumerosDe(reg);
+
+  if (navVisao) {
+    var btnV = function(v, rotulo) {
+      var ativo = (_gvCxVisao === v);
+      return '<button onclick="gvCapExecTrocarVisao(\'' + v + '\')" style="padding:7px 18px;border-radius:4px;' +
+        'border:1px solid ' + (ativo ? '#e8e8e8' : '#2f2f2f') + ';background:' + (ativo ? '#e8e8e8' : '#1a1a1a') + ';' +
+        'color:' + (ativo ? '#111' : '#9a9a9a') + ';font-size:12px;font-weight:700;cursor:pointer;font-family:\'Poppins\',sans-serif">' + rotulo + '</button>';
+    };
+    navVisao.innerHTML = btnV('turnos', 'Por Turno') + btnV('consolidado', 'Consolidado');
+  }
+
+  if (navDia) {
+    var estiloBtn = 'padding:7px 12px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:\'Poppins\',sans-serif';
+    var noFuturo = (dataISO >= hojeISO);
+    navDia.innerHTML =
+      '<button onclick="gvCapExecDeslocarDia(-1)" style="' + estiloBtn + '" title="Dia anterior">◀</button>' +
+      '<input type="date" value="' + dataISO + '" max="' + hojeISO + '" onchange="gvCapExecIrParaData(this.value)" ' +
+        'style="background:#1a1a1a;border:1px solid #2f2f2f;border-radius:4px;color:#e5e5e5;padding:6px 10px;font-size:12px;font-family:\'Poppins\',sans-serif;color-scheme:dark">' +
+      '<button onclick="gvCapExecDeslocarDia(1)" style="' + estiloBtn + (noFuturo ? ';opacity:.35;cursor:default' : '') + '" title="Próximo dia">▶</button>' +
+      '<button onclick="gvCapExecIrParaData(\'' + hojeISO + '\')" style="' + estiloBtn + (dataISO === hojeISO ? ';border-color:#e8e8e8;background:#e8e8e8;color:#111' : '') + '">Hoje</button>';
+  }
+
+  var pctDia = Math.round(n.total.pct);
+  topo.innerHTML =
+    _fpKpiCard('Capacidade do Dia', Math.round(n.total.cap), '#ffffff', ' kg', 'HC Ajudante + Terceiros (Lista de Presença)') +
+    _fpKpiCard('Executado do Dia', Math.round(n.total.exec), '#3fb950', ' kg', 'Descarga (IN) + Carregamento (OUT)') +
+    _fpKpiCard('Saldo de Capacidade', Math.round(n.total.saldo), n.total.saldo < 0 ? '#ef4444' : '#f0b429', ' kg', 'Capacidade − Executado') +
+    _gvDonutEficienciaCard(pctDia, _gvCxISOParaBR(dataISO), '% Executado do Dia', _gvCxCor(pctDia));
+
+  var corpo = (_gvCxVisao === 'consolidado')
+    ? _gvCxConsolidado(n)
+    : ('<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px">' +
+        n.linhas.map(_gvCxCardTurno).join('') +
+      '</div>' + _gvCxTabela(n));
+
+  conteudo.innerHTML =
+    (aviso ? '<div style="font-size:11px;color:#f0b429;margin-bottom:12px">' + aviso + '</div>' : '') + corpo;
+}
+
+// Arquivamento periódico: o dia entra no histórico mesmo que ninguém abra esta
+// tela. O envio ao Supabase continua sujeito às duas travas de _gvCapExecHistSalvar
+// (só quando muda e no máximo a cada 10 min).
+setInterval(function() {
+  try {
+    if (typeof _gvCapExecColeta !== 'function') return;
+    _gvCapExecHistSalvar(_gvCapExecColeta());
+  } catch (e) {}
+}, 120000);   // V190 — era 300000 (5 min); alinhado ao polling do relatório
 
 function gestaoVistaFiltrarTurno(turno) {
   _gvFiltroTurno = (_gvFiltroTurno === turno) ? null : turno; // clica de novo no mesmo = limpa
@@ -19898,15 +20381,26 @@ function gestaoVistaRenderizar() {
   var containerInout = document.getElementById('gv-inout-container');
   var containerFp = document.getElementById('gv-fp-container');
   var containerExt = document.getElementById('gv-extrato-container');
+  var containerCx = document.getElementById('gv-capexec-container');
 
   if (_gvVisaoAtual === 'extrato') {
     if (containerInout) containerInout.style.display = 'none';
     if (containerFp) containerFp.style.display = 'none';
+    if (containerCx) containerCx.style.display = 'none';
     if (containerExt) containerExt.style.display = 'block';
     gvExtratoRenderizar();
     return;
   }
   if (containerExt) containerExt.style.display = 'none';
+
+  if (_gvVisaoAtual === 'capexec') {
+    if (containerInout) containerInout.style.display = 'none';
+    if (containerFp) containerFp.style.display = 'none';
+    if (containerCx) containerCx.style.display = 'block';
+    if (typeof gvCapExecRenderizar === 'function') gvCapExecRenderizar();
+    return;
+  }
+  if (containerCx) containerCx.style.display = 'none';
 
   if (_gvVisaoAtual === 'fp') {
     if (containerInout) containerInout.style.display = 'none';
