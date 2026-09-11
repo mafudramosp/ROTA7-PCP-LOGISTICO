@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V190--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V192--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6239,7 +6239,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V190';
+var ROTA7_VERSAO = 'V192';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -18231,6 +18231,26 @@ function _gvJanelaOperacionalAtual(agoraReferencia) {
   return { agora: agora, dataRef: dataRef, inicio: inicio, fim: fim, fimProgramado: fimProgramado };
 }
 
+// V192 — REGRA DE TURNO, fonte única.
+//
+// Dentro do dia operacional (23:01 → 23:01) só contam os turnos que já
+// COMEÇARAM. A ordem importa: o dia operacional abre no 3º Turno, depois 1º,
+// depois 2º — por isso, de manhã, o 3º Turno já tem número e o 2º ainda não.
+//   1381 = 23:01 · 399 = 06:39 · 945 = 15:45
+//
+// Este trecho estava duplicado, palavra por palavra, dentro de _gvFluxoFilaIN e
+// de _gvFluxoFilaOUT. As duas passam a chamar daqui. Foi justamente a
+// divergência entre cópias destes cortes que gerou o defeito corrigido na V177;
+// uma terceira cópia seria a próxima chance de o mesmo problema voltar.
+function _gvTurnosDecorridos(agoraReferencia) {
+  var agora = (agoraReferencia instanceof Date && !isNaN(agoraReferencia.getTime()))
+    ? agoraReferencia : new Date();
+  var minutos = agora.getHours() * 60 + agora.getMinutes();
+  if (minutos >= 1381 || minutos <= 399) return ['3º Turno'];
+  if (minutos <= 945) return ['3º Turno', '1º Turno'];
+  return ['3º Turno', '1º Turno', '2º Turno'];
+}
+
 function _gvDataDentroDaJanela(valor, janela) {
   var d = valor instanceof Date ? valor : new Date(valor);
   if (!janela || isNaN(d.getTime())) return false;
@@ -18580,13 +18600,22 @@ function _gvCapExecColeta() {
   var dataISO = _gvExtratoDataISO(0);
   var fIn  = (typeof _gvFluxoFilaIN  === 'function') ? _gvFluxoFilaIN()  : null;
   var fOut = (typeof _gvFluxoFilaOUT === 'function') ? _gvFluxoFilaOUT() : null;
+  // V192 — só entram os turnos já iniciados, igual aos painéis Descarga (IN) e
+  // Carregamento (OUT). _gvFluxoFilaIN/OUT devolvem as três linhas sempre, mas
+  // só somam no Total os turnos decorridos; quem lesse linha a linha — como esta
+  // tela fazia — capturava execução atribuída a turno que ainda nem começou.
+  // Turno não iniciado entra zerado e marcado, não some da tela.
+  var decorridos = (typeof _gvTurnosDecorridos === 'function')
+    ? _gvTurnosDecorridos() : GV_CX_TURNOS.slice();
   var turnos = {};
   GV_CX_TURNOS.forEach(function(t) {
+    var iniciado = decorridos.indexOf(t) >= 0;
     turnos[t] = {
-      capIn:   Math.round(_gvCapacidadeHCTurno(dataISO, t, 'inbound')  * 1000),
-      capOut:  Math.round(_gvCapacidadeHCTurno(dataISO, t, 'outbound') * 1000),
-      execIn:  Math.round(_gvCxExecDoTurno(fIn,  t)),
-      execOut: Math.round(_gvCxExecDoTurno(fOut, t))
+      iniciado: iniciado,
+      capIn:   iniciado ? Math.round(_gvCapacidadeHCTurno(dataISO, t, 'inbound')  * 1000) : 0,
+      capOut:  iniciado ? Math.round(_gvCapacidadeHCTurno(dataISO, t, 'outbound') * 1000) : 0,
+      execIn:  iniciado ? Math.round(_gvCxExecDoTurno(fIn,  t)) : 0,
+      execOut: iniciado ? Math.round(_gvCxExecDoTurno(fOut, t)) : 0
     };
   });
   return { data: dataISO, turnos: turnos, ts: new Date().toISOString() };
@@ -18710,6 +18739,31 @@ function gvCapExecDeslocarDia(delta) {
 // ── Componentes visuais ──
 function _gvCxKg(v) { return Math.round(v || 0).toLocaleString('pt-BR') + ' kg'; }
 
+// V191 — SALDO DE CAPACIDADE: passar da capacidade não é déficit.
+//
+// Antes o saldo era sempre "Capacidade − Executado", então um turno que fez
+// mais do que a capacidade prevista aparecia como "-125.000" em vermelho — a
+// mesma linguagem visual de um problema, para o que na verdade é desempenho
+// acima do previsto. Agora o excedente aparece como "+125.000" em verde, e o
+// que ainda falta para atingir a capacidade continua em âmbar.
+//
+// Fonte única: todo lugar que mostra saldo (card do topo, coluna da tabela,
+// linha do consolidado) passa por aqui, para não divergirem entre si.
+function _gvCxSaldoInfo(cap, exec) {
+  var dif = Math.round((exec || 0) - (cap || 0));
+  if (dif > 0) {
+    return { txt: '+ ' + dif.toLocaleString('pt-BR'), cor: '#3fb950', acima: true };
+  }
+  // Math.abs e não -dif: em JavaScript, -0 existe e (-0).toLocaleString() devolve
+  // "-0". Executado batendo a capacidade em cheio mostraria "-0 kg" na tela.
+  var falta = Math.abs(dif);
+  return {
+    txt: falta.toLocaleString('pt-BR'),
+    cor: (falta === 0 ? '#9a9a9a' : '#f0b429'),
+    acima: false
+  };
+}
+
 function _gvCxCor(pct) {
   return pct >= 90 ? '#3fb950' : (pct >= 60 ? '#f0b429' : '#ef4444');
 }
@@ -18719,11 +18773,13 @@ function _gvCxNumerosDe(reg) {
   var t = (reg && reg.turnos) || {};
   var linhas = GV_CX_TURNOS.map(function(nome) {
     var r = t[nome] || {};
+    // Registros gravados antes da V192 não têm o campo — valem como iniciados.
+    var iniciado = (r.iniciado === undefined) ? true : !!r.iniciado;
     var capIn = r.capIn || 0, capOut = r.capOut || 0;
     var execIn = r.execIn || 0, execOut = r.execOut || 0;
     var cap = capIn + capOut, exec = execIn + execOut;
     return {
-      turno: nome, capIn: capIn, capOut: capOut, cap: cap,
+      turno: nome, iniciado: iniciado, capIn: capIn, capOut: capOut, cap: cap,
       execIn: execIn, execOut: execOut, exec: exec,
       pct: cap ? (exec / cap * 100) : 0,
       saldo: cap - exec
@@ -18761,7 +18817,9 @@ function _gvCxCardTurno(l) {
       '<span style="font-size:10.5px;font-weight:800;color:' + cor + ';border:1px solid ' + cor + ';border-radius:4px;padding:2px 8px">' + pctReal + '%</span>' +
     '</div>' +
     _gvGaugeSvg(pct, cor, 'Executado ÷ Capacidade', pctReal + '%') +
-    (semCap ? '<div style="font-size:10px;color:#f0b429;text-align:center;margin-top:4px">Sem HC lançado na Lista de Presença</div>' : '') +
+    (!l.iniciado
+      ? '<div style="font-size:10px;color:#8a8a8a;text-align:center;margin-top:4px">Turno ainda não iniciado</div>'
+      : (semCap ? '<div style="font-size:10px;color:#f0b429;text-align:center;margin-top:4px">Sem HC lançado na Lista de Presença</div>' : '')) +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">' +
       _gvCxMini('Capacidade', _gvCxKg(l.cap), '#ffffff') +
       _gvCxMini('Executado', _gvCxKg(l.exec), cor) +
@@ -18782,13 +18840,14 @@ function _gvCxTabela(n) {
     var zebra = (i % 2 === 0) ? '#121212' : '#161616';
     var pct = Math.round(l.pct);
     return '<tr style="background:' + zebra + '">' +
-      '<td style="padding:9px 14px;font-size:12.5px;font-weight:600;color:#d0d0d0;white-space:nowrap;border-right:1px solid #232323">' + l.turno + '</td>' +
+      '<td style="padding:9px 14px;font-size:12.5px;font-weight:600;color:' + (l.iniciado ? '#d0d0d0' : '#6b6b6b') + ';white-space:nowrap;border-right:1px solid #232323">' + l.turno +
+        (l.iniciado ? '' : '<span style="font-size:10px;color:#6b6b6b;font-weight:400"> · não iniciado</span>') + '</td>' +
       '<td style="' + tdNum + '">' + fmt(l.cap) + '</td>' +
       '<td style="' + tdNum + ';color:#4ade80">' + fmt(l.execIn) + '</td>' +
       '<td style="' + tdNum + ';color:#f0b429">' + fmt(l.execOut) + '</td>' +
       '<td style="' + tdNum + ';font-weight:700">' + fmt(l.exec) + '</td>' +
-      '<td style="' + tdNum + ';color:' + (l.saldo < 0 ? '#ef4444' : '#9a9a9a') + '">' + fmt(l.saldo) + '</td>' +
-      '<td style="' + tdNum + ';color:' + _gvCxCor(pct) + ';font-weight:800">' + pct + '%</td>' +
+      '<td style="' + tdNum + ';color:' + _gvCxSaldoInfo(l.cap, l.exec).cor + '">' + _gvCxSaldoInfo(l.cap, l.exec).txt + '</td>' +
+      '<td style="' + tdNum + ';color:' + (l.iniciado ? _gvCxCor(pct) : '#6b6b6b') + ';font-weight:800">' + (l.iniciado ? pct + '%' : '—') + '</td>' +
     '</tr>';
   }).join('');
 
@@ -18801,13 +18860,13 @@ function _gvCxTabela(n) {
       '<td style="' + tdTot + ';color:#4ade80">' + fmt(t.execIn) + '</td>' +
       '<td style="' + tdTot + ';color:#f0b429">' + fmt(t.execOut) + '</td>' +
       '<td style="' + tdTot + '">' + fmt(t.exec) + '</td>' +
-      '<td style="' + tdTot + ';color:' + (t.saldo < 0 ? '#ef4444' : '#9a9a9a') + '">' + fmt(t.saldo) + '</td>' +
+      '<td style="' + tdTot + ';color:' + _gvCxSaldoInfo(t.cap, t.exec).cor + '">' + _gvCxSaldoInfo(t.cap, t.exec).txt + '</td>' +
       '<td style="' + tdTot + ';color:' + _gvCxCor(pctT) + '">' + pctT + '%</td>' +
     '</tr>';
 
   return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 18px;box-sizing:border-box">' +
     '<div style="font-size:12px;font-weight:800;color:#e5e5e5;margin-bottom:2px">Capacidade x Executado — por turno</div>' +
-    '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">KG · Capacidade: HC Ajudante + Terceiros (Lista de Presença) · Executado: Descarga IN + Carregamento OUT</div>' +
+    '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">KG · Capacidade: HC Ajudante + Terceiros (Lista de Presença) · Executado: Descarga IN + Carregamento OUT · Só turnos já iniciados (dia operacional 23:01→23:01, começa no 3º Turno)</div>' +
     '<div style="overflow-x:auto">' +
       '<table style="width:100%;border-collapse:collapse;min-width:760px">' +
         '<thead>' +
@@ -18818,7 +18877,7 @@ function _gvCxTabela(n) {
             '<th style="' + thNum + '">Exec. IN</th>' +
             '<th style="' + thNum + '">Exec. OUT</th>' +
             '<th style="' + thNum + '">Executado</th>' +
-            '<th style="' + thNum + '">Saldo</th>' +
+            '<th style="' + thNum + '">Saldo (+ acima)</th>' +
             '<th style="' + thNum + '">% Executado</th>' +
           '</tr>' +
         '</thead>' +
@@ -18856,8 +18915,10 @@ function _gvCxConsolidado(n) {
       '<div style="font-size:10px;color:#8a8a8a;text-transform:uppercase;letter-spacing:.05em;margin-top:16px">Composição da capacidade utilizada — verde: IN · âmbar: OUT · cinza: ociosa</div>' +
       _gvExtratoBarra(pctIn, pctOut) +
       '<div style="display:flex;gap:18px;margin-top:12px;font-size:11px;color:#8a8a8a">' +
-        '<span>Saldo de capacidade: <b style="color:' + (t.saldo < 0 ? '#ef4444' : '#e5e5e5') + '">' + _gvCxKg(t.saldo) + '</b></span>' +
-        '<span>Turnos com HC lançado: <b style="color:#e5e5e5">' + n.linhas.filter(function(l){ return l.cap > 0; }).length + ' de 3</b></span>' +
+        '<span>' + (_gvCxSaldoInfo(t.cap, t.exec).acima ? 'Executado acima da capacidade: ' : 'Saldo de capacidade: ') +
+          '<b style="color:' + _gvCxSaldoInfo(t.cap, t.exec).cor + '">' + _gvCxSaldoInfo(t.cap, t.exec).txt + ' kg</b></span>' +
+        '<span>Turnos já iniciados: <b style="color:#e5e5e5">' + n.linhas.filter(function(l){ return l.iniciado; }).length + ' de 3</b></span>' +
+        '<span>Com HC lançado: <b style="color:#e5e5e5">' + n.linhas.filter(function(l){ return l.cap > 0; }).length + '</b></span>' +
       '</div>' +
     '</div>';
 
@@ -18912,7 +18973,11 @@ function gvCapExecRenderizar() {
   topo.innerHTML =
     _fpKpiCard('Capacidade do Dia', Math.round(n.total.cap), '#ffffff', ' kg', 'HC Ajudante + Terceiros (Lista de Presença)') +
     _fpKpiCard('Executado do Dia', Math.round(n.total.exec), '#3fb950', ' kg', 'Descarga (IN) + Carregamento (OUT)') +
-    _fpKpiCard('Saldo de Capacidade', Math.round(n.total.saldo), n.total.saldo < 0 ? '#ef4444' : '#f0b429', ' kg', 'Capacidade − Executado') +
+    (function() {
+      var s = _gvCxSaldoInfo(n.total.cap, n.total.exec);
+      return _fpKpiCard('Saldo de Capacidade', s.txt, s.cor, ' kg',
+        s.acima ? 'Executado acima da capacidade' : 'Capacidade − Executado');
+    })() +
     _gvDonutEficienciaCard(pctDia, _gvCxISOParaBR(dataISO), '% Executado do Dia', _gvCxCor(pctDia));
 
   var corpo = (_gvCxVisao === 'consolidado')
@@ -20143,9 +20208,7 @@ function _gvFluxoFilaOUT() {
   // pesoExecutadoTurno ficava null e o card "Executado" caía no total do DIA em vez
   // de zerar na virada. Era o card que não zerava na passagem de turno.
   //   1381 = 23:01 · 399 = 06:39 · 945 = 15:45
-  var ordemCascata = (minutosAgora >= 1381 || minutosAgora <= 399)
-    ? ['3º Turno']
-    : (minutosAgora <= 945 ? ['3º Turno', '1º Turno'] : ['3º Turno', '1º Turno', '2º Turno']);
+  var ordemCascata = _gvTurnosDecorridos(agora);   // V192 — regra única
   var linhasPorTurno = {};
   ordemCascata.forEach(function(t) {
     var filaPropriaT = filaPropriaPorTurno[t] || 0;
@@ -20339,9 +20402,7 @@ function _gvFluxoFilaIN() {
   // pesoExecutadoTurno ficava null e o card "Executado" caía no total do DIA em vez
   // de zerar na virada. Era o card que não zerava na passagem de turno.
   //   1381 = 23:01 · 399 = 06:39 · 945 = 15:45
-  var ordemCascata = (minutosAgora >= 1381 || minutosAgora <= 399)
-    ? ['3º Turno']
-    : (minutosAgora <= 945 ? ['3º Turno', '1º Turno'] : ['3º Turno', '1º Turno', '2º Turno']);
+  var ordemCascata = _gvTurnosDecorridos(agora);   // V192 — regra única
   var processados = {};
   ordemCascata.forEach(function(t) {
     var l = linhas[t];
