@@ -5097,6 +5097,10 @@ function _gvTurnoCustomOut(horaStr) {
   if (isNaN(h)) return null;
   if (isNaN(m)) m = 0;
   var minutos = h * 60 + m;
+  // Sábado/domingo usam a régua própria de fim de semana (ver _gvTurnoFimDeSemana,
+  // definida junto de _gvTurnoDoHorario) — fonte única para IN e OUT não divergirem.
+  var _turnoFDS = (typeof _gvTurnoFimDeSemana === 'function') ? _gvTurnoFimDeSemana(minutos, new Date().getDay()) : null;
+  if (_turnoFDS) return _turnoFDS;
   if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
   if (minutos <= 945) return '1º Turno';    // 06:40–15:45
   if (minutos <= 1380) return '2º Turno';   // 15:46–23:00
@@ -18146,6 +18150,41 @@ function _gvGaugeSvg(pct, corAtivo, label, valorTexto) {
   '</svg>';
 }
 
+// V-nova (12/09/2026) — REGRA DE TURNO PARA SÁBADO E DOMINGO, fonte única
+// para o Painel Executivo (IN via _gvTurnoDoHorario abaixo e OUT via
+// _gvTurnoCustomOut). Nos fins de semana os cortes normais V168 não valem;
+// esta régua entra no lugar deles:
+//
+//   Sábado:  06:01–13:00 = 1º Turno · 13:01–19:59 = 2º Turno
+//            (confirmado com o Patrick: a janela 19:01–19:59, entre o fim
+//            do 2º Turno às 19:00 e o início do 3º às 20:00, conta como
+//            2º Turno — sem isso sobrariam minutos sem turno definido)
+//   Domingo: o dia inteiro (06:00–19:59) é OU 1º Turno OU 2º Turno — nunca
+//            os dois — alternando de domingo em domingo. 13/09/2026 é o
+//            primeiro domingo do 1º Turno (ver GV_DOMINGO_ANCORA_1TURNO).
+//   Sábado e domingo: 3º Turno = 20:00–05:59, cruza a meia-noite (o minuto
+//            06:00 cai dentro do 3º Turno, para não sobrar sem classificar).
+//
+// De segunda a sexta esta função devolve null e quem chamou segue com a
+// régua de dia de semana de sempre (inalterada).
+var GV_DOMINGO_ANCORA_1TURNO = new Date(2026, 8, 13); // 13/09/2026 = 1º Turno
+
+function _gvDomingoTurnoVigente(dataRef) {
+  var hoje = (dataRef instanceof Date && !isNaN(dataRef.getTime())) ? dataRef : new Date();
+  var d0 = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  var a0 = new Date(GV_DOMINGO_ANCORA_1TURNO.getFullYear(), GV_DOMINGO_ANCORA_1TURNO.getMonth(), GV_DOMINGO_ANCORA_1TURNO.getDate());
+  var diffSemanas = Math.round((d0.getTime() - a0.getTime()) / (7 * 86400000));
+  return (diffSemanas % 2 === 0) ? '1º Turno' : '2º Turno';
+}
+
+function _gvTurnoFimDeSemana(minutos, diaSemana, dataRef) {
+  if (diaSemana !== 0 && diaSemana !== 6) return null; // dia de semana normal: não se aplica
+  if (minutos >= 1200 || minutos < 361) return '3º Turno'; // 20:00–05:59 (+ o minuto 06:00)
+  if (diaSemana === 0) return _gvDomingoTurnoVigente(dataRef); // domingo: 06:00–19:59 inteiro
+  if (minutos <= 780) return '1º Turno';  // sábado 06:01–13:00
+  return '2º Turno';                       // sábado 13:01–19:59
+}
+
 function _gvTurnoDoHorario(horaStr) {
   // Corte operacional do Painel Executivo — Descarga (IN), V168:
   // 1º 06:40–15:45 · 2º 15:46–23:00 · 3º 23:01–06:39.
@@ -18164,6 +18203,8 @@ function _gvTurnoDoHorario(horaStr) {
   if (isNaN(h)) return null;
   if (isNaN(m)) m = 0;
   var minutos = h * 60 + m;
+  var _turnoFDS = _gvTurnoFimDeSemana(minutos, new Date().getDay());
+  if (_turnoFDS) return _turnoFDS;
   if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
   if (minutos <= 945) return '1º Turno';    // 06:40–15:45
   if (minutos <= 1380) return '2º Turno';   // 15:46–23:00
