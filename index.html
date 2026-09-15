@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V192--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V193--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6239,7 +6239,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V192';
+var ROTA7_VERSAO = 'V193';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -7022,6 +7022,10 @@ function _sbResincronizarFontesPainel() {
     // reforço, uma mensagem perdida do Realtime deixava a máquina desse usuário
     // divergindo das demais indefinidamente, sem nenhum mecanismo de recuperação.
     if (typeof _descAcompListaCarregarSupabase === 'function') _descAcompListaCarregarSupabase();
+    // V193 — Lista de Presença (HC): a capacidade do Extrato do Dia sai dela e,
+    // até aqui, só era lida no boot. Depois da primeira carga completa o ciclo
+    // pede só as células alteradas (marca d'água).
+    if (typeof lpCarregarSupabase === 'function' && _lpCargaFeita) lpCarregarSupabase();
   } catch (e) {}
 }
 
@@ -7071,12 +7075,22 @@ function sbInicializarRealtime() {
           // Um MAC do Acompanhamento de Produção mudou em outra máquina — aplica só
           // esse registro (nunca recarrega/substitui a tabela inteira).
           var _macAcomp = chave.slice('desc_acomp_cel:'.length);
-          if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompAplicarCelulaRemota === 'function') {
+          // V193 — com a publicação enxuta o valor vem de um GET feito DEPOIS do
+          // aviso, e o eco da própria gravação chega enquanto o conferente ainda
+          // preenche os campos seguintes: o GET devolvia a versão anterior e
+          // desfazia o que acabara de ser digitado (e a próxima edição regravava
+          // essa versão velha no servidor). Dentro da janela de edição local o
+          // valor local vence; o reforço de 60s entrega depois o que for de outra
+          // máquina (a marca d'água segura a linha, ver _descAcompCarregarSupabase).
+          if (typeof _descAcompLocalMaisNovo === 'function' && _descAcompLocalMaisNovo(_macAcomp)) {
+            // nada: edição local recente
+          } else if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompAplicarCelulaRemota === 'function') {
             try { _descAcompAplicarCelulaRemota(_macAcomp, JSON.parse(payload.new.valor)); } catch(e) {}
           } else if (payload.new && typeof _descAcompAplicarCelulaRemota === 'function') {
             // Payload sem "valor" (publicação enxuta) — busca só esta célula.
             _sbLerValorChave(chave).then(function(v) {
               if (typeof v !== 'string') return;
+              if (typeof _descAcompLocalMaisNovo === 'function' && _descAcompLocalMaisNovo(_macAcomp)) return;
               try { _descAcompAplicarCelulaRemota(_macAcomp, JSON.parse(v)); } catch(e) {}
             });
           }
@@ -7088,12 +7102,16 @@ function sbInicializarRealtime() {
           // aplica só esse item (nunca recarrega/substitui a lista inteira). Mesmo
           // padrão de 'desc_acomp_cel:' acima.
           var _macItem = chave.slice('desc_acomp_item:'.length);
-          if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompListaAplicarItemRemoto === 'function') {
+          // V193 — mesma proteção da célula acima.
+          if (typeof _descAcompItemLocalMaisNovo === 'function' && _descAcompItemLocalMaisNovo(_macItem)) {
+            // nada: edição local recente
+          } else if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompListaAplicarItemRemoto === 'function') {
             try { _descAcompListaAplicarItemRemoto(_macItem, JSON.parse(payload.new.valor)); } catch(e) {}
           } else if (payload.new && typeof _descAcompListaAplicarItemRemoto === 'function') {
             // Payload sem "valor" (publicação enxuta) — busca só este item.
             _sbLerValorChave(chave).then(function(v) {
               if (typeof v !== 'string') return;
+              if (typeof _descAcompItemLocalMaisNovo === 'function' && _descAcompItemLocalMaisNovo(_macItem)) return;
               try { _descAcompListaAplicarItemRemoto(_macItem, JSON.parse(v)); } catch(e) {}
             });
           }
@@ -9064,7 +9082,18 @@ function _lpChaveCelula(dia, fluxo, turno, funcao) {
 // Grava uma célula (ou uma meta) de forma independente e imediata — upsert direto,
 // sem precisar ler o resto do estado primeiro, porque cada célula tem sua própria
 // linha no banco e não pode mais ser atropelada por outra gravação.
+// V193 — instante da última edição local de cada chave da HC. Uma leitura do
+// reforço periódico que saiu do banco antes desta gravação chegar lá não pode
+// voltar por cima do que acabou de ser digitado (mesmo padrão do Acompanhamento IN).
+var _lpEditadoLocalEm = {};
+var _LP_JANELA_LOCAL_MS = 20000;
+function _lpLocalMaisNovo(chave) {
+  var t = _lpEditadoLocalEm[chave];
+  return !!(t && (Date.now() - t) < _LP_JANELA_LOCAL_MS);
+}
+
 function _lpGravarChave(chave, valor) {
+  _lpEditadoLocalEm[chave] = Date.now();
   try {
     fetch(SB_URL + '/configuracoes', {
       method: 'POST',
@@ -9080,61 +9109,95 @@ function lpSalvar() {
   try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
 }
 
+// V193 — CAPACIDADE DIVERGENTE DA HC. Esta leitura pedia TODAS as linhas lp_cel:
+// sem ORDER BY, sem limit e sem paginação. O PostgREST corta a resposta no teto
+// de linhas do servidor (1.000 por padrão) e, sem ordenação, devolve uma fatia
+// arbitrária. Com 18 células por dia, o corte já é atingido em ~2 meses: cada
+// máquina passava a enxergar uma HC diferente, e o Extrato do Dia fotografava a
+// capacidade da HC incompleta daquela máquina. Além disso a carga rodava UMA vez,
+// no boot — o monitor do Painel, que ninguém recarrega, nunca recebia a HC
+// lançada depois. Agora usa a mesma leitura ordenada e paginada das demais
+// células, e entra no reforço de 60s em modo incremental (só o que mudou).
+var _lpMigracaoFeita = false;
+var _lpCargaFeita = false;
 function lpCarregarSupabase() {
   try {
-    // 1) Migração: traz o que existir no blob antigo (formato usado antes desta
-    //    correção), para não perder o histórico já salvo.
-    var pMigracao = fetch(SB_URL + '/configuracoes?chave=eq.' + LP_CHAVE + '&select=valor', {
+    var mudou = false;
+
+    // 1) Migração: traz o que existir no blob antigo (formato usado antes da
+    //    gravação por célula). Só faz sentido uma vez por sessão.
+    var pMigracao = _lpMigracaoFeita ? Promise.resolve() :
+    fetch(SB_URL + '/configuracoes?chave=eq.' + LP_CHAVE + '&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
+      _lpMigracaoFeita = true;
       if (!data || !data.length || !data[0].valor) return;
       var remoto = null;
       try { remoto = JSON.parse(data[0].valor); } catch (e) { return; }
       if (!remoto) return;
-      if (remoto.metas && !localStorage.getItem('lista_presenca_v2')) _lpDados.metas = remoto.metas;
+      if (remoto.metas && !localStorage.getItem('lista_presenca_v2')) { _lpDados.metas = remoto.metas; mudou = true; }
       Object.keys(remoto.dias || {}).forEach(function(dia) {
-        if (!_lpDados.dias[dia]) _lpDados.dias[dia] = remoto.dias[dia];
+        if (!_lpDados.dias[dia]) { _lpDados.dias[dia] = remoto.dias[dia]; mudou = true; }
       });
     }).catch(function(){});
 
     // 2) Estado atual, célula a célula — fonte de verdade para tudo já salvo no
-    //    formato novo. Busca só as linhas desta funcionalidade (prefixo lp_cel:/
-    //    lp_meta:), não a tabela configuracoes inteira — com o Acompanhamento IN/OUT
-    //    e o Relatório TMS também gravando por célula agora, a tabela ficou grande
-    //    demais para buscar tudo de uma vez em toda carga (causava timeout no banco).
-    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(LP_PREFIXO_CELULA) + '*&select=chave,valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(rows) {
-      (rows || []).forEach(function(row) {
-        var chave = String(row.chave || '');
-        if (chave.indexOf(LP_PREFIXO_CELULA) === 0) {
-          var partes = chave.slice(LP_PREFIXO_CELULA.length).split(':');
-          if (partes.length !== 4) return;
-          var dia = partes[0], fluxo = partes[1], turno = partes[2], funcao = partes[3];
-          if (!_lpDados.dias[dia]) _lpDados.dias[dia] = { inbound: {}, outbound: {} };
-          if (!_lpDados.dias[dia][fluxo]) _lpDados.dias[dia][fluxo] = {};
-          if (!_lpDados.dias[dia][fluxo][turno]) _lpDados.dias[dia][fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
-          _lpDados.dias[dia][fluxo][turno][funcao] = row.valor;
-        }
-      });
-    }).catch(function(){});
+    //    formato novo.
+    function aplicarCelula(row) {
+      var chave = String(row && row.chave || '');
+      if (chave.indexOf(LP_PREFIXO_CELULA) !== 0) return;
+      var partes = chave.slice(LP_PREFIXO_CELULA.length).split(':');
+      if (partes.length !== 4) return;
+      // edição local recente vence a leitura em trânsito; o "false" segura a
+      // marca d'água para a linha ser reoferecida no ciclo seguinte
+      if (_lpLocalMaisNovo(chave)) return false;
+      var dia = partes[0], fluxo = partes[1], turno = partes[2], funcao = partes[3];
+      if (!_lpDados.dias[dia]) _lpDados.dias[dia] = { inbound: {}, outbound: {} };
+      if (!_lpDados.dias[dia][fluxo]) _lpDados.dias[dia][fluxo] = {};
+      if (!_lpDados.dias[dia][fluxo][turno]) _lpDados.dias[dia][fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
+      if (_lpDados.dias[dia][fluxo][turno][funcao] !== row.valor) mudou = true;
+      _lpDados.dias[dia][fluxo][turno][funcao] = row.valor;
+    }
+    var pCelulas = (typeof _sbLerCelulasPaginado === 'function')
+      ? _sbLerCelulasPaginado(LP_PREFIXO_CELULA, aplicarCelula, _lpCargaFeita)
+      : fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(LP_PREFIXO_CELULA) + '*&select=chave,valor&order=chave.asc', {
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+        }).then(function(r){ return r.json(); }).then(function(rows) {
+          (rows || []).forEach(aplicarCelula);
+        }).catch(function(){});
 
+    // 3) Metas (3 linhas). Mesma guarda de edição local.
     var pMetas2 = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(LP_PREFIXO_META) + '*&select=chave,valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(rows) {
       (rows || []).forEach(function(row) {
         var chave = String(row.chave || '');
         if (chave.indexOf(LP_PREFIXO_META) === 0) {
+          if (_lpLocalMaisNovo(chave)) return;
           var campo = chave.slice(LP_PREFIXO_META.length);
-          if (['ajudante','conferente','atuacao'].indexOf(campo) !== -1) _lpDados.metas[campo] = row.valor;
+          if (['ajudante','conferente','atuacao'].indexOf(campo) !== -1) {
+            if (_lpDados.metas[campo] !== row.valor) mudou = true;
+            _lpDados.metas[campo] = row.valor;
+          }
         }
       });
     }).catch(function(){});
 
     Promise.all([pMigracao, pCelulas, pMetas2]).then(function() {
+      _lpCargaFeita = true;
+      if (!mudou) return; // nada novo: não regrava localStorage nem redesenha
       try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
       var el = document.getElementById('tab-listaPresenca-content');
-      if (el && el.classList.contains('active')) lpRenderizar();
+      if (el && el.classList.contains('active')) {
+        // não redesenha com um campo em edição — o cursor sairia do campo; o
+        // próprio onblur do campo redesenha logo em seguida
+        var ae = document.activeElement;
+        var editando = ae && el.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName || '');
+        if (!editando) lpRenderizar();
+      }
+      // A capacidade do Painel Executivo (Extrato do Dia / Capacidade X
+      // Executado) sai de _lpDados — precisa refletir a HC que acabou de chegar.
+      if (typeof _gvRedesenharSeAtivo === 'function') _gvRedesenharSeAtivo();
     });
   } catch (e) {}
 }
@@ -9159,21 +9222,34 @@ function lpTrocarData() {
   lpRenderizar();
 }
 function lpMetaAlterada() {
+  var anteriores = _lpDados.metas || {};
   _lpDados.metas = {
     ajudante: (document.getElementById('lp-meta-ajudante') || {}).value || '',
     conferente: (document.getElementById('lp-meta-conferente') || {}).value || '',
     atuacao: (document.getElementById('lp-meta-atuacao') || {}).value || ''
   };
+  // V193 — as metas valem para TODOS os dias, inclusive os já fechados. Antes o
+  // onblur de qualquer um dos três campos regravava os três, mesmo sem mudança:
+  // uma máquina com meta desatualizada sobrescrevia a meta de todo mundo só por
+  // clicar e sair do campo. Agora só sai para o banco o que foi alterado.
+  var mudouAlguma = false;
+  ['ajudante', 'conferente', 'atuacao'].forEach(function(campo) {
+    if (String(anteriores[campo] == null ? '' : anteriores[campo]) === String(_lpDados.metas[campo])) return;
+    mudouAlguma = true;
+    _lpGravarChave(LP_PREFIXO_META + campo, _lpDados.metas[campo]);
+  });
+  if (!mudouAlguma) return;
   lpRenderizar();
   lpSalvar();
-  _lpGravarChave(LP_PREFIXO_META + 'ajudante', _lpDados.metas.ajudante);
-  _lpGravarChave(LP_PREFIXO_META + 'conferente', _lpDados.metas.conferente);
-  _lpGravarChave(LP_PREFIXO_META + 'atuacao', _lpDados.metas.atuacao);
+  if (typeof _gvRedesenharSeAtivo === 'function') _gvRedesenharSeAtivo();
 }
 function lpQtdAlterada(fluxo, turno, funcao, valor) {
   var dia = _lpDiaAtual();
   if (!dia[fluxo]) return;
   if (!dia[fluxo][turno]) dia[fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
+  // V193 — onblur sem alteração não grava: evita criar linhas vazias no banco a
+  // cada data navegada e regravar valor desatualizado por cima do de outra máquina.
+  if (String(dia[fluxo][turno][funcao] == null ? '' : dia[fluxo][turno][funcao]) === String(valor == null ? '' : valor)) return;
   dia[fluxo][turno][funcao] = valor;
   lpRenderizar();
   lpSalvar();
@@ -15117,7 +15193,12 @@ function _descAcompCarregarSupabase() {
       try { remoto = JSON.parse(data[0].valor); } catch(e) { return; }
       if (!remoto) return;
       Object.keys(remoto).forEach(function(mac) {
-        if (!_descAcompData[mac]) _descAcompData[mac] = remoto[mac];
+        if (!_descAcompData[mac]) {
+          _descAcompData[mac] = remoto[mac];
+          // V193 — dado do formato antigo não pode ser regravado por cima da
+          // célula nova só porque o usuário editou outra linha durante a carga.
+          _descAcompUltimoSalvo[mac] = JSON.stringify(remoto[mac]);
+        }
       });
     }).catch(function(){});
 
@@ -15154,6 +15235,12 @@ function _descAcompCarregarSupabase() {
 function _descAcompGet(mac) {
   if (!_descAcompData[mac]) {
     _descAcompData[mac] = { impressoes: 0, progresso: 0, conferente: '', doca: '', horaInicio: '', horaFim: '' };
+    // V193 — o render chama esta função para TODA linha da lista, criando um
+    // registro vazio para cada MAC/MEC sem dado nesta máquina. Sem marcar como
+    // "já salvo", a próxima edição em qualquer linha enviava todos esses vazios
+    // ao Supabase (merge-duplicates) — por cima do que outra máquina acabou de
+    // registrar. Só vai ao servidor quando algum campo for de fato alterado.
+    if (typeof _descAcompUltimoSalvo === 'object' && _descAcompUltimoSalvo) _descAcompUltimoSalvo[mac] = JSON.stringify(_descAcompData[mac]);
   }
   return _descAcompData[mac];
 }
@@ -15456,6 +15543,11 @@ function descargaAcompRegistrarImpressao(mac) {
 
 function descargaAcompCampoAlterado(mac, campo, valor) {
   var rec = _descAcompGet(mac);
+  // V193 — o onblur dispara sempre que o campo perde o foco, inclusive ao clicar
+  // no menu para trocar de tela. Sem esta checagem cada saída da aba gravava o
+  // localStorage inteiro, serializava todos os MACs e enviava ao Supabase um
+  // registro que não mudou — parte da lentidão da transição.
+  if (String(rec[campo] == null ? '' : rec[campo]) === String(valor == null ? '' : valor)) return;
   rec[campo] = valor;
   // V176 — carimba o instante da finalização também quando a Hora Fim é digitada
   // direto no campo. Antes, só o seletor de status gravava "dataFimISO"; sem esse
@@ -15713,14 +15805,18 @@ function descargaAcompSalvarHistoricoSheets() {
 function descargaAcompAtualizarCards() {
   var cardsDiv = document.getElementById('descarga-acomp-cards');
   if (!cardsDiv) return;
-  
-  // Recarregar dados do localStorage para garantir sincronização
-  try { 
-    var stored = localStorage.getItem('descarga_acomp_v1');
-    if (stored) {
-      _descAcompData = JSON.parse(stored);
-    }
-  } catch(ex) {}
+  // V193 — aba fechada não precisa de cards; showTab redesenha na entrada.
+  var _tabCards = document.getElementById('tab-descargaAcomp-content');
+  if (_tabCards && !_tabCards.classList.contains('active')) return;
+
+  // V193 — CAUSA DOS REGISTROS SUMINDO. Aqui _descAcompData era SUBSTITUÍDO pelo
+  // conteúdo do localStorage a cada atualização de card. O localStorage não é
+  // fonte da verdade: quando a gravação dele falha (cota cheia — o relatório TMS
+  // e os históricos ocupam quase tudo) ou outra aba do mesmo navegador grava por
+  // cima, a memória voltava a um estado VELHO. Como _descAcompUltimoSalvo já
+  // guardava o valor novo, a próxima edição em QUALQUER linha via a diferença e
+  // regravava o registro velho no Supabase — apagando a Hora Fim de todos.
+  // A memória passa a ser a única fonte; o localStorage só abre a tela no boot.
   
   var macsFila = _descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){ return {mac:m.mac, ativo:true}; });
   var totalGeral = macsFila.length;
@@ -15798,6 +15894,14 @@ function descargaAcompOrdenar(coluna) {
 function descargaAcompRenderizar() {
   var tbody = document.getElementById('descarga-acomp-tbody');
   if (!tbody) return;
+  // V193 — LENTIDÃO NA TRANSIÇÃO. Esta tabela (lista acumulada, que só cresce)
+  // era montada inteira mesmo com a aba fechada: a cada descargaRenderizar (todo
+  // relatório importado ou recebido de outra máquina), a cada reset de impressões
+  // e — o caso da troca de tela — no focusout do campo que perdia o foco ao
+  // clicar no menu, 150 ms depois, em cima da renderização da tela nova.
+  // showTab já chama esta função ao entrar na aba, então nada fica desatualizado.
+  var _tabAcomp = document.getElementById('tab-descargaAcomp-content');
+  if (_tabAcomp && !_tabAcomp.classList.contains('active')) { _descAcompRenderPendente = false; return; }
   // Usuário digitando: adia o redesenho para não tirar o cursor do campo
   if (_descAcompFocoNaTabela()) { _descAcompRenderPendente = true; return; }
 
@@ -18388,6 +18492,12 @@ function _gvExtratoHistLer() {
   catch (e) { return {}; }
 }
 
+// V193 — assinatura do último dia enviado por esta máquina. Cada renderização do
+// Painel reenviava o histórico INTEIRO (60 dias) ao Supabase, mesmo com números
+// idênticos — e cada envio acordava, via Realtime, a leitura do blob em todas as
+// outras máquinas. Com o painel redesenhando a cada registro do Acompanhamento IN,
+// isso virava uma rajada contínua de tráfego. Mesma disciplina do _gvCapExecHistSalvar.
+var _gvExtratoUltimoEnviado = '';
 function _gvExtratoHistSalvar(dados) {
   if (!dados || !dados.data) return;
   try {
@@ -18397,6 +18507,9 @@ function _gvExtratoHistSalvar(dados) {
     var chaves = Object.keys(h).sort();
     while (chaves.length > 60) { delete h[chaves.shift()]; }
     localStorage.setItem(GV_EXTRATO_HIST_KEY, JSON.stringify(h));
+    var assinatura = dados.data + '|' + JSON.stringify(dados);
+    if (assinatura === _gvExtratoUltimoEnviado) return;
+    _gvExtratoUltimoEnviado = assinatura;
     _gvExtratoHistSalvarSupabase();
   } catch (e) {}
 }
@@ -18492,6 +18605,36 @@ function _gvExtratoProcesso(titulo, bloco, formatar, pctCapacidade, capacidadeKg
   '</div>';
 }
 
+// V193 — CAPACIDADE DE ONTEM ≠ LISTA DE PRESENÇA. O dia anterior era exibido
+// inteiro a partir da foto gravada na última renderização ANTES da virada do dia
+// operacional (23:01). Toda HC lançada ou corrigida depois disso — tipicamente a
+// do 3º Turno, preenchida com o turno já em andamento — ficava fora da foto para
+// sempre. Peso executado/plano não têm como ser recalculados para um dia passado
+// (as funções de fluxo só conhecem a janela corrente), mas a capacidade tem: a HC
+// é gravada por dia. Então a capacidade, e os percentuais que dependem dela, são
+// relidos da Lista de Presença na hora de exibir; o resto continua vindo da foto.
+// A foto gravada não é alterada.
+function _gvExtratoCapacidadeAoVivo(snap) {
+  try {
+    if (!snap || !snap.data) return snap;
+    // Sem a HC daquele dia nesta máquina, mantém o que foi fotografado.
+    if (typeof _lpDados === 'undefined' || !_lpDados || !_lpDados.dias || !_lpDados.dias[snap.data]) return snap;
+    var e = Object.assign({}, snap);
+    var capInKg  = _gvCapacidadeHC(snap.data, 'inbound')  * 1000;
+    var capOutKg = _gvCapacidadeHC(snap.data, 'outbound') * 1000;
+    var capKg = capInKg + capOutKg;
+    e.capacidadeInKg  = capInKg;
+    e.capacidadeOutKg = capOutKg;
+    e.capacidadeKg    = capKg;
+    e.capacidadeTon   = capKg / 1000;
+    e.pctEficienciaCapacidade = capKg ? ((e.movimentado || 0) / capKg * 100) : 0;
+    e.pctCapacidadeTotal = e.pctEficienciaCapacidade;
+    e.pctCapacidadeIn  = capInKg  ? (((e.in  && e.in.plano)  || 0) / capInKg  * 100) : 0;
+    e.pctCapacidadeOut = capOutKg ? (((e.out && e.out.plano) || 0) / capOutKg * 100) : 0;
+    return e;
+  } catch (err) { return snap; }
+}
+
 function gvExtratoRenderizar() {
   var topo = document.getElementById('ext-cards-topo');
   var proc = document.getElementById('ext-processos');
@@ -18507,7 +18650,7 @@ function gvExtratoRenderizar() {
   if (_gvExtratoDia === 'ontem') {
     var ontem = _gvExtratoHistLer()[_gvExtratoDataISO(1)];
     if (ontem) {
-      e = ontem;
+      e = _gvExtratoCapacidadeAoVivo(ontem);
     } else {
       aviso = 'Sem histórico salvo para ontem — exibindo os dados de hoje.';
     }
