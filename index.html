@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V193--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V195--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6243,7 +6243,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V193';
+var ROTA7_VERSAO = 'V195';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -14818,17 +14818,17 @@ function _descAcompListaMerge() {
     mapaAtual[m.mac] = m;
   });
 
-  // V193 — PESO DA CARGA NÃO ENCOLHE. A V183 repunha o peso integral lido do
-  // relatório atual, mas conforme os CTRCs já descarregados EMBARCAM, eles saem do
-  // relatório e esse "integral" cai (16.118 → 8.000 kg). Quem importava gravava o
-  // valor menor no servidor, as outras máquinas (que ainda tinham as linhas)
-  // regravavam o maior, e o peso ficava indo e voltando — no Acompanhamento IN e
-  // no Executado. Vale o MAIOR peso conhecido do MAC/MEC (mesma regra da V182 no
-  // Painel), o que também recupera itens que já tinham sido rebaixados.
+  // V194 — PESO DO MAC/MEC = COLUNA M DO RELATÓRIO MAIS RECENTE (ver
+  // _inPesoPorMacTodos). A V193 usava o MAIOR peso já visto e travava valores
+  // velhos: a coleta 510-151949372 ficou em 26.001 kg com o TMS informando
+  // 18.760,57. Continua valendo a proteção da V193 contra o peso encolher quando
+  // os CTRCs embarcam: item fora da fila e sem snapshot mantém o valor guardado
+  // (regra 3 da precedência), em vez de assumir o integral parcial do relatório.
+  if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null; // rankings acabaram de mudar
   var _pesosConhecidos = (typeof _inPesoPorMacTodos === 'function') ? _inPesoPorMacTodos() : {};
   function _pesoConsolidado(mac, atual, novo) {
     var k = String(mac == null ? '' : mac).trim().toUpperCase();
-    return Math.max(parseFloat(atual) || 0, parseFloat(novo) || 0, _pesosConhecidos[k] || 0);
+    return _pesosConhecidos[k] || parseFloat(novo) || parseFloat(atual) || 0;
   }
 
   // 1) Atualiza/marca os que já existem na lista
@@ -15176,6 +15176,130 @@ function ROTA7Diag() {
     console.log('Se este número for maior que o de itens em memória, a lista local ainda não convergiu.');
   });
   return 'diagnóstico enviado ao Console';
+}
+
+// V194 — Diagnóstico de UM MAC/MEC: digite ROTA7DiagMac('151949') no Console (F12).
+// Mostra o registro, o carimbo do fim, os imports de hoje que o trouxeram, o peso
+// usado e se ele entra ou não no Executado do Painel (e por quê).
+function ROTA7DiagMac(busca) {
+  var alvo = String(busca == null ? '' : busca).trim().toUpperCase();
+  if (!alvo) return 'informe parte do número do MAC/MEC, ex.: ROTA7DiagMac(\'151949\')';
+  var achados = {};
+  Object.keys(_descAcompData || {}).forEach(function(m) { if (String(m).toUpperCase().indexOf(alvo) !== -1) achados[m] = true; });
+  (_descAcompLista || []).forEach(function(i) { if (i && String(i.mac).toUpperCase().indexOf(alvo) !== -1) achados[i.mac] = true; });
+  var macs = Object.keys(achados);
+  if (!macs.length) { console.log('Nenhum MAC/MEC contendo "' + busca + '" no Acompanhamento IN desta máquina.'); return 'nada encontrado'; }
+  var janela = _gvJanelaOperacionalAtual(new Date());
+  if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null;
+  var pesos = _inPesoPorMacTodos();
+  function fmt(d) { d = new Date(d); return isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR'); }
+  macs.forEach(function(mac) {
+    var k = String(mac).trim().toUpperCase();
+    var rec = _descAcompData[mac] || {};
+    var item = (_descAcompLista || []).filter(function(i) { return i && String(i.mac).trim().toUpperCase() === k; })[0] || {};
+    var snaps = (_relatorioHistorico || []).filter(function(h) {
+      return _gvDataDentroDaJanela(new Date(h.dataHoraISO), janela) &&
+        (h.filaSnapshot || []).some(function(f) { return String(f && f.mac).trim().toUpperCase() === k; });
+    });
+    var horaFim = rec.horaFim && String(rec.horaFim).trim();
+    var decisao;
+    if (!horaFim) {
+      decisao = 'NÃO CONTA — sem Hora Fim nesta máquina (não lançada ou ainda não sincronizada)';
+    } else if (snaps.length) {
+      decisao = _inFinalizadoAntesDaJanela(rec, janela)
+        ? 'NÃO CONTA — Hora Fim de um dia operacional anterior'
+        : 'CONTA no ' + (_gvTurnoDoHorario(horaFim) || '3º Turno') + ' (está na fila dos imports de hoje)';
+    } else {
+      var it = _inExecutadoForaDoSnapshot(janela, {}).itens.filter(function(x) { return String(x.mac).trim().toUpperCase() === k; })[0];
+      decisao = it ? 'CONTA no ' + it.turno + ' (registrado fora dos imports de hoje)'
+                   : 'NÃO CONTA — fora da fila dos imports de hoje e com fim fora do dia operacional';
+    }
+    console.log('── ROTA7 · ' + mac + ' ─────────────────────────');
+    console.table({
+      'Hora Início': rec.horaInicio || '—',
+      'Hora Fim': horaFim || '—',
+      'Carimbo do fim (dataFimISO)': rec.dataFimISO ? fmt(rec.dataFimISO) : '— (sem carimbo)',
+      'Dia operacional': fmt(janela.inicio) + ' → ' + fmt(janela.fim),
+      'Imports de hoje com ele na fila': snaps.length + (snaps.length ? ' (último ' + fmt(snaps[0].dataHoraISO) + ')' : ''),
+      'Peso usado no Painel (kg)': Math.round((pesos[k] || 0) * 100) / 100,
+      'Peso na lista do Acomp. IN (kg)': Math.round((item.pesoTotal || 0) * 100) / 100,
+      'Na fila do relatório atual': item.ativo === false ? 'não' : 'sim',
+      'Igual ao gravado no servidor': (_descAcompUltimoSalvo[mac] === JSON.stringify(rec)) ? 'sim' : 'não (pendente de sincronizar)'
+    });
+    console.log('Executado do Painel IN:', decisao);
+  });
+  return macs.length + ' MAC/MEC analisado(s)';
+}
+
+// V195 — Conferência do Executado IN de hoje, MAC a MAC: digite
+// ROTA7ConferirPesos() no Console (F12). Para cada MAC/MEC que entra no Executado,
+// mostra o peso usado (coluna M do import mais recente), o MAIOR peso que o app
+// já tinha visto para ele (regra da V193) e de onde veio esse maior valor. Não
+// altera nenhum número da tela.
+function ROTA7ConferirPesos() {
+  var janela = _gvJanelaOperacionalAtual(new Date());
+  if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null;
+  var usados = _inPesoPorMacTodos();
+  function K(m) { return String(m == null ? '' : m).trim().toUpperCase(); }
+  function fmt(d) { d = new Date(d); return isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR'); }
+  function kg(v) { return Math.round((v || 0) * 100) / 100; }
+
+  var maior = {};
+  function regMaior(mac, peso, fonte) {
+    var k = K(mac), p = parseFloat(peso);
+    if (!k || isNaN(p) || p <= 0) return;
+    if (!maior[k] || p > maior[k].peso) maior[k] = { peso: p, fonte: fonte };
+  }
+  (_descAcompLista || []).forEach(function(m) { regMaior(m && m.mac, m && m.pesoTotal, 'lista do Acompanhamento IN'); });
+  Object.keys(_descPesoIntegralPorMac || {}).forEach(function(k) { regMaior(k, _descPesoIntegralPorMac[k], 'relatório carregado nesta máquina'); });
+  (_relatorioHistorico || []).forEach(function(h) {
+    ((h && h.filaSnapshot) || []).forEach(function(f) { regMaior(f && f.mac, f && f.pesoOpl, 'import de ' + fmt(h.dataHoraISO)); });
+  });
+
+  var hoje = {};
+  (_relatorioHistorico || []).filter(function(h) { return _gvDataDentroDaJanela(new Date(h.dataHoraISO), janela); })
+    .sort(function(a, b) { return new Date(a.dataHoraISO) - new Date(b.dataHoraISO); })
+    .forEach(function(h) {
+      ((h && h.filaSnapshot) || []).forEach(function(f) {
+        var k = K(f && f.mac); if (!k) return;
+        var p = parseFloat(f.pesoOpl) || 0;
+        if (!hoje[k]) hoje[k] = { mac: String(f.mac).trim(), primeiro: p, ultimo: p };
+        hoje[k].ultimo = p;
+      });
+    });
+
+  var linhas = [];
+  Object.keys(hoje).forEach(function(k) {
+    var rec = _descAcompData[hoje[k].mac] || _descAcompData[k] || {};
+    var hf = rec.horaFim && String(rec.horaFim).trim();
+    if (!hf || _inFinalizadoAntesDaJanela(rec, janela)) return;
+    linhas.push({ k: k, mac: hoje[k].mac, turno: _gvTurnoDoHorario(hf) || '3º Turno', horaFim: hf,
+                  primeiro: hoje[k].primeiro, ultimo: hoje[k].ultimo });
+  });
+  _inExecutadoForaDoSnapshot(janela, hoje).itens.forEach(function(it) {
+    linhas.push({ k: K(it.mac), mac: it.mac, turno: it.turno, horaFim: (_descAcompData[it.mac] || {}).horaFim || '—' });
+  });
+
+  var tUsado = 0, tMaior = 0, tabela = [];
+  linhas.forEach(function(l) {
+    var u = usados[l.k] || l.ultimo || 0;
+    var mx = Math.max(u, (maior[l.k] && maior[l.k].peso) || 0);
+    tUsado += u; tMaior += mx;
+    tabela.push({
+      'MAC/MEC': l.mac, 'Turno': l.turno, 'Hora Fim': l.horaFim,
+      'Peso usado (kg)': kg(u), 'Maior já visto (kg)': kg(mx), 'Diferença (kg)': kg(mx - u),
+      'Origem do maior': (mx - u) > 1 ? maior[l.k].fonte : '—',
+      '1º import hoje (kg)': l.primeiro != null ? kg(l.primeiro) : '—',
+      'Último import hoje (kg)': l.ultimo != null ? kg(l.ultimo) : '—'
+    });
+  });
+  tabela.sort(function(a, b) { return b['Diferença (kg)'] - a['Diferença (kg)']; });
+  console.log('── ROTA7 · Conferência do Executado IN · dia operacional ' + fmt(janela.inicio) + ' → ' + fmt(janela.fim) + ' ──');
+  console.table(tabela);
+  console.log('Total com o peso do import mais recente (tela atual):', kg(tUsado), 'kg');
+  console.log('Total com o maior peso já visto (regra da V193):     ', kg(tMaior), 'kg');
+  console.log('Confira na coluna M do relatório TMS os MACs com diferença > 0 no topo da tabela.');
+  return tabela.length + ' MAC/MEC no Executado de hoje';
 }
 
 var _descAcompMigracaoFeita = false;
@@ -16021,6 +16145,7 @@ function _relatorioHistoricoCarregarSupabase() {
       var data = [{ valor: valor }];
       if (data && data.length && data[0].valor) {
         _relatorioHistorico = JSON.parse(data[0].valor);
+        if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null; // V194 — peso segue o import mais recente
         
         // Limpeza automática: registros com mais de 7 dias
         var agora = new Date();
@@ -16107,6 +16232,9 @@ function _relatorioHistoricoRegistrar() {
     filaSnapshot: filaSnapshot
   };
   _relatorioHistorico.unshift(entrada); // mais recente primeiro
+  // V194 — o peso oficial de cada MAC/MEC sai do import mais recente: sem isto o
+  // cache de 15s seguia entregando o peso do import anterior.
+  if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null;
   if (_relatorioHistorico.length > 100) _relatorioHistorico = _relatorioHistorico.slice(0, 100);
   try { localStorage.setItem('relatorio_historico_v1', JSON.stringify(_relatorioHistorico)); } catch(ex) {}
   _relatorioHistoricoSalvarSupabase(); // compartilha com todos os usuários
@@ -19232,36 +19360,43 @@ function _inPesoPorMacTodos() {
   var agora = Date.now();
   if (_inPesoPorMacCache && (agora - _inPesoPorMacCacheTs) < 15000) return _inPesoPorMacCache;
   var mapa = {};
-  // V182 — passou a valer o MAIOR peso conhecido do MAC/MEC, não o primeiro que
-  // aparecer. Motivo: o peso que circulava nas fontes era o PENDENTE, que encolhe
-  // conforme os CTRCs são baixados. Itens gravados antes desta correção ficaram
-  // congelados numa fração da carga (o MAC 10891 com 551 kg no lugar de 16.118) e,
-  // por já terem saído do relatório, não têm como ser recalculados — mas o valor
-  // cheio ainda existe nos snapshots do Histórico de Relatório. Pegar o maior
-  // recupera esses casos e, para os MACs ativos, escolhe naturalmente o peso
-  // integral (que é o maior de todos). Sem passada extra: mesma varredura.
+  // V194 — PESO = COLUNA M DO RELATÓRIO MAIS RECENTE, não o maior já visto.
+  // A V182/V193 escolhia o MAIOR peso conhecido. Isso trava valores velhos: a
+  // coleta 510-151949372 chegou a 26.001 kg num import anterior e, depois que o
+  // TMS passou a informar 18.760,57 kg na coluna M, o app continuou mostrando e
+  // somando 26.001. Ordem de precedência agora (a primeira que responder vence):
+  //   1) o import MAIS RECENTE que trouxe o MAC/MEC na fila (snapshot do
+  //      Histórico de Relatório) — é a coluna M do TMS naquele momento e é igual
+  //      em todas as máquinas;
+  //   2) o MAC/MEC na fila agora, pelo relatório carregado neste aparelho;
+  //   3) o valor guardado na lista do Acompanhamento IN — cobre o que já saiu da
+  //      fila e nunca entrou num snapshot, sem encolher quando os CTRCs embarcam;
+  //   4) qualquer linha do relatório atual.
+  // O caso do MAC 10891 (V182: lista com 551 kg, snapshot com 16.118) continua
+  // resolvido pela regra 1.
   function reg(mac, peso) {
     var k = String(mac == null ? '' : mac).trim().toUpperCase();
-    if (!k) return;
+    if (!k || mapa[k] !== undefined) return;
     var p = parseFloat(peso);
     if (isNaN(p) || p <= 0) return;
-    if (mapa[k] === undefined || p > mapa[k]) mapa[k] = p;
+    mapa[k] = p;
   }
-  ((typeof _descAcompLista !== 'undefined' && _descAcompLista) ? _descAcompLista : [])
-    .forEach(function(m) { reg(m && m.mac, m && m.pesoTotal); });
-  // V183 — peso integral direto do relatório: cobre inclusive MAC/MEC que já saiu
-  // da fila, cujo valor na lista pode estar defasado até o próximo merge.
-  if (typeof _descPesoIntegralPorMac !== 'undefined' && _descPesoIntegralPorMac) {
-    Object.keys(_descPesoIntegralPorMac).forEach(function(k) { reg(k, _descPesoIntegralPorMac[k]); });
-  }
+  var hist = ((typeof _relatorioHistorico !== 'undefined' && _relatorioHistorico) ? _relatorioHistorico : []).slice();
+  hist.sort(function(a, b) {
+    return (new Date(b && b.dataHoraISO).getTime() || 0) - (new Date(a && a.dataHoraISO).getTime() || 0);
+  });
+  hist.forEach(function(h) {
+    ((h && h.filaSnapshot) || []).forEach(function(f) { reg(f && f.mac, f && f.pesoOpl); });
+  });
   ((typeof _descMacRankingCompleto !== 'undefined' && _descMacRankingCompleto) ? _descMacRankingCompleto : [])
     .forEach(function(m) { reg(m && m.mac, m && (m.pesoIntegral || m.pesoTotal)); });
   ((typeof _descColetaRankingCompleto !== 'undefined' && _descColetaRankingCompleto) ? _descColetaRankingCompleto : [])
     .forEach(function(c) { reg(c && c.mac, c && (c.pesoIntegral || c.peso)); });
-  var hist = (typeof _relatorioHistorico !== 'undefined' && _relatorioHistorico) ? _relatorioHistorico : [];
-  hist.forEach(function(h) {
-    ((h && h.filaSnapshot) || []).forEach(function(f) { reg(f && f.mac, f && f.pesoOpl); });
-  });
+  ((typeof _descAcompLista !== 'undefined' && _descAcompLista) ? _descAcompLista : [])
+    .forEach(function(m) { reg(m && m.mac, m && m.pesoTotal); });
+  if (typeof _descPesoIntegralPorMac !== 'undefined' && _descPesoIntegralPorMac) {
+    Object.keys(_descPesoIntegralPorMac).forEach(function(k) { reg(k, _descPesoIntegralPorMac[k]); });
+  }
   _inPesoPorMacCache = mapa;
   _inPesoPorMacCacheTs = agora;
   return mapa;
@@ -19310,23 +19445,33 @@ function _inInstanteFimNaJanela(rec, horaFim, janela) {
 // antes.
 function _inFinalizadoAntesDaJanela(rec, janela) {
   if (!janela || !rec || !rec.dataFimISO) return false;
-  if (!(rec.horaFim && String(rec.horaFim).trim())) return false;
+  var horaFim = rec.horaFim && String(rec.horaFim).trim();
+  if (!horaFim) return false;
   var d = new Date(rec.dataFimISO);
-  return !isNaN(d.getTime()) && d.getTime() < janela.inicio.getTime();
+  if (isNaN(d.getTime()) || d.getTime() >= janela.inicio.getTime()) return false;
+  // V194 — CAUSA DA COLETA 510-151949372 FORA DO EXECUTADO. O carimbo dataFimISO
+  // vem do relógio do aparelho de quem lançou, e a regra de lançamento joga para
+  // o DIA ANTERIOR toda Hora Fim mais de 1h à frente desse relógio (feita para a
+  // virada da meia-noite). Relógio atrasado, ou hora lançada adiantada, basta para
+  // uma descarga de hoje ganhar carimbo de ontem — e a V193 a excluía do Plano e do
+  // Executado. Como o MAC/MEC ainda está na fila do TMS de hoje, a Hora Fim é a
+  // prova mais forte: se esse horário JÁ ACONTECEU no dia operacional de hoje,
+  // conta hoje. Só é excluído quando o horário ainda não chegou hoje (ex.: fim
+  // 21:50 visto às 10:00) — aí é, com certeza, de um dia anterior.
+  return !_inInstanteFimNaJanela({ horaFim: horaFim }, horaFim, janela);
 }
 
-// Peso de um MAC/MEC no Painel: o MAIOR conhecido — o mesmo que aparece na coluna
-// Peso do Acompanhamento IN e o mesmo já usado por _inExecutadoForaDoSnapshot.
-// Antes o caminho dos snapshots usava o pesoOpl do relatório e o caminho de
-// compensação usava este, então o Executado do Painel não fechava com a soma dos
-// finalizados na tela do Acompanhamento IN. Plano e Executado usam o mesmo valor,
-// então o Pendente continua exato.
+// Peso de um MAC/MEC no Painel: o mesmo da coluna Peso do Acompanhamento IN e o
+// mesmo usado por _inExecutadoForaDoSnapshot — a coluna M do relatório mais
+// recente (ver _inPesoPorMacTodos). Plano e Executado usam o mesmo valor, então o
+// Pendente continua exato. V194: sem a regra de "maior peso", que travava 26.001
+// kg numa coleta que o TMS informa com 18.760,57.
 function _inPesoOficialDe(chave, pesoSnapshot) {
   var p = parseFloat(pesoSnapshot);
   if (isNaN(p)) p = 0;
   var k = String(chave == null ? '' : chave).trim().toUpperCase();
   var oficial = k ? (_inPesoPorMacTodos()[k] || 0) : 0;
-  return Math.max(p, oficial);
+  return oficial || p;
 }
 
 // Todo MAC/MEC com Hora Fim registrada no Acompanhamento IN dentro da janela
