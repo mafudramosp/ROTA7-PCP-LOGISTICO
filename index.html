@@ -14938,7 +14938,38 @@ function _descAcompSalvar() {
   _gvRedesenharSeAtivo();
 }
 
-function _descAcompSalvarCelulaSupabase(mac, registro) {
+function _descAcompSalvarCelulaSupabase(mac, registro, _tentativa) {
+  // Correção da sincronização com o Supabase: antes, esta função disparava o
+  // POST e engolia qualquer erro (.catch vazio), sem nunca conferir o status da
+  // resposta. Um 401/409/500/timeout passava por gravação bem-sucedida. Como
+  // _descAcompSalvar() já havia marcado o MAC como salvo em _descAcompUltimoSalvo
+  // ANTES do envio, a linha "se não mudou, não regrava" bloqueava toda tentativa
+  // posterior: o registro nunca era reenviado e a sincronização periódica acabava
+  // trazendo o valor antigo do servidor por cima do que o usuário digitou.
+  // Agora a marca de "salvo" só vale se o servidor confirmar; se não confirmar,
+  // reenvia com espera crescente e, esgotadas as tentativas, libera a marca para
+  // o próximo ciclo tentar de novo e avisa em vez de perder o dado em silêncio.
+  var corpo = JSON.stringify(registro);
+  var tentativa = _tentativa || 0;
+  var MAX_TENTATIVAS = 3;
+  function _falhou(motivo) {
+    // Só insiste enquanto o valor local continuar sendo este — se o usuário
+    // editou de novo no meio do caminho, quem manda é a edição mais recente.
+    if (JSON.stringify(_descAcompData[mac]) !== corpo) return;
+    if (tentativa < MAX_TENTATIVAS) {
+      setTimeout(function() {
+        if (JSON.stringify(_descAcompData[mac]) === corpo) {
+          _descAcompSalvarCelulaSupabase(mac, registro, tentativa + 1);
+        }
+      }, 2000 * (tentativa + 1));
+      return;
+    }
+    if (_descAcompUltimoSalvo[mac] === corpo) delete _descAcompUltimoSalvo[mac];
+    console.warn('[Acomp IN] não foi possível salvar o MAC ' + mac + ' no Supabase:', motivo);
+    if (typeof showToast === 'function') {
+      showToast('⚠️ Falha ao salvar o MAC ' + mac + ' no servidor — verifique a conexão', 'error');
+    }
+  }
   try {
     fetch(SB_URL + '/configuracoes', {
       method: 'POST',
@@ -14946,9 +14977,16 @@ function _descAcompSalvarCelulaSupabase(mac, registro) {
                         // logo em seguida — sem isso, a Hora Fim digitada podia nunca
                         // chegar ao servidor (ver correção do "zera o Executado no 3º Turno").
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: 'desc_acomp_cel:' + mac, valor: JSON.stringify(registro) })
-    }).catch(function(){});
-  } catch(e) {}
+      body: JSON.stringify({ chave: 'desc_acomp_cel:' + mac, valor: corpo })
+    }).then(function(res) {
+      if (res && res.ok) return; // confirmado pelo servidor — a marca de "salvo" vale
+      _falhou('HTTP ' + (res ? res.status : '?'));
+    }).catch(function(err) {
+      _falhou(err);
+    });
+  } catch(e) {
+    _falhou(e);
+  }
 }
 
 // Aplica o registro de UM MAC vindo do servidor (carga inicial, polling ou o payload
