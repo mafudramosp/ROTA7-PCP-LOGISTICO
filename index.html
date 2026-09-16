@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V192--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V193--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6243,7 +6243,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V192';
+var ROTA7_VERSAO = 'V193';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -14600,7 +14600,11 @@ try { _descAcompLista = JSON.parse(localStorage.getItem('descarga_acomp_lista_v1
 function _descAcompResetarImpressoes() {
   // Reseta as impressões de todos os MACs quando novo relatório é importado
   for (var mac in _descAcompData) {
-    if (_descAcompData.hasOwnProperty(mac)) {
+    // V193 — só zera quem tem impressão. Antes gravava "0" também em quem não
+    // tinha o campo, o que mudava o registro e o reenviava INTEIRO ao servidor a
+    // cada import — levando junto Hora Início/Fim possivelmente defasadas desta
+    // máquina por cima das lançadas por outro usuário.
+    if (_descAcompData.hasOwnProperty(mac) && _descAcompData[mac] && _descAcompData[mac].impressoes) {
       _descAcompData[mac].impressoes = 0;
     }
   }
@@ -14814,12 +14818,25 @@ function _descAcompListaMerge() {
     mapaAtual[m.mac] = m;
   });
 
+  // V193 — PESO DA CARGA NÃO ENCOLHE. A V183 repunha o peso integral lido do
+  // relatório atual, mas conforme os CTRCs já descarregados EMBARCAM, eles saem do
+  // relatório e esse "integral" cai (16.118 → 8.000 kg). Quem importava gravava o
+  // valor menor no servidor, as outras máquinas (que ainda tinham as linhas)
+  // regravavam o maior, e o peso ficava indo e voltando — no Acompanhamento IN e
+  // no Executado. Vale o MAIOR peso conhecido do MAC/MEC (mesma regra da V182 no
+  // Painel), o que também recupera itens que já tinham sido rebaixados.
+  var _pesosConhecidos = (typeof _inPesoPorMacTodos === 'function') ? _inPesoPorMacTodos() : {};
+  function _pesoConsolidado(mac, atual, novo) {
+    var k = String(mac == null ? '' : mac).trim().toUpperCase();
+    return Math.max(parseFloat(atual) || 0, parseFloat(novo) || 0, _pesosConhecidos[k] || 0);
+  }
+
   // 1) Atualiza/marca os que já existem na lista
   _descAcompLista.forEach(function(item){
     if (mapaAtual[item.mac]) {
       item.ativo = true;
       item.dest = mapaAtual[item.mac].dest || item.dest;
-      item.pesoTotal = mapaAtual[item.mac].pesoTotal || item.pesoTotal;
+      item.pesoTotal = _pesoConsolidado(item.mac, item.pesoTotal, mapaAtual[item.mac].pesoTotal);
       item.ctrcs = mapaAtual[item.mac].ctrcs || item.ctrcs;
       item.tipo = mapaAtual[item.mac].tipo || item.tipo;
     } else {
@@ -14831,7 +14848,7 @@ function _descAcompListaMerge() {
       // dele, porém, CONTINUAM no relatório, agora como já baixadas: o peso
       // integral segue disponível e é reposto aqui.
       var integral = _descPesoIntegralDe(item.mac);
-      if (integral > 0) item.pesoTotal = integral;
+      item.pesoTotal = _pesoConsolidado(item.mac, item.pesoTotal, integral);
     }
   });
 
@@ -14843,7 +14860,7 @@ function _descAcompListaMerge() {
       // V176 — "entradaISO" carimba quando o MAC/MEC entrou na fila. É a régua das
       // 72h que decide se um item fora da fila ainda fica em aberto para registro
       // ou já pode ir para "Finalizado anteriormente" (ver _descAcompIdadeHoras).
-      _descAcompLista.push({ mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: m.tipo, ativo: true, entradaISO: new Date().toISOString() });
+      _descAcompLista.push({ mac: m.mac, dest: m.dest, pesoTotal: _pesoConsolidado(m.mac, 0, m.pesoTotal), ctrcs: m.ctrcs, tipo: m.tipo, ativo: true, entradaISO: new Date().toISOString() });
     }
   });
 
@@ -14907,20 +14924,22 @@ try {
 // o valor local vence; passada ela, o servidor volta a ser a fonte da verdade,
 // exatamente como sempre foi. Não vale para o Realtime: ali o payload é o
 // próprio registro recém-gravado, então nunca é mais velho que o local.
-//
-// Correção: a janela era de 20s, mas o reforço periódico (_sbResincronizarFontesPainel)
-// roda a cada 60s — deixava de 20 a 60s sem proteção nenhuma. Se a gravação
-// ainda não tivesse sido confirmada no servidor nesse intervalo, o reforço lia
-// o valor antigo (sem Hora Fim) e voltava por cima, inclusive gravando esse
-// valor velho no localStorage — daí o Executado do Painel Executivo cair
-// sozinho minutos depois, mesmo com a tela parada. 75s garante cobrir pelo
-// menos um ciclo inteiro de 60s, não importa em que ponto do ciclo a edição
-// aconteça.
 var _descAcompEditadoLocalEm = {};
-var _DESC_ACOMP_JANELA_LOCAL_MS = 75000;
+var _DESC_ACOMP_JANELA_LOCAL_MS = 20000;
 function _descAcompLocalMaisNovo(mac) {
   var t = _descAcompEditadoLocalEm[mac];
   return !!(t && (Date.now() - t) < _DESC_ACOMP_JANELA_LOCAL_MS);
+}
+
+// V193 — registro "em branco": exatamente o que _descAcompGet cria só para
+// desenhar a linha, sem nada digitado.
+function _descAcompRegistroVazio(rec) {
+  if (!rec) return true;
+  var campos = ['conferente', 'doca', 'horaInicio', 'horaFim', 'qtdConf', 'qtdAjud', 'dataFimISO'];
+  for (var i = 0; i < campos.length; i++) {
+    if (rec[campos[i]] && String(rec[campos[i]]).trim()) return false;
+  }
+  return !(rec.impressoes > 0) && !(rec.progresso > 0) && !rec.programado;
 }
 
 function _descAcompSalvar() {
@@ -14928,6 +14947,12 @@ function _descAcompSalvar() {
   Object.keys(_descAcompData).forEach(function(mac) {
     var atual = JSON.stringify(_descAcompData[mac]);
     if (_descAcompUltimoSalvo[mac] === atual) return; // este MAC não mudou desde a última gravação
+    // V193 — registro em branco que esta máquina nunca gravou não sobe. Ele nasce
+    // no render (_descAcompGet) para MAC/MEC que ainda não chegou do servidor; ao
+    // salvar QUALQUER outro campo, ia junto e apagava, no servidor, a Hora
+    // Início/Fim que outro usuário tinha acabado de lançar — Executado zerado
+    // para todos. Limpar um registro já gravado continua subindo normalmente.
+    if (_descAcompUltimoSalvo[mac] === undefined && _descAcompRegistroVazio(_descAcompData[mac])) return;
     _descAcompUltimoSalvo[mac] = atual;
     _descAcompEditadoLocalEm[mac] = Date.now();
     _descAcompSalvarCelulaSupabase(mac, _descAcompData[mac]);
@@ -15188,24 +15213,7 @@ function _descAcompCarregarSupabase() {
       // que a janela de edição local (20s) expirar.
       if (_descAcompLocalMaisNovo(mac)) return false;
       try {
-        var _remoto = JSON.parse(row.valor);
-        // Correção: na carga inicial da sessão (logo após um reload), o servidor
-        // pode ainda não ter recebido a Hora Fim que acabou de ser digitada — o
-        // fetch que a gravou pode até ter sido cancelado pelo próprio reload,
-        // antes de chegar lá (ver "keepalive" em _descAcompSalvarCelulaSupabase).
-        // Sem esta trava, esta leitura inicial sobrescrevia (e gravava de volta
-        // no localStorage) a Hora Fim certa com a versão antiga sem Hora Fim,
-        // zerando o peso Executado do Painel Executivo — Descarga (IN). Só vale
-        // na carga inicial (_descAcompCargaFeita ainda false); nos ciclos
-        // seguintes, uma reversão de status feita de propósito em outra máquina
-        // continua valendo normalmente.
-        if (!_descAcompCargaFeita) {
-          var _local = _descAcompData[mac];
-          var _localTemFim = !!(_local && _local.horaFim && String(_local.horaFim).trim());
-          var _remotoTemFim = !!(_remoto && _remoto.horaFim && String(_remoto.horaFim).trim());
-          if (_localTemFim && !_remotoTemFim) return false;
-        }
-        _descAcompData[mac] = _remoto;
+        _descAcompData[mac] = JSON.parse(row.valor);
         _descAcompUltimoSalvo[mac] = row.valor;
       } catch(e) {}
     }, _descAcompCargaFeita);
@@ -15785,13 +15793,14 @@ function descargaAcompAtualizarCards() {
   var cardsDiv = document.getElementById('descarga-acomp-cards');
   if (!cardsDiv) return;
   
-  // Recarregar dados do localStorage para garantir sincronização
-  try { 
-    var stored = localStorage.getItem('descarga_acomp_v1');
-    if (stored) {
-      _descAcompData = JSON.parse(stored);
-    }
-  } catch(ex) {}
+  // V193 — CAUSA DO "EXECUTADO ZERANDO". Aqui havia uma recarga de _descAcompData
+  // a partir do localStorage "para garantir sincronização". A memória é a fonte
+  // da verdade (o Supabase entra nela pelo Realtime/reforço) e o localStorage é só
+  // cópia. Quando a gravação local falhava em silêncio (cota cheia — o relatório
+  // TMS em cache ocupa MBs) ou chegava atrasada, esta linha trocava a memória por
+  // uma cópia velha a cada redesenho: a Hora Fim lançada por outro usuário (ou
+  // pelo próprio) sumia, o Executado do Painel caía, e o registro velho ainda era
+  // regravado no servidor por cima do certo. Removido.
   
   var macsFila = _descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){ return {mac:m.mac, ativo:true}; });
   var totalGeral = macsFila.length;
@@ -19290,6 +19299,36 @@ function _inInstanteFimNaJanela(rec, horaFim, janela) {
   return null;
 }
 
+// ── V193 · DEDUPLICAÇÃO ENTRE DIAS E PESO ÚNICO POR MAC/MEC ─────────────────
+// Carga finalizada em dia operacional ANTERIOR (dataFimISO antes do início da
+// janela) que ainda aparece na fila do TMS — o conferente fechou no app, mas o
+// TMS só baixa depois. Os snapshots de hoje traziam esse MAC de novo: ele entrava
+// no Plano, e o Executado de ontem era somado outra vez hoje (no dia e no turno
+// da hora de fim — ex.: fim 21:50 de ontem aparecia no 2º Turno de hoje). Pela
+// regra do Extrato, só entra MAC/MEC novo; o que já foi executado não é novo.
+// Registro sem dataFimISO (anterior à V176) não tem como ser datado e segue como
+// antes.
+function _inFinalizadoAntesDaJanela(rec, janela) {
+  if (!janela || !rec || !rec.dataFimISO) return false;
+  if (!(rec.horaFim && String(rec.horaFim).trim())) return false;
+  var d = new Date(rec.dataFimISO);
+  return !isNaN(d.getTime()) && d.getTime() < janela.inicio.getTime();
+}
+
+// Peso de um MAC/MEC no Painel: o MAIOR conhecido — o mesmo que aparece na coluna
+// Peso do Acompanhamento IN e o mesmo já usado por _inExecutadoForaDoSnapshot.
+// Antes o caminho dos snapshots usava o pesoOpl do relatório e o caminho de
+// compensação usava este, então o Executado do Painel não fechava com a soma dos
+// finalizados na tela do Acompanhamento IN. Plano e Executado usam o mesmo valor,
+// então o Pendente continua exato.
+function _inPesoOficialDe(chave, pesoSnapshot) {
+  var p = parseFloat(pesoSnapshot);
+  if (isNaN(p)) p = 0;
+  var k = String(chave == null ? '' : chave).trim().toUpperCase();
+  var oficial = k ? (_inPesoPorMacTodos()[k] || 0) : 0;
+  return Math.max(p, oficial);
+}
+
 // Todo MAC/MEC com Hora Fim registrada no Acompanhamento IN dentro da janela
 // operacional que NÃO foi contado pelo caminho dos snapshots. O turno segue a
 // mesma régua do painel (_gvTurnoDoHorario sobre a Hora Fim), respeitando a
@@ -19353,7 +19392,10 @@ function _gvColetarDadosIN() {
     (h.filaSnapshot || []).forEach(function(f) {
       var chaveMac = String(f.mac == null ? '' : f.mac).trim().toUpperCase();
       if (!chaveMac || macsUnicos[chaveMac] !== undefined) return;
-      macsUnicos[chaveMac] = { mac: String(f.mac || '').trim(), pesoOpl: f.pesoOpl || 0, origem: f.origem || '—' };
+      var macOrig = String(f.mac || '').trim();
+      // V193 — já executado em dia operacional anterior: não é carga de hoje
+      if (_inFinalizadoAntesDaJanela(acompData[macOrig] || acompData[chaveMac], janela)) return;
+      macsUnicos[chaveMac] = { mac: macOrig, pesoOpl: _inPesoOficialDe(chaveMac, f.pesoOpl), origem: f.origem || '—' };
     });
   });
 
@@ -19371,7 +19413,9 @@ function _gvColetarDadosIN() {
     var peso = info.pesoOpl;
     pesoPlano += peso;
 
-    var rec = acompData[mac] || {};
+    // V193 — mesma busca do Extrato do Dia: chave original primeiro (a chave
+    // normalizada em maiúsculas não acha MEC/MAC gravado com minúsculas).
+    var rec = acompData[info.mac] || acompData[mac] || {};
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
 
@@ -20406,9 +20450,14 @@ function _gvFluxoFilaIN() {
     ((relatorio && relatorio.filaSnapshot) || []).forEach(function(f) {
       var chave = chaveMac(f.mac);
       if (!chave || unicos[chave] !== undefined) return;
+      var macOrig = String(f.mac == null ? '' : f.mac).trim();
+      // V193 — já executado em dia operacional anterior: fora do Plano e do
+      // Executado de hoje (ver _inFinalizadoAntesDaJanela)
+      if (_inFinalizadoAntesDaJanela(acompData[macOrig] || acompData[chave], janela)) return;
       unicos[chave] = {
-        mac: String(f.mac == null ? '' : f.mac).trim(),
-        pesoOpl: pesoMac(f.pesoOpl),
+        mac: macOrig,
+        // V193 — peso único do MAC/MEC (o do Acompanhamento IN), igual no Plano e no Executado
+        pesoOpl: _inPesoOficialDe(chave, pesoMac(f.pesoOpl)),
         origem: f.origem || '—'
       };
     });
