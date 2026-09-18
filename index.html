@@ -6992,12 +6992,22 @@ function ROTA7Trafego() {
 // pontos que atualizam essas fontes; se a aba não estiver aberta não faz nada,
 // porque o showTab já renderiza na entrada.
 // ══════════════════════════════════════════════════════════════════════
+// V195 — COALESCÊNCIA. Uma importação grava uma linha por MAC/MEC; cada gravação
+// vira um evento de Realtime em todas as máquinas, e cada evento chamava esta
+// função, que redesenhava o Painel inteiro. Com 200 itens eram 200 redesenhos
+// completos em sequência — origem direta do travamento. Agora a rajada inteira
+// vira UM redesenho, ao final dela. Nada muda no resultado exibido.
+var _gvRedesenhoTimer = null;
 function _gvRedesenharSeAtivo() {
-  try {
-    var tab = document.getElementById('tab-gestaoVista-content');
-    if (!tab || !tab.classList.contains('active')) return;
-    if (typeof gestaoVistaRenderizar === 'function') gestaoVistaRenderizar();
-  } catch (e) {}
+  if (_gvRedesenhoTimer) return;
+  _gvRedesenhoTimer = setTimeout(function() {
+    _gvRedesenhoTimer = null;
+    try {
+      var tab = document.getElementById('tab-gestaoVista-content');
+      if (!tab || !tab.classList.contains('active')) return;
+      if (typeof gestaoVistaRenderizar === 'function') gestaoVistaRenderizar();
+    } catch (e) {}
+  }, 150);
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -14634,6 +14644,40 @@ function _descAcompItemLocalMaisNovo(mac) {
   return !!(t && (Date.now() - t) < _DESC_ACOMP_ITEM_JANELA_LOCAL_MS);
 }
 
+// V195 — mesma coalescência do Painel, aplicada à tabela do Acompanhamento IN e
+// à cópia em localStorage. A tabela é reconstruída por innerHTML (N linhas x 15
+// colunas, com inputs); fazer isso uma vez por mensagem de Realtime durante uma
+// importação travava a tela. Agora a rajada vira um único redesenho e uma única
+// gravação local. O caminho de EDIÇÃO do usuário continua gravando na hora.
+var _descAcompRenderTimer = null;
+function _descAcompAgendarRender() {
+  if (_descAcompRenderTimer) return;
+  _descAcompRenderTimer = setTimeout(function() {
+    _descAcompRenderTimer = null;
+    var tab = document.getElementById('tab-descargaAcomp-content');
+    if (tab && tab.classList.contains('active') && typeof descargaAcompRenderizar === 'function') {
+      descargaAcompRenderizar(); // já adia sozinho se houver campo em foco
+    }
+  }, 150);
+}
+
+var _descAcompLsTimer = null;
+function _descAcompAgendarPersistLocal() {
+  if (_descAcompLsTimer) return;
+  _descAcompLsTimer = setTimeout(function() {
+    _descAcompLsTimer = null;
+    try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
+    try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
+  }, 400);
+}
+// Não perde a cópia local se a aba for fechada dentro da janela de 400ms.
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState !== 'hidden' || !_descAcompLsTimer) return;
+  clearTimeout(_descAcompLsTimer); _descAcompLsTimer = null;
+  try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
+  try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
+});
+
 function _descAcompListaSalvar() {
   try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(ex) {}
   _descAcompLista.forEach(function(item) {
@@ -14674,11 +14718,8 @@ function _descAcompListaAplicarItemRemoto(mac, item) {
   }
   if (idx >= 0) _descAcompLista[idx] = item; else _descAcompLista.push(item);
   _descAcompItemUltimoSalvo[mac] = JSON.stringify(item);
-  try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
-  if (typeof descargaAcompRenderizar === 'function') {
-    var tab = document.getElementById('tab-descargaAcomp-content');
-    if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
-  }
+  _descAcompAgendarPersistLocal();
+  _descAcompAgendarRender();
   _gvRedesenharSeAtivo();
 }
 
@@ -15022,11 +15063,8 @@ function _descAcompAplicarCelulaRemota(mac, registro) {
   if (!mac) return;
   _descAcompData[mac] = registro || {};
   _descAcompUltimoSalvo[mac] = JSON.stringify(_descAcompData[mac]);
-  try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
-  if (typeof descargaAcompRenderizar === 'function') {
-    var tab = document.getElementById('tab-descargaAcomp-content');
-    if (tab && tab.classList.contains('active')) descargaAcompRenderizar(); // já adia sozinho se houver campo em foco
-  }
+  _descAcompAgendarPersistLocal();
+  _descAcompAgendarRender();
   // Era exatamente aqui que a atualização morria: o registro do outro usuário
   // chegava e entrava em _descAcompData, mas só a aba Acompanhamento IN era
   // redesenhada. Quem estivesse com o Painel Executivo aberto continuava vendo
@@ -16125,6 +16163,18 @@ var _descAcompOrdenaçao = { coluna: 'mac', direcao: 'asc' };
 var _relatorioHistorico = [];
 try { _relatorioHistorico = JSON.parse(localStorage.getItem('relatorio_historico_v1') || '[]'); } catch(ex) { _relatorioHistorico = []; }
 
+// V195 — imports registrados POR ESTA MÁQUINA nesta sessão. O histórico é gravado
+// como um blob único ('descarga_historico_relatorio'), então duas importações
+// próximas se sobrescreviam: a segunda subia a lista inteira SEM a entrada da
+// primeira, apagando-a do compartilhado. Como o peso oficial de cada MAC/MEC vem
+// do import mais recente (_inPesoPorMacTodos) e o Plano do dia vem dos snapshots
+// da janela (_gvColetarDadosIN), perder um import derruba o Executado e, no
+// import seguinte, ele volta num valor diferente do original — exatamente o
+// sintoma "o peso diminui e depois sobe, mas não volta ao valor certo".
+// Esta marca permite remesclar de volta o que a máquina criou, sem ressuscitar o
+// que foi excluído de propósito (a exclusão local retira a marca).
+var _relHistCriadasNestaSessao = {};
+
 // Salva o Histórico de Relatório no Supabase (tabela "configuracoes", compartilhado entre todos os usuários)
 function _relatorioHistoricoSalvarSupabase() {
   try {
@@ -16144,8 +16194,30 @@ function _relatorioHistoricoCarregarSupabase() {
     _kvLerSeMudou('descarga_historico_relatorio', function(valor) {
       var data = [{ valor: valor }];
       if (data && data.length && data[0].valor) {
-        _relatorioHistorico = JSON.parse(data[0].valor);
+        var _localAntes = _relatorioHistorico || [];
+        var _remoto = JSON.parse(data[0].valor) || [];
+        // V195 — MESCLA em vez de SUBSTITUIR. A substituição pura apagava, desta
+        // máquina, o import que ela mesma acabou de registrar quando outra máquina
+        // gravava o blob no intervalo entre o registro e a confirmação.
+        var _vistos = {}, _merge = [];
+        _remoto.forEach(function(h) {
+          if (!h || !h.dataHoraISO || _vistos[h.dataHoraISO]) return;
+          _vistos[h.dataHoraISO] = true; _merge.push(h);
+        });
+        var _repostar = 0;
+        _localAntes.forEach(function(h) {
+          if (!h || !h.dataHoraISO || _vistos[h.dataHoraISO]) return;
+          if (!_relHistCriadasNestaSessao[h.dataHoraISO]) return; // só o que ESTA máquina criou
+          _vistos[h.dataHoraISO] = true; _merge.push(h); _repostar++;
+        });
+        _merge.sort(function(a, b) {
+          return (new Date(b && b.dataHoraISO).getTime() || 0) - (new Date(a && a.dataHoraISO).getTime() || 0);
+        });
+        if (_merge.length > 100) _merge = _merge.slice(0, 100);
+        _relatorioHistorico = _merge;
         if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null; // V194 — peso segue o import mais recente
+        if (typeof _descAcompPrimeiraAparicaoCache !== 'undefined') _descAcompPrimeiraAparicaoCache = null;
+        if (_repostar) _relatorioHistoricoSalvarSupabase(); // devolve ao servidor o que faltava lá
         
         // Limpeza automática: registros com mais de 7 dias
         var agora = new Date();
@@ -16189,7 +16261,12 @@ function _relatorioHistoricoRegistrar() {
       mac: c.mac,
       origem: c.nome || '',
       qtdCtrcs: c.ctrcs || 0,
-      pesoOpl: c.peso || 0,
+      // V195 — peso INTEGRAL do MEC, igual ao que a Transferência já grava logo
+      // abaixo (soma de todas as linhas do relatório). Com "c.peso" o snapshot
+      // guardava só o pendente da fila; como o peso oficial do MAC/MEC sai do
+      // snapshot mais recente (_inPesoPorMacTodos), a coleta encolhia a cada
+      // import conforme os CTRCs eram baixados.
+      pesoOpl: c.pesoIntegral || c.peso || 0,
       qtdVolume: qtdVolume,
       qtdNotas: Object.keys(notasUnicas).length,
       isColeta: true
@@ -16232,6 +16309,7 @@ function _relatorioHistoricoRegistrar() {
     filaSnapshot: filaSnapshot
   };
   _relatorioHistorico.unshift(entrada); // mais recente primeiro
+  _relHistCriadasNestaSessao[entrada.dataHoraISO] = true; // V195 — protege contra sobrescrita por outra máquina
   // V194 — o peso oficial de cada MAC/MEC sai do import mais recente: sem isto o
   // cache de 15s seguia entregando o peso do import anterior.
   if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null;
@@ -16405,6 +16483,10 @@ function descargaHistoricoRenderizar() {
 
 function descargaHistoricoExcluir(idx) {
   if (!confirm('Excluir este registro do histórico? Essa ação não pode ser desfeita.')) return;
+  var _removida = _relatorioHistorico[idx];
+  // V195 — excluir de propósito retira a proteção de remesclagem: sem isto, o
+  // próximo ciclo de leitura devolveria a entrada recém-apagada.
+  if (_removida && _removida.dataHoraISO) delete _relHistCriadasNestaSessao[_removida.dataHoraISO];
   _relatorioHistorico.splice(idx, 1);
   try { localStorage.setItem('relatorio_historico_v1', JSON.stringify(_relatorioHistorico)); } catch(ex) {}
   _relatorioHistoricoSalvarSupabase(); // compartilha com todos os usuários
@@ -16823,11 +16905,30 @@ function _acompOutLocalMaisNovo(id) {
   return !!(t && (Date.now() - t) < _ACOMP_OUT_JANELA_LOCAL_MS);
 }
 
+// V195 — registro "em branco": exatamente o que _acompOutGet cria só para
+// desenhar a linha, sem nada digitado. Espelha _descAcompRegistroVazio (V193).
+function _acompOutRegistroVazio(rec) {
+  if (!rec) return true;
+  if (rec.adiantadoDe || rec.adiantadoPara || rec.linha) return false; // cópia de Veículo Adiantado
+  var campos = ['pesoOpl', 'conferente', 'qtdConf', 'qtdAjud', 'horaInicio', 'horaFim', 'turno', 'prevFech'];
+  for (var i = 0; i < campos.length; i++) {
+    if (rec[campos[i]] && String(rec[campos[i]]).trim()) return false;
+  }
+  return true;
+}
+
 function _acompOutSalvar() {
   try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(ex) {}
   Object.keys(_acompOutData).forEach(function(id) {
     var atual = JSON.stringify(_acompOutData[id]);
     if (_acompOutUltimoSalvo[id] === atual) return; // este veículo não mudou desde a última gravação
+    // V195 — CAUSA DA DIVERGÊNCIA DO PESO NO "CARREGAMENTO OUT". _acompOutGet cria
+    // um registro vazio para CADA linha só para desenhar a tabela; ele entrava em
+    // _acompOutData e, no primeiro salvamento de QUALQUER outro veículo, subia ao
+    // servidor por cima do Peso OPL/Hora Fim que outro usuário tinha acabado de
+    // lançar naquele veículo — o Executado do painel caía e não voltava sozinho.
+    // Mesma correção já feita no Acompanhamento IN (V193).
+    if (_acompOutUltimoSalvo[id] === undefined && _acompOutRegistroVazio(_acompOutData[id])) return;
     _acompOutUltimoSalvo[id] = atual;
     _acompOutEditadoLocalEm[id] = Date.now();
     _acompOutSalvarCelulaSupabase(id, _acompOutData[id]);
@@ -16835,14 +16936,50 @@ function _acompOutSalvar() {
   _gvRedesenharSeAtivo();
 }
 
-function _acompOutSalvarCelulaSupabase(id, registro) {
+function _acompOutSalvarCelulaSupabase(id, registro, _tentativa) {
+  // V195 — antes esta função disparava o POST e engolia qualquer erro (.catch
+  // vazio), sem conferir o status da resposta: 401/409/500/timeout passavam por
+  // gravação bem-sucedida. Como _acompOutSalvar já marcara o veículo em
+  // _acompOutUltimoSalvo ANTES do envio, a linha "se não mudou, não regrava"
+  // bloqueava toda tentativa posterior — o Peso OPL digitado nunca chegava ao
+  // servidor e o reforço periódico trazia o valor antigo de volta por cima.
+  // Mesma proteção já existente em _descAcompSalvarCelulaSupabase (lado IN).
+  var corpo = JSON.stringify(registro);
+  var tentativa = _tentativa || 0;
+  var MAX_TENTATIVAS = 3;
+  function _falhou(motivo) {
+    // Só insiste enquanto o valor local continuar sendo este — se o usuário
+    // editou de novo no meio do caminho, quem manda é a edição mais recente.
+    if (JSON.stringify(_acompOutData[id]) !== corpo) return;
+    if (tentativa < MAX_TENTATIVAS) {
+      setTimeout(function() {
+        if (JSON.stringify(_acompOutData[id]) === corpo) {
+          _acompOutSalvarCelulaSupabase(id, registro, tentativa + 1);
+        }
+      }, 2000 * (tentativa + 1));
+      return;
+    }
+    if (_acompOutUltimoSalvo[id] === corpo) delete _acompOutUltimoSalvo[id];
+    console.warn('[Acomp OUT] não foi possível salvar o veículo ' + id + ' no Supabase:', motivo);
+    if (typeof showToast === 'function') {
+      showToast('⚠️ Falha ao salvar o veículo ' + id + ' no servidor — verifique a conexão', 'error');
+    }
+  }
   try {
     fetch(SB_URL + '/configuracoes', {
       method: 'POST',
+      keepalive: true, // a gravação não pode ser cancelada por um reload/troca de aba logo em seguida
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: 'acomp_out_cel:' + id, valor: JSON.stringify(registro) })
-    }).catch(function(){});
-  } catch(e) {}
+      body: JSON.stringify({ chave: 'acomp_out_cel:' + id, valor: corpo })
+    }).then(function(res) {
+      if (res && res.ok) return; // confirmado pelo servidor — a marca de "salvo" vale
+      _falhou('HTTP ' + (res ? res.status : '?'));
+    }).catch(function(err) {
+      _falhou(err);
+    });
+  } catch(e) {
+    _falhou(e);
+  }
 }
 
 // Aplica o registro de UM veículo vindo do servidor (carga inicial, polling ou o
@@ -16853,10 +16990,15 @@ function _acompOutAplicarCelulaRemota(id, registro) {
   _acompOutData[id] = registro || { pesoOpl: '', horaInicio: '', horaFim: '', conferente: '' };
   _acompOutUltimoSalvo[id] = JSON.stringify(_acompOutData[id]);
   try { localStorage.setItem('acomp_out_v1', JSON.stringify(_acompOutData)); } catch(e){}
-  if (typeof acompOutRenderizar === 'function') {
+  // V195 — mesma coalescência do lado IN: uma rajada de eventos vira um redesenho.
+  if (_acompOutRenderTimer) { /* já agendado */ }
+  else _acompOutRenderTimer = setTimeout(function() {
+    _acompOutRenderTimer = null;
     var tab = document.getElementById('tab-acompOut-content');
-    if (tab && tab.classList.contains('active')) acompOutRenderizar(); // já adia sozinho se houver campo em foco (_acompOutFocoNaTabela)
-  }
+    if (tab && tab.classList.contains('active') && typeof acompOutRenderizar === 'function') {
+      acompOutRenderizar(); // já adia sozinho se houver campo em foco (_acompOutFocoNaTabela)
+    }
+  }, 150);
   // Mesmo motivo do lado IN: sem isto o Executado (OUT) do Painel Executivo
   // ficava parado no valor antigo até o usuário trocar de aba.
   _gvRedesenharSeAtivo();
@@ -17148,6 +17290,7 @@ function _acompOutAtualizarSetas() {
 // pendente e ocorre assim que o foco sai. Dados remotos continuam sendo
 // recebidos e aplicados normalmente — só o desenho da tela é adiado.
 var _acompOutRenderPendente = false;
+var _acompOutRenderTimer = null; // V195 — coalescência dos redesenhos vindos do Realtime
 
 function _acompOutFocoNaTabela() {
   var ae = document.activeElement;
