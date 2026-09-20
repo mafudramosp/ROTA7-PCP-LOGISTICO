@@ -6060,8 +6060,10 @@ document.addEventListener('click',function(e){
 
   <div id="descarga-acomp-cards" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
   
-  <div style="margin-bottom:12px">
+  <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <input type="text" id="descarga-acomp-search" placeholder="Buscar por MAC..." style="width:280px;padding:8px 12px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;font-family:'Poppins',sans-serif" onkeyup="descargaAcompFiltrarPorMAC(this.value)">
+    <button id="descarga-acomp-btn-fila" onclick="descargaAcompAlternarSomenteFila()" title="Mostra apenas os MAC/MEC que ainda estão na fila de descarga. Apenas oculta — nenhum registro é apagado." style="padding:8px 14px;font-size:12px;font-weight:700;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#334155;cursor:pointer;font-family:'Poppins',sans-serif;white-space:nowrap">Somente na fila</button>
+    <span id="descarga-acomp-fila-info" style="font-size:11px;color:#94a3b8"></span>
   </div>
   
   <div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;background:#fff">
@@ -15063,6 +15065,7 @@ function _descAcompAplicarCelulaRemota(mac, registro) {
   if (!mac) return;
   _descAcompData[mac] = registro || {};
   _descAcompUltimoSalvo[mac] = JSON.stringify(_descAcompData[mac]);
+  if (typeof _inAcompIdxCache !== 'undefined') _inAcompIdxCache = null; // V196
   _descAcompAgendarPersistLocal();
   _descAcompAgendarRender();
   // Era exatamente aqui que a atualização morria: o registro do outro usuário
@@ -15098,13 +15101,37 @@ var _SB_MAX_PAGINAS = 60; // trava de segurança: 60 mil registros
 // leitura de cada prefixo é sempre completa.
 function _sbLerCelulasPaginado(prefixo, aplicarLinha, incremental) {
   return new Promise(function(resolve) {
-    var offset = 0, total = 0, pagina = 0, nulos = 0, maiorTs = '', menorTsIgnorado = '';
+    var offset = 0, total = 0, pagina = 0, nulos = 0, maiorTs = '', menorTsIgnorado = '', ultimaChave = '';
+    // V198 — CAUSA DO EXECUTADO CURTO E TEIMOSO. A leitura era dada por concluída
+    // mesmo quando uma página falhava (.catch chamava finalizar()) ou quando o
+    // PostgREST devolvia um objeto de erro em vez de um array (rows.length ficava
+    // "undefined" e era lido como "acabaram as linhas"). Nos dois casos a função
+    // ligava o modo incremental e avançava a marca d'água com base numa carga
+    // PARCIAL — e a partir daí todo ciclo de 60s só pedia linhas MAIS NOVAS que essa
+    // marca. As linhas que nunca chegaram nunca mais eram pedidas na sessão inteira.
+    //
+    // Resultado prático: a máquina ficava com uma fração das Horas Fim do
+    // Acompanhamento IN e o Executado do Painel parava num número mais baixo, sem
+    // se mexer nem se recuperar — e nenhum ajuste de fórmula resolvia, porque o
+    // dado simplesmente não estava na memória. Bastava um engasgo de rede durante a
+    // carga inicial (que roda junto com o download do relatório TMS, pesado) para
+    // a sessão inteira ficar torta.
+    //
+    // Agora: falhou, não conclui. A marca d'água não avança, o modo incremental é
+    // desligado e o ciclo seguinte relê tudo até uma leitura completar de verdade.
     // Só usa o filtro incremental se a carga completa anterior confirmou que
     // todas as linhas têm "atualizado_em". Caso contrário, lê tudo (V150).
     var usarFiltro = !!(incremental && _sbIncrementalOk[prefixo] && _sbMarcaDagua[prefixo]);
     var filtroTs = usarFiltro ? '&atualizado_em=gt.' + encodeURIComponent(_sbMarcaDagua[prefixo]) : '';
-
+    var falhou = false;
     function finalizar() {
+      if (falhou) {
+        // Carga incompleta: não avança nada e força releitura completa no próximo ciclo.
+        _sbIncrementalOk[prefixo] = false;
+        console.warn('[supabase] Leitura de "' + prefixo + '" INCOMPLETA (' + total +
+                     ' registro(s) lidos). Marca d\'água preservada; o próximo ciclo relê tudo.');
+        return resolve(total);
+      }
       if (!usarFiltro) {
         // Carga completa: decide se o modo incremental pode ser ligado.
         _sbIncrementalOk[prefixo] = (total > 0 && nulos === 0);
@@ -15141,13 +15168,26 @@ function _sbLerCelulasPaginado(prefixo, aplicarLinha, incremental) {
     function proxima() {
       if (pagina++ >= _SB_MAX_PAGINAS) {
         console.warn('[supabase] Leitura de "' + prefixo + '" interrompida na trava de segurança após ' + total + ' registros.');
+        falhou = true; // V198 — interrompida no meio não é leitura completa
         return finalizar();
       }
+      // V198 — paginação por CHAVE (keyset) em vez de OFFSET. Com offset, uma linha
+      // inserida durante a leitura (é o que acontece numa importação, que grava uma
+      // linha por MAC/MEC) empurra as demais para frente e a página seguinte PULA
+      // registros — perda silenciosa, diferente a cada máquina. Com "chave > última
+      // lida" o corte é estável mesmo com gravação concorrente.
+      var filtroChave = ultimaChave ? ('&chave=gt.' + encodeURIComponent(ultimaChave)) : '';
       fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(prefixo) + '*&select=chave,valor,atualizado_em' +
-            filtroTs + '&order=chave.asc&limit=' + _SB_PAGINA_TAM + '&offset=' + offset, {
+            filtroTs + filtroChave + '&order=chave.asc&limit=' + _SB_PAGINA_TAM, {
         headers: _sbCabecalhoLeitura()
       }).then(function(r){ return r.json(); }).then(function(rows) {
-        if (!rows || !rows.length) {
+        // Resposta que não é array = erro do PostgREST (ex.: {code,message}). Antes
+        // caía no "!rows.length" e passava por FIM DOS DADOS, concluindo a leitura.
+        if (!Array.isArray(rows)) {
+          falhou = true;
+          return finalizar();
+        }
+        if (!rows.length) {
           if (usarFiltro && total === 0) _sbLeiturasEvitadas++;
           return finalizar();
         }
@@ -15164,11 +15204,18 @@ function _sbLerCelulasPaginado(prefixo, aplicarLinha, incremental) {
           }
         });
         total += rows.length;
-        // Avança pelo tamanho REAL devolvido: se o servidor tiver um teto menor
-        // que _SB_PAGINA_TAM, a paginação continua correta mesmo assim.
-        offset += rows.length;
+        // Avança pela ÚLTIMA CHAVE lida (a consulta é ordenada por chave.asc).
+        var ult = rows[rows.length - 1];
+        var novaChave = ult && ult.chave ? String(ult.chave) : '';
+        if (!novaChave || novaChave === ultimaChave) return finalizar(); // sem avanço: encerra
+        ultimaChave = novaChave;
         proxima();
-      }).catch(function() { finalizar(); });
+      }).catch(function(err) {
+        // V198 — engasgo de rede não pode mais passar por leitura concluída.
+        falhou = true;
+        console.warn('[supabase] Falha ao ler página de "' + prefixo + '":', err);
+        finalizar();
+      });
     }
     proxima();
   });
@@ -15338,6 +15385,127 @@ function ROTA7ConferirPesos() {
   console.log('Total com o maior peso já visto (regra da V193):     ', kg(tMaior), 'kg');
   console.log('Confira na coluna M do relatório TMS os MACs com diferença > 0 no topo da tabela.');
   return tabela.length + ' MAC/MEC no Executado de hoje';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// AUDITORIA DO EXECUTADO (IN) — digite ROTA7Executado() no Console (F12).
+// Percorre TODO registro do Acompanhamento IN que tem Hora Fim e diz, um por um,
+// se ele entrou no Executado do dia e, quando não entrou, o motivo exato. Reproduz
+// passo a passo as mesmas regras de _gvColetarDadosIN + _inExecutadoForaDoSnapshot,
+// sem alterar nenhum dado — é só leitura.
+// ══════════════════════════════════════════════════════════════════════════
+function ROTA7Executado() {
+  function K(m) { return String(m == null ? '' : m).trim().toUpperCase(); }
+  function fmt(d) { d = new Date(d); return isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR'); }
+  function kg(v) { return Math.round(v || 0).toLocaleString('pt-BR'); }
+
+  var janela = _gvJanelaOperacionalAtual(new Date());
+  var acomp = (typeof _descAcompData !== 'undefined' && _descAcompData) ? _descAcompData : {};
+  var hist  = (typeof _relatorioHistorico !== 'undefined' && _relatorioHistorico) ? _relatorioHistorico : [];
+  if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null;
+  if (typeof _inPesoIdxHistCache !== 'undefined') _inPesoIdxHistCache = null;
+  if (typeof _inAcompIdxCache !== 'undefined') _inAcompIdxCache = null;
+  var pesos = _inPesoPorMacTodos();
+  var itensLista = (typeof _inItemAcompPorMac === 'function') ? _inItemAcompPorMac() : {};
+
+  // Imports dentro da janela operacional e o que cada um trouxe
+  var snapsJanela = hist.filter(function(h) {
+    return h && _gvDataDentroDaJanela(new Date(h.dataHoraISO), janela);
+  }).sort(function(a, b) { return new Date(a.dataHoraISO) - new Date(b.dataHoraISO); });
+  var noSnapshot = {};
+  snapsJanela.forEach(function(h) {
+    ((h.filaSnapshot) || []).forEach(function(f) {
+      var k = K(f && f.mac);
+      if (k && noSnapshot[k] === undefined) noSnapshot[k] = parseFloat(f.pesoOpl) || 0;
+    });
+  });
+
+  console.log('══ ROTA7 · auditoria do Executado (Descarga IN) ══════════════');
+  console.log('Janela operacional :', fmt(janela.inicio), '→', fmt(janela.fim));
+  console.log('Imports na janela  :', snapsJanela.length,
+              snapsJanela.length ? ('(' + snapsJanela.map(function(h){ return fmt(h.dataHoraISO).split(' ')[1]; }).join(', ') + ')') : '');
+  console.log('MAC/MEC nos imports:', Object.keys(noSnapshot).length);
+  console.log('Registros com Hora Fim em memória:', Object.keys(acomp).filter(function(m){
+    var r = acomp[m] || {}; return r.horaFim && String(r.horaFim).trim();
+  }).length);
+
+  var dentro = [], fora = [], somaDentro = 0, somaFora = 0;
+  var porMotivo = {};
+
+  Object.keys(acomp).forEach(function(macBruto) {
+    var rec = acomp[macBruto] || {};
+    var hf = rec.horaFim && String(rec.horaFim).trim();
+    if (!hf) return;
+    var k = K(macBruto);
+    if (!k) return;
+
+    var emSnap = (noSnapshot[k] !== undefined);
+    var peso = 0, motivo = '', caminho = emSnap ? 'snapshot' : 'compensação';
+
+    if (emSnap) {
+      // caminho principal (_gvColetarDadosIN / _gvFluxoFilaIN)
+      if (_inFinalizadoAntesDaJanela(rec, janela, _inEntrouNaJanela(k, janela))) {
+        motivo = 'descartado: finalizado em dia operacional ANTERIOR (dataFimISO ' + fmt(rec.dataFimISO) + ')';
+      } else {
+        peso = _inPesoOficialDe(k, noSnapshot[k]);
+        if (!peso) motivo = 'descartado: peso zero no snapshot e em todas as fontes';
+      }
+    } else {
+      // caminho de recuperação (_inExecutadoForaDoSnapshot)
+      if (!rec.dataFimISO) {
+        var it = itensLista[k];
+        var recente = it ? (it.ativo !== false || _descAcompIdadeHoras(it) <= DESC_ACOMP_HORAS_ARQUIVAR) : false;
+        if (!recente) motivo = 'descartado: sem dataFimISO e carga fora da fila há mais de ' + DESC_ACOMP_HORAS_ARQUIVAR + 'h';
+      }
+      if (!motivo && !_inInstanteFimNaJanela(rec, hf, janela, _inEntrouNaJanela(k, janela))) {
+        motivo = 'descartado: Hora Fim ' + hf + ' não cai na janela operacional'
+               + (rec.dataFimISO ? (' (dataFimISO ' + fmt(rec.dataFimISO) + ')') : ' (sem dataFimISO)');
+      }
+      if (!motivo) {
+        peso = (typeof _inPesoCongeladoDe === 'function' ? _inPesoCongeladoDe(k) : 0) || pesos[k] || 0;
+        if (!peso) motivo = 'descartado: nenhum import conhece este MAC/MEC, peso indeterminado';
+      }
+    }
+
+    var linha = {
+      'MAC/MEC': String(macBruto).trim(),
+      'Hora Fim': hf,
+      'Turno': _gvTurnoDoHorario(hf) || '—',
+      'Peso (kg)': Math.round(peso),
+      'Caminho': caminho,
+      'Situação': motivo || 'CONTABILIZADO'
+    };
+    if (motivo) { fora.push(linha); somaFora += peso || (pesos[k] || 0);
+                  var chaveM = motivo.split('(')[0].trim();
+                  porMotivo[chaveM] = (porMotivo[chaveM] || 0) + 1; }
+    else { dentro.push(linha); somaDentro += peso; }
+  });
+
+  dentro.sort(function(a, b){ return b['Peso (kg)'] - a['Peso (kg)']; });
+  fora.sort(function(a, b){ return b['Peso (kg)'] - a['Peso (kg)']; });
+
+  console.log('');
+  console.log('── CONTABILIZADOS: ' + dentro.length + ' MAC/MEC · ' + kg(somaDentro) + ' kg ──');
+  if (dentro.length && console.table) console.table(dentro);
+  console.log('── DESCARTADOS: ' + fora.length + ' MAC/MEC (peso conhecido ' + kg(somaFora) + ' kg) ──');
+  if (fora.length && console.table) console.table(fora);
+  if (fora.length) {
+    console.log('Motivos dos descartes:');
+    Object.keys(porMotivo).forEach(function(m){ console.log('   • ' + m + ' → ' + porMotivo[m] + ' registro(s)'); });
+  }
+
+  var d = (typeof _gvColetarDadosIN === 'function') ? _gvColetarDadosIN() : {};
+  var fx = (typeof _gvFluxoFilaIN === 'function') ? _gvFluxoFilaIN() : null;
+  console.log('');
+  console.log('Executado do DIA no painel   :', kg(d.pesoExecutado), 'kg');
+  if (fx && fx.linhas) fx.linhas.forEach(function(l){
+    console.log('   ' + l.turno + ' →', kg(l.executado), 'kg');
+  });
+  console.log('Plano do dia no painel       :', kg(d.pesoPlano), 'kg');
+  console.log('');
+  console.log('Se a soma dos CONTABILIZADOS bater com o painel, o cálculo está certo e');
+  console.log('o peso que falta está na tabela de DESCARTADOS — o motivo diz onde corrigir.');
+  return dentro.length + ' contabilizado(s) · ' + fora.length + ' descartado(s)';
 }
 
 var _descAcompMigracaoFeita = false;
@@ -15712,15 +15880,25 @@ function descargaAcompCampoAlterado(mac, campo, valor) {
       } else {
         if (isNaN(_mf)) _mf = 0;
         var _dtFim = new Date(_agoraFim.getFullYear(), _agoraFim.getMonth(), _agoraFim.getDate(), _hf, _mf, 0, 0);
-        // Hora à frente do relógio no mesmo dia = registro do turno que atravessou
-        // a meia-noite (ex.: 23:40 lançado às 00:20) — pertence ao dia anterior.
-        if (_dtFim.getTime() - _agoraFim.getTime() > 3600000) _dtFim.setDate(_dtFim.getDate() - 1);
+        // V197 — este recuo existe SÓ para a virada da meia-noite (23:40 lançado às
+        // 00:20). A condição anterior era "hora mais de 1h à frente do relógio", o
+        // que atingia qualquer lançamento arredondado para a frente durante o dia
+        // (17:00 lançado às 15:30, muito comum): o registro ganhava carimbo de ONTEM
+        // e o Painel o descartava do Plano E do Executado, sem aviso nenhum. Agora
+        // só recua de madrugada com hora de fim noturna — a virada de verdade.
+        //   400 = 06:40 (abertura do 1º Turno) · 1200 = 20:00
+        var _minAgoraFim = _agoraFim.getHours() * 60 + _agoraFim.getMinutes();
+        var _minHoraFim = _hf * 60 + _mf;
+        if (_minAgoraFim < 400 && _minHoraFim > 1200) _dtFim.setDate(_dtFim.getDate() - 1);
         rec.dataFimISO = _dtFim.toISOString();
       }
     } else {
       delete rec.dataFimISO;
     }
   }
+  // V196 — o peso do Executado passa a ser lido pelo instante da Hora Fim; o
+  // índice precisa refletir o registro na hora, não no próximo ciclo de 5s.
+  if (typeof _inAcompIdxCache !== 'undefined') _inAcompIdxCache = null;
   _descAcompSalvar();
   setTimeout(function(){
     descargaAcompAtualizarLinha(mac);
@@ -15763,6 +15941,7 @@ function descargaAcompStatusAlterado(mac, status) {
     rec.horaFim = '';
   }
   
+  if (typeof _inAcompIdxCache !== 'undefined') _inAcompIdxCache = null; // V196
   _descAcompSalvar();
   // Pequeno delay para garantir que localStorage foi atualizado
   setTimeout(function(){
@@ -16074,6 +16253,15 @@ function descargaAcompRenderizar() {
     });
   }
 
+  // "Somente na fila": oculta o que saiu da fila de descarga (ativo = false).
+  var _ocultosForaDaFila = 0;
+  if (_descAcompSomenteFila) {
+    var _antesFila = lista.length;
+    lista = lista.filter(function(m) { return m.ativo !== false; });
+    _ocultosForaDaFila = _antesFila - lista.length;
+  }
+  _descAcompAtualizarBotaoFila(_ocultosForaDaFila);
+
   // Separar arquivados (fora da fila há mais de 72h, sem registro) dos demais.
   // V176 — antes o critério era só "saiu da fila", o que jogava para o fim da
   // tabela cargas recentes que ainda precisavam ser registradas.
@@ -16152,6 +16340,33 @@ function descargaAcompRenderizar() {
   }).join('');
 }
 
+// ═══ FILTRO "SOMENTE NA FILA" (Acompanhamento IN) ═══
+// Esconde as linhas que saíram da fila de descarga (ativo = false). É só
+// visualização: nada é removido de _descAcompLista nem do Supabase, e o Executado
+// do Painel continua somando as cargas finalizadas normalmente. A preferência fica
+// gravada nesta máquina.
+var _descAcompSomenteFila = false;
+try { _descAcompSomenteFila = (localStorage.getItem('desc_acomp_somente_fila') === '1'); } catch (e) {}
+
+function descargaAcompAlternarSomenteFila() {
+  _descAcompSomenteFila = !_descAcompSomenteFila;
+  try { localStorage.setItem('desc_acomp_somente_fila', _descAcompSomenteFila ? '1' : '0'); } catch (e) {}
+  descargaAcompRenderizar();
+}
+
+function _descAcompAtualizarBotaoFila(ocultos) {
+  var b = document.getElementById('descarga-acomp-btn-fila');
+  if (b) {
+    b.style.background  = _descAcompSomenteFila ? '#111827' : '#fff';
+    b.style.color       = _descAcompSomenteFila ? '#fff' : '#334155';
+    b.style.borderColor = _descAcompSomenteFila ? '#111827' : '#e2e8f0';
+  }
+  var s = document.getElementById('descarga-acomp-fila-info');
+  if (s) s.textContent = _descAcompSomenteFila
+    ? (ocultos + ' fora da fila ocultado(s) — nada foi apagado')
+    : '';
+}
+
 // ═══ FILTRO E ORDENAÇÃO (Acompanhamento de Produção) ═══
 var _descAcompFiltro = '';
 var _descAcompOrdenaçao = { coluna: 'mac', direcao: 'asc' };
@@ -16217,6 +16432,7 @@ function _relatorioHistoricoCarregarSupabase() {
         _relatorioHistorico = _merge;
         if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null; // V194 — peso segue o import mais recente
         if (typeof _descAcompPrimeiraAparicaoCache !== 'undefined') _descAcompPrimeiraAparicaoCache = null;
+        if (typeof _inPesoIdxHistCache !== 'undefined') _inPesoIdxHistCache = null; // V196
         if (_repostar) _relatorioHistoricoSalvarSupabase(); // devolve ao servidor o que faltava lá
         
         // Limpeza automática: registros com mais de 7 dias
@@ -16313,6 +16529,7 @@ function _relatorioHistoricoRegistrar() {
   // V194 — o peso oficial de cada MAC/MEC sai do import mais recente: sem isto o
   // cache de 15s seguia entregando o peso do import anterior.
   if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null;
+  if (typeof _inPesoIdxHistCache !== 'undefined') _inPesoIdxHistCache = null; // V196
   if (_relatorioHistorico.length > 100) _relatorioHistorico = _relatorioHistorico.slice(0, 100);
   try { localStorage.setItem('relatorio_historico_v1', JSON.stringify(_relatorioHistorico)); } catch(ex) {}
   _relatorioHistoricoSalvarSupabase(); // compartilha com todos os usuários
@@ -19559,11 +19776,53 @@ function _inItemAcompPorMac() {
 // operacional; caso contrário null. Usa "dataFimISO" quando existe (carimbo
 // exato) e, para registros antigos gravados só com a hora, reconstrói o instante
 // testando o dia de referência e o anterior — a janela cruza a meia-noite.
-function _inInstanteFimNaJanela(rec, horaFim, janela) {
+// V197 — para decidir se uma HORA FIM pertence ao dia operacional, o limite é o
+// fim do dia (23:01), não o relógio. "janela.fim" é cortado em "agora" porque serve
+// para filtrar IMPORTS já ocorridos; aplicá-lo aqui fazia toda Hora Fim lançada à
+// frente do relógio ficar fora do Plano e do Executado e só reaparecer mais tarde,
+// quando o relógio a alcançasse — exatamente o comportamento de peso que some e
+// volta sozinho ao longo do turno.
+// V197 — PROVA DE QUE A CARGA É DE HOJE. "entradaISO" marca quando o MAC/MEC entrou
+// na fila (gravado por _descAcompListaMerge). Uma carga que entrou na fila dentro do
+// dia operacional NÃO pode ter sido finalizada num dia anterior — então, quando o
+// carimbo dataFimISO diz o contrário, é o carimbo que está errado, e não a carga que
+// deve sumir do Plano e do Executado.
+var _inEntradaIdxCache = null, _inEntradaIdxTs = 0;
+function _inEntrouNaJanela(k, janela) {
+  if (!janela || !k) return false;
+  var agora = Date.now();
+  if (!_inEntradaIdxCache || (agora - _inEntradaIdxTs) > 15000) {
+    _inEntradaIdxCache = (typeof _inItemAcompPorMac === 'function') ? _inItemAcompPorMac() : {};
+    _inEntradaIdxTs = agora;
+  }
+  var it = _inEntradaIdxCache[k];
+  if (!it || !it.entradaISO) return false;
+  var d = new Date(it.entradaISO);
+  if (isNaN(d.getTime())) return false;
+  var limite = janela.fimProgramado || janela.fim;
+  return d.getTime() >= janela.inicio.getTime() && d.getTime() <= limite.getTime();
+}
+
+// "entrouHoje" muda duas coisas, e só para quem tem essa prova:
+//   • o limite passa a ser o FIM DO DIA OPERACIONAL (23:01) em vez do relógio —
+//     sem isso, toda Hora Fim lançada à frente do relógio (17:00 lançado às 15:30,
+//     prática comum) ficava fora do Plano e do Executado até o relógio alcançá-la;
+//   • um carimbo dataFimISO fora do dia deixa de descartar o registro na hora e cede
+//     lugar à Hora Fim, que é a prova mais forte (mesmo princípio da V194).
+// Sem a prova, tudo continua exatamente como antes — inclusive a proteção da V193
+// contra somar de novo, hoje, o que foi executado ontem.
+function _inInstanteFimNaJanela(rec, horaFim, janela, entrouHoje) {
   if (!janela) return null;
+  var limite = entrouHoje ? (janela.fimProgramado || janela.fim) : janela.fim;
+  function dentro(d) {
+    return !isNaN(d.getTime()) && d.getTime() >= janela.inicio.getTime() && d.getTime() <= limite.getTime();
+  }
   if (rec && rec.dataFimISO) {
     var d = new Date(rec.dataFimISO);
-    if (!isNaN(d.getTime())) return _gvDataDentroDaJanela(d, janela) ? d : null;
+    if (!isNaN(d.getTime())) {
+      if (dentro(d)) return d;
+      if (!entrouHoje) return null; // carimbo de outro dia e sem prova em contrário
+    }
   }
   var partes = String(horaFim || '').split(':');
   var hh = parseInt(partes[0], 10), mm = parseInt(partes[1], 10);
@@ -19572,7 +19831,7 @@ function _inInstanteFimNaJanela(rec, horaFim, janela) {
   var ref = janela.dataRef;
   for (var off = 0; off <= 1; off++) {
     var c = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - off, hh, mm, 0, 0);
-    if (_gvDataDentroDaJanela(c, janela)) return c;
+    if (dentro(c)) return c;
   }
   return null;
 }
@@ -19586,7 +19845,9 @@ function _inInstanteFimNaJanela(rec, horaFim, janela) {
 // regra do Extrato, só entra MAC/MEC novo; o que já foi executado não é novo.
 // Registro sem dataFimISO (anterior à V176) não tem como ser datado e segue como
 // antes.
-function _inFinalizadoAntesDaJanela(rec, janela) {
+function _inFinalizadoAntesDaJanela(rec, janela, entrouHoje) {
+  // V197 — entrou na fila dentro do dia operacional: é carga de hoje, ponto.
+  if (entrouHoje) return false;
   if (!janela || !rec || !rec.dataFimISO) return false;
   var horaFim = rec.horaFim && String(rec.horaFim).trim();
   if (!horaFim) return false;
@@ -19601,7 +19862,84 @@ function _inFinalizadoAntesDaJanela(rec, janela) {
   // prova mais forte: se esse horário JÁ ACONTECEU no dia operacional de hoje,
   // conta hoje. Só é excluído quando o horário ainda não chegou hoje (ex.: fim
   // 21:50 visto às 10:00) — aí é, com certeza, de um dia anterior.
-  return !_inInstanteFimNaJanela({ horaFim: horaFim }, horaFim, janela);
+  return !_inInstanteFimNaJanela({ horaFim: horaFim }, horaFim, janela, false);
+}
+
+// ── V196 · PESO DECLARADO NO INSTANTE DA FINALIZAÇÃO ────────────────────────
+// CAUSA DO EXECUTADO RETROCEDENDO. A V194 fixou o peso oficial no import MAIS
+// RECENTE. Enquanto a carga está aberta isso está correto — acompanha a correção
+// da coluna M do TMS. Depois que ela é FINALIZADA, porém, todo import seguinte
+// traz só o que ainda resta daquele MAC/MEC: o peso encolhe e o Executado do dia
+// cai sozinho, sem ninguém mexer em nada, voltando depois num valor diferente.
+//
+// Regra nova, aplicada SÓ a quem já tem Hora Fim: vale o peso declarado no último
+// import anterior à finalização — o que o TMS informava quando a carga terminou.
+// Correção de peso feita ANTES da Hora Fim continua valendo (caso da V194);
+// encolhimento posterior à Hora Fim deixa de ser considerado.
+//
+// Mesmo padrão já usado e validado em _descProgramacaoPesoNoHistorico (congelamento
+// do peso da programação). Não cria campo novo: é derivado de dataFimISO + histórico,
+// então não precisa sincronizar nada entre máquinas e corrige valores retroativamente.
+var _inPesoIdxHistCache = null, _inPesoIdxHistTs = 0;
+function _inPesoIdxHistorico() {
+  var agora = Date.now();
+  if (_inPesoIdxHistCache && (agora - _inPesoIdxHistTs) < 15000) return _inPesoIdxHistCache;
+  var hist = (typeof _relatorioHistorico !== 'undefined' && _relatorioHistorico) ? _relatorioHistorico : [];
+  var idx = {};
+  hist.forEach(function(h) {
+    if (!h || !h.dataHoraISO) return;
+    var t = new Date(h.dataHoraISO).getTime();
+    if (isNaN(t)) return;
+    ((h.filaSnapshot) || []).forEach(function(f) {
+      var k = String(f && f.mac == null ? '' : f.mac).trim().toUpperCase();
+      var p = parseFloat(f && f.pesoOpl);
+      if (!k || isNaN(p) || p <= 0) return;
+      if (!idx[k]) idx[k] = [];
+      idx[k].push({ t: t, peso: p });
+    });
+  });
+  Object.keys(idx).forEach(function(k) { idx[k].sort(function(a, b){ return a.t - b.t; }); });
+  _inPesoIdxHistCache = idx; _inPesoIdxHistTs = agora;
+  return idx;
+}
+
+// Peso que o TMS declarava para este MAC/MEC no último import até o instante dado.
+function _inPesoDeclaradoAte(k, instanteMs) {
+  var lista = _inPesoIdxHistorico()[k];
+  if (!lista || !lista.length || isNaN(instanteMs)) return 0;
+  var escolhido = null;
+  for (var i = 0; i < lista.length; i++) {
+    if (lista[i].t <= instanteMs) escolhido = lista[i]; else break;
+  }
+  if (!escolhido) escolhido = lista[0]; // finalizado antes do primeiro import conhecido
+  return escolhido.peso || 0;
+}
+
+// _descAcompData indexado pela chave normalizada (o objeto é gravado com o MAC
+// exatamente como veio do relatório; as somas do Painel usam maiúsculas).
+var _inAcompIdxCache = null, _inAcompIdxTs = 0;
+function _inAcompRecDe(k) {
+  var agora = Date.now();
+  if (!_inAcompIdxCache || (agora - _inAcompIdxTs) > 5000) {
+    _inAcompIdxCache = {};
+    var d = (typeof _descAcompData !== 'undefined' && _descAcompData) ? _descAcompData : {};
+    Object.keys(d).forEach(function(m) {
+      var kk = String(m == null ? '' : m).trim().toUpperCase();
+      if (kk && _inAcompIdxCache[kk] === undefined) _inAcompIdxCache[kk] = d[m];
+    });
+    _inAcompIdxTs = agora;
+  }
+  return _inAcompIdxCache[k] || null;
+}
+
+// Peso congelado de um MAC/MEC JÁ FINALIZADO. Zero quando a regra não se aplica
+// (sem Hora Fim, sem carimbo dataFimISO ou sem snapshot), e aí tudo segue como antes.
+function _inPesoCongeladoDe(k) {
+  var rec = _inAcompRecDe(k);
+  if (!rec || !(rec.horaFim && String(rec.horaFim).trim())) return 0;
+  var ms = rec.dataFimISO ? new Date(rec.dataFimISO).getTime() : NaN;
+  if (isNaN(ms)) return 0;
+  return _inPesoDeclaradoAte(k, ms);
 }
 
 // Peso de um MAC/MEC no Painel: o mesmo da coluna Peso do Acompanhamento IN e o
@@ -19613,7 +19951,12 @@ function _inPesoOficialDe(chave, pesoSnapshot) {
   var p = parseFloat(pesoSnapshot);
   if (isNaN(p)) p = 0;
   var k = String(chave == null ? '' : chave).trim().toUpperCase();
-  var oficial = k ? (_inPesoPorMacTodos()[k] || 0) : 0;
+  if (!k) return p;
+  // V196 — carga já finalizada: peso travado no instante da Hora Fim. Vale para
+  // Plano e Executado ao mesmo tempo, então o Pendente continua exato.
+  var congelado = _inPesoCongeladoDe(k);
+  if (congelado > 0) return congelado;
+  var oficial = _inPesoPorMacTodos()[k] || 0;
   return oficial || p;
 }
 
@@ -19645,9 +19988,10 @@ function _inExecutadoForaDoSnapshot(janela, jaContados) {
       var recente = item ? (item.ativo !== false || _descAcompIdadeHoras(item) <= DESC_ACOMP_HORAS_ARQUIVAR) : false;
       if (!recente) return;
     }
-    if (!_inInstanteFimNaJanela(rec, horaFim, janela)) return; // concluído em outro dia operacional
+    if (!_inInstanteFimNaJanela(rec, horaFim, janela, _inEntrouNaJanela(chave, janela))) return; // concluído em outro dia operacional
 
-    var peso = pesos[chave];
+    // V196 — mesma régua do caminho principal: finalizado, o peso não se mexe mais.
+    var peso = _inPesoCongeladoDe(chave) || pesos[chave];
     if (!peso) return;                                          // sem peso conhecido, nada a somar
     var t = _gvTurnoDoHorario(horaFim) || '3º Turno';
     if (res.porTurno[t] === undefined) res.porTurno[t] = 0;
@@ -19682,7 +20026,7 @@ function _gvColetarDadosIN() {
       if (!chaveMac || macsUnicos[chaveMac] !== undefined) return;
       var macOrig = String(f.mac || '').trim();
       // V193 — já executado em dia operacional anterior: não é carga de hoje
-      if (_inFinalizadoAntesDaJanela(acompData[macOrig] || acompData[chaveMac], janela)) return;
+      if (_inFinalizadoAntesDaJanela(acompData[macOrig] || acompData[chaveMac], janela, _inEntrouNaJanela(chaveMac, janela))) return;
       macsUnicos[chaveMac] = { mac: macOrig, pesoOpl: _inPesoOficialDe(chaveMac, f.pesoOpl), origem: f.origem || '—' };
     });
   });
@@ -20741,7 +21085,7 @@ function _gvFluxoFilaIN() {
       var macOrig = String(f.mac == null ? '' : f.mac).trim();
       // V193 — já executado em dia operacional anterior: fora do Plano e do
       // Executado de hoje (ver _inFinalizadoAntesDaJanela)
-      if (_inFinalizadoAntesDaJanela(acompData[macOrig] || acompData[chave], janela)) return;
+      if (_inFinalizadoAntesDaJanela(acompData[macOrig] || acompData[chave], janela, _inEntrouNaJanela(chave, janela))) return;
       unicos[chave] = {
         mac: macOrig,
         // V193 — peso único do MAC/MEC (o do Acompanhamento IN), igual no Plano e no Executado
@@ -20847,7 +21191,20 @@ function _gvFluxoFilaIN() {
   // pesoExecutadoTurno ficava null e o card "Executado" caía no total do DIA em vez
   // de zerar na virada. Era o card que não zerava na passagem de turno.
   //   1381 = 23:01 · 399 = 06:39 · 945 = 15:45
-  var ordemCascata = _gvTurnosDecorridos(agora);   // V192 — regra única
+  var ordemCascata = _gvTurnosDecorridos(agora).slice();   // V192 — regra única
+  // V196 — _gvTurnosDecorridos conhece só os cortes de DIA ÚTIL (06:39 / 15:45 /
+  // 23:01), mas o classificador (_gvTurnoDoHorario) tem régua própria para sábado
+  // (1º 06:01–13:00 · 2º 13:01–19:59) e domingo (um turno só, 06:00–19:59,
+  // alternando por quinzena). No fim de semana os dois discordavam e um turno com
+  // movimento real ficava fora da linha Total — o Extrato somava menos do que os
+  // turnos exibidos. Correção aditiva: nenhum turno sai, só entra quem já tem peso.
+  ordem.forEach(function(t) {
+    if (ordemCascata.indexOf(t) !== -1) return;
+    var lx = linhas[t];
+    if ((lx.filaInicial + lx.entrouDepois + lx.executado) > 0) ordemCascata.push(t);
+  });
+  var _ORDEM_DIA_OP = ['3º Turno', '1º Turno', '2º Turno'];
+  ordemCascata.sort(function(a, b) { return _ORDEM_DIA_OP.indexOf(a) - _ORDEM_DIA_OP.indexOf(b); });
   var processados = {};
   ordemCascata.forEach(function(t) {
     var l = linhas[t];
