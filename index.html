@@ -4037,9 +4037,9 @@ document.addEventListener('DOMContentLoaded', function() {
   <!-- Totalizadores -->
   <div id="rel-stats" style="display:none;gap:10px;margin-bottom:12px;flex-wrap:wrap;flex-shrink:0">
     <div class="rel-stat-card"><div class="rel-stat-label">Total CTRCs</div><div class="rel-stat-val" id="rel-s-total">—</div></div>
-    <div class="rel-stat-card"><div class="rel-stat-label" title="Peso das linhas que entram no planejamento: todo o relatório MENOS Ocor.Aberta sem agendamento. Carga com ocorrência em aberto não pode ser planejada, por isso ela sai desta tela.">Peso total (kg) · sem Ocor.Aberta</div><div class="rel-stat-val" id="rel-s-peso">—</div></div>
-    <div class="rel-stat-card" style="border-left:3px solid #f59e0b"><div class="rel-stat-label" title="Linhas que atendem a todos os filtros da tela mas saem do planejamento por terem Ocor.Aberta sem agendamento. É exatamente a diferença entre o total desta tela e o peso bruto do relatório.">Ocor.Aberta excluída</div><div class="rel-stat-val" id="rel-s-ocor">—</div></div>
-    <div class="rel-stat-card" style="border-left:3px solid #16a34a"><div class="rel-stat-label" title="Peso total + Ocor.Aberta excluída. Este é o número que bate com o Total do Terminal (Resumo Operacional) e com o Peso Total Armazém (Prioridade de Carregamento).">Peso bruto · = Resumo Operacional</div><div class="rel-stat-val" id="rel-s-bruto">—</div></div>
+    <div class="rel-stat-card"><div class="rel-stat-label" title="Peso de todas as linhas da tela, incluindo Ocor.Aberta sem agendamento.">Peso total (kg)</div><div class="rel-stat-val" id="rel-s-peso">—</div></div>
+    <div class="rel-stat-card" style="border-left:3px solid #f59e0b"><div class="rel-stat-label" title="Parte do Peso total que é Ocor.Aberta sem agendamento. Já está somada no total e aparece na tabela.">Ocor.Aberta incluída</div><div class="rel-stat-val" id="rel-s-ocor">—</div></div>
+    <div class="rel-stat-card" style="border-left:3px solid #16a34a"><div class="rel-stat-label" title="Igual ao Peso total, que já inclui a Ocor.Aberta. Este é o número que bate com o Total do Terminal (Resumo Operacional) e com o Peso Total Armazém (Prioridade de Carregamento).">Peso bruto · = Resumo Operacional</div><div class="rel-stat-val" id="rel-s-bruto">—</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Valor total</div><div class="rel-stat-val" id="rel-s-valor">—</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Volumes</div><div class="rel-stat-val" id="rel-s-vols">—</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Total de Notas</div><div class="rel-stat-val" id="rel-s-notas">—</div></div>
@@ -5358,13 +5358,15 @@ function relFiltrar() {
       var hay=(r.ctrc+r.remetente+r.destinatario+r.origem+r.destino+r.mac+r.frotaPlan).toLowerCase();
       if(hay.indexOf(search)===-1) return false;
     }
-    // Ocor.Aberta sem Agendamento = SIM não entra no Planejamento OUT. Sai da
-    // tabela e, por consequência, dos totalizadores, do Exportar Excel e da
-    // Impressão — todos derivam de _relFilt.
-    // V185 — a checagem passou para o FIM (o resultado é o mesmo, é tudo "E"),
-    // para que aqui já se saiba que a linha atendia a todos os outros filtros.
-    // Só assim os cards de reconciliação respeitam o filtro ativo na tela.
-    if (_relOcorIgnorar(r)) { _relExcluidosOcor.push(r); return false; }
+    // V191 — Ocor.Aberta sem Agendamento = SIM passa a ENTRAR no Planejamento OUT
+    // (decisão da operação: ao consultar um equipamento, todos os CTRCs dele têm
+    // de aparecer — ex.: 002479612 no 3779290). A linha fica na tabela e soma nos
+    // totalizadores, no Exportar Excel e na Impressão, como qualquer outra.
+    // Continua sendo registrada em _relExcluidosOcor só para o card informar
+    // quanto do total é Ocor.Aberta. _relOcorIgnorar() NÃO foi alterada: Painel
+    // Executivo, Prioridade de Carregamento, Consolidação e Resumo Operacional
+    // seguem com a regra antiga.
+    if (_relOcorIgnorar(r)) _relExcluidosOcor.push(r);
     return true;
   });
   // Ordenação
@@ -5424,18 +5426,18 @@ function relRenderizar() {
   document.getElementById('rel-s-notas').textContent=notasSet.size.toLocaleString('pt-BR');
   document.getElementById('rel-s-critentrega').textContent=totCritCount.toLocaleString('pt-BR');
 
-  // V185 — cards de reconciliação: quanto saiu por Ocor.Aberta e qual o bruto.
-  // O bruto é a soma dos dois e é o número que fecha com o Total do Terminal do
-  // Resumo Operacional e com o Peso Total Armazém da Prioridade de Carregamento.
+  // V191 — Ocor.Aberta agora já está DENTRO do Peso total. O card mostra quanto
+  // desse total é Ocor.Aberta sem agendamento, e o bruto passa a ser o próprio
+  // total (somar pesoOcor de novo contaria esse peso duas vezes).
   var pesoOcor = 0, qtdOcor = (_relExcluidosOcor || []).length;
   for (var iO = 0; iO < qtdOcor; iO++) pesoOcor += (_relExcluidosOcor[iO].peso || 0);
   var elOcor = document.getElementById('rel-s-ocor');
   if (elOcor) {
     elOcor.textContent = pesoOcor.toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' kg';
-    elOcor.title = qtdOcor.toLocaleString('pt-BR') + ' linha(s) fora do planejamento';
+    elOcor.title = qtdOcor.toLocaleString('pt-BR') + ' linha(s) incluída(s) no total';
   }
   var elBruto = document.getElementById('rel-s-bruto');
-  if (elBruto) elBruto.textContent = (totPeso + pesoOcor).toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' kg';
+  if (elBruto) elBruto.textContent = totPeso.toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' kg';
 
   // Thead
   var thead=document.getElementById('rel-thead');
@@ -8022,13 +8024,35 @@ function _relAplicarDados(registros, ts, forcar) {
 
   var novos = registros.map(_relDescomprimir);
   if (_relData && _relData.length) {
-    var idx = {};
-    for (var i = 0; i < _relData.length; i++) idx[_relChaveRegistroAplicado(_relData[i])] = i;
+    // V190 — a mescla agora substitui por GRUPO de chave, não linha a linha.
+    //
+    // Defeito corrigido: o TMS pode trazer o mesmo CTRC + Nota em mais de uma
+    // linha (ex.: carga dividida em dois equipamentos). A mescla antiga indexava
+    // uma posição por chave, então a segunda linha sobrescrevia a primeira e só
+    // um equipamento sobrevivia. O CTRC aparecia na busca por CTRC, mas sumia do
+    // filtro pelo equipamento que foi descartado.
+    //
+    // Agora todas as linhas de uma chave que veio na carga substituem todas as
+    // linhas antigas dessa chave, na mesma posição. O resto do V178 fica igual:
+    // chave que não veio na carga permanece, chave nova entra no final.
+    var grupos = {}, ordemNovas = [];
     for (var j = 0; j < novos.length; j++) {
       var k = _relChaveRegistroAplicado(novos[j]);
-      if (idx[k] !== undefined) _relData[idx[k]] = novos[j];   // duplicado: sobrescreve
-      else { _relData.push(novos[j]); idx[k] = _relData.length - 1; }  // novo: acrescenta
+      if (!grupos[k]) { grupos[k] = []; ordemNovas.push(k); }
+      grupos[k].push(novos[j]);
     }
+    var mesclado = [], emitida = {};
+    for (var i = 0; i < _relData.length; i++) {
+      var ka = _relChaveRegistroAplicado(_relData[i]);
+      if (!grupos[ka]) { mesclado.push(_relData[i]); continue; }         // não veio: permanece
+      if (emitida[ka]) continue;                                          // linha antiga extra da mesma chave
+      emitida[ka] = true;
+      Array.prototype.push.apply(mesclado, grupos[ka]);                   // veio: entra o grupo novo inteiro
+    }
+    for (var n = 0; n < ordemNovas.length; n++) {
+      if (!emitida[ordemNovas[n]]) Array.prototype.push.apply(mesclado, grupos[ordemNovas[n]]);  // chave nova
+    }
+    _relData = mesclado;
   } else {
     _relData = novos;
   }
