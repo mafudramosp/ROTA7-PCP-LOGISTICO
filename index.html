@@ -19717,6 +19717,61 @@ function _gvPesoProgramadoHistoricoIN(turnoAlvo) {
   }, 0);
 }
 
+// ── V199 · PROGRAMADO IN DO PAINEL = CARD "FILA DE PROGRAMADOS" DA DESCARGA ──
+// CAUSA DO DEFEITO: o card lia só o balde do TURNO VIGENTE de
+// descargaPesoProgramadoPorTurno(_gvTurnoDoHorario). MAC/MEC impressos e ainda
+// marcados na tela Descarga ficavam fora do card por dois motivos:
+//   1) TRAVA DE TURNO (_descProgramacaoRegistrarLista): reimprimir num turno
+//      seguinte mantém a 1ª programação — o que foi impresso no 3º Turno continua
+//      no 3º e some do card do 1º Turno;
+//   2) régua do Painel (1º Turno = 06:40–15:45): impressão feita entre 06:01 e
+//      06:39, início real do turno, cai no balde do 3º Turno e também some.
+// Além disso o card usava peso CONGELADO e a tela Descarga usa o peso PENDENTE
+// vivo — os dois números nunca fechariam depois que a descarga começa.
+//
+// REGRA (só card e barra "Programado" do Painel; Extrato do Dia e Histórico de
+// Relatório IN seguem com o cálculo por turno, sem nenhuma alteração):
+// soma todo MAC/MEC registrado por "Imprimir Selecionados" no dia operacional
+// atual, usando a MESMA fila e o MESMO peso do card "Fila de Programados"
+// (_descColetaRanking → c.peso · _descMacRanking → m.pesoTotal).
+// Descarregou → saiu da fila → sai daqui e passa a contar no Executado.
+// Devolve null quando a fila ainda não existe (sem relatório carregado).
+function _gvPesoProgramadoFilaIN() {
+  // Painel aberto sem passar pela aba Descarga: a fila ainda não foi montada.
+  if ((typeof _descMacRanking === 'undefined' || !_descMacRanking || !_descMacRanking.length) &&
+      (typeof _descColetaRanking === 'undefined' || !_descColetaRanking || !_descColetaRanking.length) &&
+      typeof _relData !== 'undefined' && _relData && _relData.length &&
+      typeof descargaRenderizar === 'function') {
+    try { descargaRenderizar(); } catch (e) {}
+  }
+  var coletas = (typeof _descColetaRanking !== 'undefined' && _descColetaRanking) ? _descColetaRanking : [];
+  var macs = (typeof _descMacRanking !== 'undefined' && _descMacRanking) ? _descMacRanking : [];
+  if (!coletas.length && !macs.length) return null;
+
+  var programacoes = (typeof _descProgramacaoData === 'object' && _descProgramacaoData) ? _descProgramacaoData : {};
+  var acomp = (typeof _descAcompData === 'object' && _descAcompData) ? _descAcompData : {};
+  var contados = {};
+  var total = 0;
+
+  function somar(mac, peso) {
+    var chave = _descProgramacaoId(mac);
+    if (!chave || contados[chave]) return;
+    var rec = programacoes[chave];
+    if (!rec || rec.programado !== true) {
+      // Compatibilidade: registro antigo ainda só no Acompanhamento IN
+      var leg = acomp[mac] || acomp[chave];
+      if (!leg || !leg.programado) return;
+      rec = { dataISO: leg.programadoDataISO || '' };
+    }
+    if (!_descProgramacaoNoDiaOperacional(rec, true)) return;
+    contados[chave] = true;
+    total += peso || 0;
+  }
+  coletas.forEach(function(c) { somar(c.mac, c.peso); });
+  macs.forEach(function(m) { somar(m.mac, m.pesoTotal); });
+  return Math.max(0, total);
+}
+
 // ── V176 · EXECUTADO REGISTRADO FORA DO SNAPSHOT DA JANELA ───────────────────
 // CAUSA DO DEFEITO: tanto _gvColetarDadosIN quanto _gvFluxoFilaIN montavam o
 // universo de MACs/MECs SOMENTE a partir dos snapshots de relatório importados
@@ -20115,13 +20170,13 @@ function _gvColetarDadosIN() {
     });
   }
 
-  // O card "Programado" do Dashboard IN mostra o peso do TURNO VIGENTE — não a
-  // soma dos três turnos. A leitura acumulada do dia fica na coluna "Programados"
-  // do Extrato do Dia, que preserva cada turno separadamente.
-  // Fonte: Histórico de Relatório IN, com peso congelado no ato da programação e
-  // um MAC/MEC contado uma única vez (a primeira programação trava o turno).
+  // V199 — o card "Programado" do Dashboard IN usa a MESMA base do card "Fila de
+  // Programados" da tela Descarga (ver _gvPesoProgramadoFilaIN). A leitura por
+  // turno, com peso congelado, continua na coluna "Programados" do Extrato do Dia.
+  // Sem fila montada (nenhum relatório carregado), mantém o cálculo anterior.
   var turnoVigenteIN = _gvTurnoDoHorario(agoraHora);
-  var programadoHistoricoIN = _gvPesoProgramadoHistoricoIN(turnoVigenteIN);
+  var programadoHistoricoIN = (typeof _gvPesoProgramadoFilaIN === 'function') ? _gvPesoProgramadoFilaIN() : null;
+  if (programadoHistoricoIN === null) programadoHistoricoIN = _gvPesoProgramadoHistoricoIN(turnoVigenteIN);
   if (programadoHistoricoIN !== null) pesoProgramado = programadoHistoricoIN;
 
   // ── Peso em Trânsito (destino GRU) — fonte separada, vem da aba Trânsito ──
