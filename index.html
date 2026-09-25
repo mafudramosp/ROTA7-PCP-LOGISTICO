@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V195--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V205--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1211,6 +1211,122 @@
   .import-loading-text { display: inline-flex; align-items: center; gap: 6px; }
   @keyframes gvRowIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
 </style>
+<script>
+// ══════════ V205 · RELÓGIO OFICIAL — HORÁRIO DE BRASÍLIA ══════════
+// Decisão: todas as telas seguem o horário de Brasília, independentemente do
+// relógio ou do fuso configurado na máquina.
+//   • Relógio: a hora certa vem do servidor que publica o app (cabeçalho "Date"
+//     da própria página). Se o relógio da máquina estiver adiantado/atrasado
+//     mais de 5 s, "new Date()" e "Date.now()" passam a devolver a hora corrigida.
+//     Ressincroniza a cada 30 min e quando a aba volta a ficar visível.
+//   • Fuso: se a máquina NÃO estiver no fuso de Brasília (UTC−3), as leituras
+//     de data/hora local (getHours, getDate, getDay, new Date(ano, mês, dia...),
+//     toLocale*) passam a ser feitas em Brasília. Numa máquina já em Brasília
+//     nada disso é ativado — o navegador segue 100% nativo.
+// Também define a VIRADA OFICIAL DO DIA OPERACIONAL (Decisão 1 — 22:31), fonte
+// única usada pelo Painel, Extrato, Malha do dia, Frotas e Lista de Presença.
+var ROTA7_VIRADA_DIA_MIN = 22 * 60 + 31; // 22:31 — abre o dia operacional seguinte e o 3º Turno
+(function () {
+  var RD = window.Date;
+  if (RD.__rota7) return;
+  var BR_MIN = 180;                 // UTC−3 (Brasília — sem horário de verão desde 2019)
+  var BR_MS = BR_MIN * 60000;
+  var ajusteMs = 0;
+  var tzAtivo = (new RD().getTimezoneOffset() !== BR_MIN);
+  var reLocal = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/;
+  function agoraMs() { return RD.now() + ajusteMs; }
+
+  function BrDate(a0, a1, a2, a3, a4, a5, a6) {
+    var n = arguments.length;
+    if (!new.target) return new RD(agoraMs()).toString();
+    if (n === 0) return new RD(agoraMs());
+    if (n === 1) {
+      if (tzAtivo && typeof a0 === 'string' && reLocal.test(a0.trim())) return new RD(a0.trim() + '-03:00');
+      return new RD(a0);
+    }
+    if (tzAtivo) {
+      return new RD(RD.UTC(a0, a1, n > 2 ? a2 : 1, n > 3 ? a3 : 0, n > 4 ? a4 : 0, n > 5 ? a5 : 0, n > 6 ? a6 : 0) + BR_MS);
+    }
+    return new RD(a0, a1, n > 2 ? a2 : 1, n > 3 ? a3 : 0, n > 4 ? a4 : 0, n > 5 ? a5 : 0, n > 6 ? a6 : 0);
+  }
+  BrDate.prototype = RD.prototype;
+  BrDate.now = agoraMs;
+  BrDate.UTC = RD.UTC;
+  BrDate.parse = function (t) {
+    if (tzAtivo && typeof t === 'string' && reLocal.test(t.trim())) return RD.parse(t.trim() + '-03:00');
+    return RD.parse(t);
+  };
+  Object.defineProperty(BrDate, Symbol.hasInstance, { value: function (x) { return x instanceof RD; } });
+  BrDate.__rota7 = true;
+
+  if (tzAtivo) {
+    var P = RD.prototype;
+    var nat = { toLocaleString: P.toLocaleString, toLocaleDateString: P.toLocaleDateString, toLocaleTimeString: P.toLocaleTimeString };
+    var G = { getFullYear: 'getUTCFullYear', getMonth: 'getUTCMonth', getDate: 'getUTCDate', getDay: 'getUTCDay',
+              getHours: 'getUTCHours', getMinutes: 'getUTCMinutes', getSeconds: 'getUTCSeconds', getMilliseconds: 'getUTCMilliseconds' };
+    Object.keys(G).forEach(function (k) {
+      var u = P[G[k]];
+      P[k] = function () { var t = this.getTime(); return isNaN(t) ? NaN : u.call(new RD(t - BR_MS)); };
+    });
+    var S = { setFullYear: 'setUTCFullYear', setMonth: 'setUTCMonth', setDate: 'setUTCDate', setHours: 'setUTCHours',
+              setMinutes: 'setUTCMinutes', setSeconds: 'setUTCSeconds', setMilliseconds: 'setUTCMilliseconds' };
+    Object.keys(S).forEach(function (k) {
+      var u = P[S[k]];
+      P[k] = function () {
+        var t = this.getTime();
+        var w = new RD((isNaN(t) ? 0 : t) - BR_MS);
+        u.apply(w, arguments);
+        return this.setTime(w.getTime() + BR_MS);
+      };
+    });
+    P.getTimezoneOffset = function () { return BR_MIN; };
+    var comFuso = function (o) { o = Object.assign({}, o || {}); if (!o.timeZone) o.timeZone = 'America/Sao_Paulo'; return o; };
+    P.toLocaleString = function (l, o) { return nat.toLocaleString.call(this, l, comFuso(o)); };
+    P.toLocaleDateString = function (l, o) { return nat.toLocaleDateString.call(this, l, comFuso(o)); };
+    P.toLocaleTimeString = function (l, o) { return nat.toLocaleTimeString.call(this, l, comFuso(o)); };
+    var p2 = function (n) { return String(n).padStart(2, '0'); };
+    var DS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var MS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    P.toTimeString = function () {
+      if (isNaN(this.getTime())) return 'Invalid Date';
+      return p2(this.getHours()) + ':' + p2(this.getMinutes()) + ':' + p2(this.getSeconds()) + ' GMT-0300 (Horário Padrão de Brasília)';
+    };
+    P.toDateString = function () {
+      if (isNaN(this.getTime())) return 'Invalid Date';
+      return DS[this.getDay()] + ' ' + MS[this.getMonth()] + ' ' + p2(this.getDate()) + ' ' + this.getFullYear();
+    };
+    P.toString = function () {
+      if (isNaN(this.getTime())) return 'Invalid Date';
+      return this.toDateString() + ' ' + this.toTimeString();
+    };
+    console.warn('[relógio] Esta máquina não está no fuso de Brasília — o app está convertendo todas as datas e horas para Brasília.');
+  }
+  window.Date = BrDate;
+
+  function sincronizar() {
+    try {
+      if (!/^https?:$/.test(location.protocol)) return;
+      var t0 = RD.now();
+      fetch(location.pathname + '?relogio=' + t0, { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+        var t1 = RD.now();
+        var h = r.headers.get('date');
+        var srv = h ? RD.parse(h) : NaN;
+        if (isNaN(srv)) return;
+        var novo = (srv + 500) - (t0 + t1) / 2;   // cabeçalho tem precisão de 1 s
+        if (Math.abs(novo) < 5000) novo = 0;       // diferença desprezível: relógio da máquina vale
+        if (Math.abs(novo - ajusteMs) >= 1000) {
+          ajusteMs = novo;
+          console.log('[relógio] ' + (novo ? 'relógio da máquina corrigido em ' + Math.round(novo / 1000) + ' s (horário do servidor).' : 'relógio da máquina em dia.'));
+        }
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  window._rota7Relogio = { ajusteMs: function () { return ajusteMs; }, fusoConvertido: tzAtivo, sincronizar: sincronizar };
+  sincronizar();
+  setInterval(sincronizar, 30 * 60000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') sincronizar(); });
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
 
 </script>
@@ -3479,9 +3595,7 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
   if (typeof progData !== 'undefined') {
     carregando = progData.filter(function(r) {
       if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
-      var gd = (r.gerado || '').substring(0, 10);
-      var gdBR = gd.indexOf('-') !== -1 ? gd.split('-')[2]+'/'+gd.split('-')[1]+'/'+gd.split('-')[0] : gd;
-      return gdBR === _hoje;
+      return _dataOperacionalDoGerado(r.gerado) === _hoje; // V205 — dia operacional
     }).length;
   }
   setEl('cg-ind-carregando', carregando);
@@ -3844,7 +3958,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // volta. Este ciclo de 60s repõe o que o tempo real deixar escapar; é somente
   // leitura (GET), então não gera gravação nem risco de avalanche de escrita.
   if (typeof _sbResincronizarFontesPainel === 'function') setInterval(_sbResincronizarFontesPainel, 60000);
-  if (typeof _descProgramacaoCarregarSupabase === 'function') setTimeout(_descProgramacaoCarregarSupabase, 1425);
+  if (typeof _descProgCarregarLinhas === 'function') setTimeout(_descProgCarregarLinhas, 1425); // V204 — linhas (+ blob antigo na transição)
   if (typeof _descAcompListaCarregarSupabase === 'function') setTimeout(_descAcompListaCarregarSupabase, 1450);
   if (typeof _cargaCriticaHistoricoCarregarSupabase === 'function') setTimeout(_cargaCriticaHistoricoCarregarSupabase, 1500);
   // Carregar Extrato do Dia (Gestão à Vista) do Supabase — compartilhado entre usuários
@@ -5103,8 +5217,8 @@ function _gvTurnoCustomOut(horaStr) {
   if (_turnoFDS) return _turnoFDS;
   if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
   if (minutos <= 945) return '1º Turno';    // 06:40–15:45
-  if (minutos <= 1380) return '2º Turno';   // 15:46–23:00
-  return '3º Turno';                        // 23:01–23:59
+  if (minutos < ROTA7_VIRADA_DIA_MIN) return '2º Turno'; // 15:46–22:30 (V205 — era até 23:00)
+  return '3º Turno';                        // 22:31–23:59 (V205 — era a partir de 23:01)
 }
 
 // Peso total (kg) registrado HOJE no Histórico de Relatório OUT, só do turno informado,
@@ -5324,11 +5438,7 @@ function relGetDestsProgramados() {
   var hoje = new Date().toISOString().slice(0,10);
   progData.forEach(function(p) {
     // Filtra somente os de hoje
-    var gd = (p.gerado||'').substring(0,10);
-    var gdBR = gd.indexOf('-')!==-1 ? gd.split('-')[2]+'/'+gd.split('-')[1]+'/'+gd.split('-')[0] : gd;
-    var hojeLocal = new Date();
-    var hojeBR = ('0'+hojeLocal.getDate()).slice(-2)+'/'+('0'+(hojeLocal.getMonth()+1)).slice(-2)+'/'+hojeLocal.getFullYear();
-    if (gdBR !== hojeBR) return;
+    if (_dataOperacionalDoGerado(p.gerado) !== getDataHoje()) return; // V205 — dia operacional
     // Adiciona cada sigla da composição
     String(p.composicao||p.destino||'').split(/[,\s\/]+/).forEach(function(s){
       var sig = s.trim().toUpperCase(); if (sig) set.add(sig);
@@ -6247,7 +6357,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V195';
+var ROTA7_VERSAO = 'V205';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -7040,6 +7150,9 @@ function _sbResincronizarFontesPainel() {
     // reforço, uma mensagem perdida do Realtime deixava a máquina desse usuário
     // divergindo das demais indefinidamente, sem nenhum mecanismo de recuperação.
     if (typeof _descAcompListaCarregarSupabase === 'function') _descAcompListaCarregarSupabase();
+    // V203/V204 — Programação IN (card Programado / coluna Programados do Extrato):
+    // linhas incrementais; o blob antigo é sondado dentro de _descProgCarregarLinhas na transição.
+    if (typeof _descProgCarregarLinhas === 'function') _descProgCarregarLinhas();
   } catch (e) {}
 }
 
@@ -7098,9 +7211,6 @@ function sbInicializarRealtime() {
               try { _descAcompAplicarCelulaRemota(_macAcomp, JSON.parse(v)); } catch(e) {}
             });
           }
-        } else if (chave === 'descarga_acomp_data') {
-          // Formato antigo (antes da correção por célula) — mantido só de fallback.
-          if (typeof _descAcompCarregarSupabase === 'function') _descAcompCarregarSupabase();
         } else if (chave.indexOf('desc_acomp_item:') === 0) {
           // V177 — um item da lista do Acompanhamento IN mudou em outra máquina —
           // aplica só esse item (nunca recarrega/substitui a lista inteira). Mesmo
@@ -7115,6 +7225,14 @@ function sbInicializarRealtime() {
               try { _descAcompListaAplicarItemRemoto(_macItem, JSON.parse(v)); } catch(e) {}
             });
           }
+        } else if (chave.indexOf('desc_prog_in:') === 0) {
+          // V204 — uma programação (uma linha) mudou em outra máquina
+          var _idProg = chave.slice('desc_prog_in:'.length);
+          if (payload.new && typeof payload.new.valor === 'string' && typeof _descProgAplicarRemotoRealtime === 'function') {
+            _descProgAplicarRemotoRealtime(_idProg, payload.new.valor);
+          } else if (payload.new && typeof _descProgAplicarRemotoRealtime === 'function') {
+            _sbLerValorChave(chave).then(function(v) { if (typeof v === 'string') _descProgAplicarRemotoRealtime(_idProg, v); });
+          }
         } else if (chave === 'descarga_programacao_in') {
           // Programações impressas são permanentes por MAC/MEC e não devem ser
           // substituídas pelo estado atual dos checkboxes ou por novo import.
@@ -7122,13 +7240,6 @@ function sbInicializarRealtime() {
             _descProgramacaoAplicarDadosRemotos(payload.new.valor);
           } else if (typeof _descProgramacaoCarregarSupabase === 'function') {
             _descProgramacaoCarregarSupabase();
-          }
-        } else if (chave === 'descarga_acomp_lista') {
-          // Lista/fila do Acompanhamento de Produção (inclui "Finalizado Anteriormente") mudou em outra máquina
-          if (payload.new && typeof payload.new.valor === 'string' && typeof _descAcompListaAplicarDadosRemotos === 'function') {
-            _descAcompListaAplicarDadosRemotos(payload.new.valor);
-          } else if (typeof _descAcompListaCarregarSupabase === 'function') {
-            _descAcompListaCarregarSupabase();
           }
         } else if (chave.indexOf('acomp_out_cel:') === 0) {
           // Um veículo do Acompanhamento OUT mudou em outra máquina — aplica só esse
@@ -8340,26 +8451,25 @@ function cgTurnoAtual() {
   var h = agora.getHours();
   var m = agora.getMinutes();
   var hm = h * 60 + m;
-  // Turno 1: 07:00 (420) – 14:40 (880)
-  if (hm >= 420 && hm <= 880) return { turno: 1, inicio: '07:00', fim: '14:40' };
+  // Turno 1: 07:00 (420) – 14:40 (880). V205 — 14:41–14:59 continua no 1º Turno
+  // (antes caía no 3º e gravava/lia a base errada).
+  if (hm >= 420 && hm < 900) return { turno: 1, inicio: '07:00', fim: '14:40' };
   // Turno 2: 15:00 (900) – 22:30 (1350)
   if (hm >= 900 && hm <= 1350) return { turno: 2, inicio: '15:00', fim: '22:30' };
-  // Turno 3: 23:00 (1380) – 06:50 (410) — cruza meia-noite
-  return { turno: 3, inicio: '23:00', fim: '06:50' };
+  // Turno 3: 22:31 – 06:59 — cruza meia-noite (V205 — início oficial 22:31)
+  return { turno: 3, inicio: '22:31', fim: '06:50' };
 }
 
 function cgChaveTurno() {
   // Chave única por turno + data: ex "cg_baseline_2026-06-08_T1"
   var agora = new Date();
   var t = cgTurnoAtual();
-  var data;
-  // Turno 3 após meia-noite pertence ao dia anterior
-  if (t.turno === 3 && agora.getHours() < 7) {
-    var ontem = new Date(agora); ontem.setDate(ontem.getDate() - 1);
-    data = ontem.toISOString().slice(0, 10);
-  } else {
-    data = agora.toISOString().slice(0, 10);
-  }
+  // V205 — a data da chave é o DIA OPERACIONAL no horário de Brasília. Antes usava
+  // toISOString() (horário de Londres): a chave mudava às 21:00 (no meio do 2º
+  // Turno) e à meia-noite (no meio do 3º), e a base do turno "sumia" duas vezes.
+  // Agora o 3º Turno inteiro (22:31 → 06:59) fica numa chave só.
+  var dRef = (typeof _diaOperacionalRef === 'function') ? _diaOperacionalRef() : new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  var data = dRef.getFullYear() + '-' + String(dRef.getMonth() + 1).padStart(2, '0') + '-' + String(dRef.getDate()).padStart(2, '0');
   return 'cg_baseline_' + data + '_T' + t.turno;
 }
 
@@ -8642,6 +8752,28 @@ let sortDir = -1;
 
 // ===== LOCAL STORAGE =====
 // ===== LOCAL STORAGE (fallback) =====
+// V205 — ID DE PROGRAMAÇÃO SEM COLISÃO. Antes cada máquina usava "maior id
+// conhecido + 1": duas pessoas programando ao mesmo tempo geravam o MESMO id e a
+// segunda gravação sobrescrevia a primeira no banco (a programação "sumia").
+// Agora cada máquina tem uma faixa própria (1–999, sorteada uma vez e guardada):
+// novo id = próximo milhar acima do maior id conhecido + faixa da máquina.
+// Duas máquinas nunca geram o mesmo número, e ids continuam inteiros positivos.
+function _progSlotMaquina() {
+  var s = parseInt(localStorage.getItem('prog_id_slot') || '', 10);
+  if (!(s >= 1 && s <= 999)) {
+    s = 1 + Math.floor(Math.random() * 999);
+    try { localStorage.setItem('prog_id_slot', String(s)); } catch (e) {}
+  }
+  return s;
+}
+function _novoIdProg() {
+  var maior = nextId - 1;
+  (progData || []).forEach(function(r) { var n = parseInt(r && r._id, 10); if (isFinite(n) && n > maior) maior = n; });
+  var id = (Math.floor(maior / 1000) + 1) * 1000 + _progSlotMaquina();
+  nextId = id + 1; // mantém "nextId - 1" apontando para o id recém-criado
+  return id;
+}
+
 function saveLocal() {
   localStorage.setItem('prog_veiculo_v4', JSON.stringify(progData));
   localStorage.setItem('prog_nextid_v4', nextId);
@@ -9063,7 +9195,7 @@ if (!_lpDados.metas) _lpDados.metas = { ajudante: LP_METAS_PADRAO.ajudante, conf
 if (!_lpDados.dias) _lpDados.dias = {};
 
 function _lpHojeISO() {
-  var d = new Date();
+  var d = (typeof _diaOperacionalRef === 'function') ? _diaOperacionalRef() : new Date(); // V205 — dia operacional
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 var _lpDataSel = _lpHojeISO();
@@ -9984,12 +10116,36 @@ function transitoRenderizar() {
 // ===== RENDER PROGRAMAÇÃO =====
 const DIAS_PT = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
 
+// V205 — Decisão 2: "hoje" é o DIA OPERACIONAL. A partir das 22:31 a Malha do
+// dia, Frotas, Recursos e a Lista de Presença já mostram o dia seguinte (a grade
+// que o 3º Turno vai trabalhar). Mesma virada do Painel (ROTA7_VIRADA_DIA_MIN).
+function _diaOperacionalRef() {
+  var agora = new Date();
+  var d = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  if (agora.getHours() * 60 + agora.getMinutes() >= ROTA7_VIRADA_DIA_MIN) d.setDate(d.getDate() + 1);
+  return d;
+}
+// Dia operacional de um carimbo "gerado" (dd/mm/aaaa hh:mm[:ss] ou aaaa-mm-dd hh:mm):
+// o que foi gerado a partir das 22:31 pertence ao dia seguinte. Devolve dd/mm/aaaa.
+function _dataOperacionalDoGerado(gerado) {
+  var s = String(gerado || '').trim();
+  var br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2}))?/);
+  var iso = br ? null : s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+  if (!br && !iso) return s.substring(0, 10);
+  var dia = br ? +br[1] : +iso[3], mes = br ? +br[2] : +iso[2], ano = br ? +br[3] : +iso[1];
+  var hh = br ? br[4] : iso[4], mm = br ? br[5] : iso[5];
+  var d = new Date(ano, mes - 1, dia);
+  if (hh !== undefined && (+hh) * 60 + (+mm) >= ROTA7_VIRADA_DIA_MIN) d.setDate(d.getDate() + 1);
+  var pad = function(n) { return String(n).padStart(2, '0'); };
+  return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+}
+
 function getDiaHoje() {
-  return DIAS_PT[new Date().getDay()];
+  return DIAS_PT[_diaOperacionalRef().getDay()];
 }
 
 function getDataHoje() {
-  const d = new Date();
+  const d = _diaOperacionalRef();
   const pad = n => String(n).padStart(2,'0');
   return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
 }
@@ -10055,7 +10211,7 @@ function buildProgRows() {
       p.destino === g.destino &&
       p.saida === g.saida &&
       p.dia === g.dia &&
-      p.gerado && p.gerado.substring(0, 10) === hoje
+      p.gerado && _dataOperacionalDoGerado(p.gerado) === hoje // V205 — dia operacional
     );
     return {
       _rowId: 'row_' + i + '_' + g.destino + '_' + g.saida.replace(':',''),
@@ -10404,7 +10560,7 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
     // New record — ocup/prev_fech nascem zerados e passam a ser preenchidos
     // automaticamente assim que o Acompanhamento OUT tiver dados para este veículo.
     const rec = {
-      _id: nextId++,
+      _id: _novoIdProg(),
       gerado: now(),
       origem: gradeRow ? gradeRow.origem : 'GRU',
       destino, regiao: gradeRow ? gradeRow.regiao : '',
@@ -10442,7 +10598,7 @@ function salvarTodos() {
       if (rec) { rec.tipo=tipo; rec.frota=frota; rec.motorista=motorista; rec.cavalinho=cavalinho; rec.gerado=now(); count++; }
     } else {
       const gradeRow = gradeData.find(g => g.destino===r.destino && g.saida===r.saida && g.dia===r.dia);
-      progData.push({ _id: nextId++, gerado: now(), origem: r.origem, destino: r.destino, regiao: r.regiao, composicao: r.composicao, saida: r.saida, dia: r.dia, tipo, frota, motorista, cavalinho, ocup: 0, prev_fech: '', obs: '', tipo_prior: '', data_crit: '', id: '' });
+      progData.push({ _id: _novoIdProg(), gerado: now(), origem: r.origem, destino: r.destino, regiao: r.regiao, composicao: r.composicao, saida: r.saida, dia: r.dia, tipo, frota, motorista, cavalinho, ocup: 0, prev_fech: '', obs: '', tipo_prior: '', data_crit: '', id: '' });
       count++;
     }
   });
@@ -10749,7 +10905,7 @@ function renderHist() {
       var dg = parseDateTimeBR(r.gerado);
       if (!dg || dg < cutoffData) return false;
     } else {
-      if (!r.gerado || r.gerado.substring(0, 10) !== hojeStr) return false;
+      if (!r.gerado || _dataOperacionalDoGerado(r.gerado) !== hojeStr) return false; // V205
     }
     if (search) {
       const s = (r.destino + r.frota + r.composicao + r.obs + r.dia + (r.motorista||"") + (r.cavalinho||"")).toLowerCase();
@@ -11091,7 +11247,7 @@ function salvarProg() {
   };
 
   const rec = {
-    _id: nextId++,
+    _id: _novoIdProg(),
     gerado: now(),
     origem, destino, regiao, composicao, saida, dia, tipo, frota, motorista, cavalinho,
     ocup, prev_fech: formatDTLocal(prev_fech), obs, tipo_prior,
@@ -11323,7 +11479,7 @@ function exportCSV(type) {
     if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
     if (tipo && r.tipo !== tipo) return false;
     if (dDe || dAte) {
-      var gd = parseBRDate((r.gerado || '').substring(0, 10));
+      var gd = parseBRDate(_dataOperacionalDoGerado(r.gerado)); // V205 — dia operacional
       if (!gd) return false;
       if (dDe && gd < dDe) return false;
       if (dAte && gd > dAte) return false;
@@ -12350,7 +12506,7 @@ function salvarPlatCard(rowId, destino, saida, dia) {
     rec = existing;
   } else {
     rec = {
-      _id: nextId++, gerado: now(),
+      _id: _novoIdProg(), gerado: now(),
       origem: gradeRow ? gradeRow.origem : 'GRU',
       destino, regiao: gradeRow ? gradeRow.regiao : '',
       composicao: gradeRow ? gradeRow.composicao : '',
@@ -12810,7 +12966,7 @@ function salvarAddPlat() {
     rec = existing;
   } else {
     rec = {
-      _id: nextId++, gerado: now(), origem: 'GRU',
+      _id: _novoIdProg(), gerado: now(), origem: 'GRU',
       destino: destino,
       regiao: gradeRow ? gradeRow.regiao : '',
       composicao: composicao || (gradeRow ? gradeRow.composicao : destino),
@@ -13061,7 +13217,7 @@ function imprimirProgramados() {
   var data = progData.filter(function(r) {
     if (!r.frota && !r.ocup && !r.motorista && !r.cavalinho) return false;
     if (dDe || dAte) {
-      var gd = parseBRDate((r.gerado || '').substring(0, 10));
+      var gd = parseBRDate(_dataOperacionalDoGerado(r.gerado)); // V205 — dia operacional
       if (!gd) return false;
       if (dDe && gd < dDe) return false;
       if (dAte && gd > dAte) return false;
@@ -13341,15 +13497,12 @@ function frotasTruckSVG(pct) {
 }
 
 function frotasGetData() {
-  var hojeLocal = new Date();
-  var hojeBR = ('0'+hojeLocal.getDate()).slice(-2)+'/'+('0'+(hojeLocal.getMonth()+1)).slice(-2)+'/'+hojeLocal.getFullYear();
+  var hojeBR = getDataHoje(); // V205 — dia operacional
   var frotas = [];
   if (typeof progData === 'undefined') return frotas;
   progData.forEach(function(p) {
     if (!p.frota) return;
-    var gd = (p.gerado||'').substring(0,10);
-    var gdBR = gd.indexOf('-')!==-1 ? gd.split('-')[2]+'/'+gd.split('-')[1]+'/'+gd.split('-')[0] : gd;
-    if (gdBR !== hojeBR) return;
+    if (_dataOperacionalDoGerado(p.gerado) !== hojeBR) return;
     frotas.push(p);
   });
   return frotas;
@@ -14749,66 +14902,13 @@ function _descAcompListaAplicarItemRemoto(mac, item) {
   _gvRedesenharSeAtivo();
 }
 
-// ── Formato antigo (blob único em 'descarga_acomp_lista'), mantido só para
-// migração de dados já gravados antes desta correção — ver _descAcompListaCarregarSupabase.
-// Não é mais gravado por este app (_descAcompListaSalvar agora grava por item).
-function _descAcompListaAplicarDadosRemotos(valorStr) {
-  if (!valorStr) return;
-  try {
-    var remoto = JSON.parse(valorStr);
-  } catch(e) { return; }
-  var existentes = {};
-  _descAcompLista.forEach(function(m){ if (m && m.mac) existentes[m.mac] = true; });
-  remoto.forEach(function(item) {
-    if (item && item.mac && !existentes[item.mac]) _descAcompLista.push(item);
-  });
-
-  // Limpeza automática: remover finalizados há mais de 3 dias
-  var agora = new Date();
-  var tresDias = 3 * 24 * 60 * 60 * 1000;
-  var mudou = false;
-  _descAcompLista = _descAcompLista.filter(function(m) {
-    var rec = _descAcompData[m.mac];
-    if (rec && rec.dataFimISO) {
-      var dtFim = new Date(rec.dataFimISO);
-      if (agora - dtFim > tresDias) {
-        delete _descAcompData[m.mac];
-        mudou = true;
-        return false;
-      }
-    }
-    return true;
-  });
-  if (mudou) {
-    _descAcompListaSalvar();
-    _descAcompSalvar();
-  }
-
-  try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
-  if (typeof descargaAcompRenderizar === 'function') {
-    var tab = document.getElementById('tab-descargaAcomp-content');
-    if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
-  }
-  _gvRedesenharSeAtivo();
-}
-
-// Carrega a lista do Supabase: primeiro migra o que existir no blob antigo (uma
-// vez por sessão, sem nunca sobrescrever um item que já exista localmente),
-// depois lê cada item já no formato novo (uma linha por MAC/MEC) — mesmo padrão
-// de _acompOutCarregarSupabase.
-var _descAcompListaMigracaoFeita = false;
+// V200 — a migração do blob antigo ('descarga_acomp_lista') foi removida: ela
+// baixava o blob a cada abertura e ainda apagava, nesta máquina, registros
+// finalizados há mais de 3 dias. Carrega a lista só no formato atual (uma linha
+// por MAC/MEC) — mesmo padrão de _acompOutCarregarSupabase.
 var _descAcompListaCargaFeita = false;
 function _descAcompListaCarregarSupabase() {
   try {
-    var pMigracao = _descAcompListaMigracaoFeita ? Promise.resolve() :
-    fetch(SB_URL + '/configuracoes?chave=eq.descarga_acomp_lista&select=valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(data) {
-      _descAcompListaMigracaoFeita = true;
-      if (!data || !data.length || !data[0].valor) return;
-      if (typeof _descAcompListaAplicarDadosRemotos === 'function') _descAcompListaAplicarDadosRemotos(data[0].valor);
-    }).catch(function(){});
-
     var pItens = _sbLerCelulasPaginado('desc_acomp_item:', function(row) {
       var chave = String(row.chave || '');
       if (chave.indexOf('desc_acomp_item:') !== 0) return;
@@ -14828,8 +14928,9 @@ function _descAcompListaCarregarSupabase() {
       } catch(e) {}
     }, _descAcompListaCargaFeita);
 
-    Promise.all([pMigracao, pItens]).then(function() {
+    Promise.all([pItens]).then(function() {
       _descAcompListaCargaFeita = true;
+      _descAcompExpurgoTalvez(); // V200
       try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
       if (typeof descargaAcompRenderizar === 'function') {
         var tab = document.getElementById('tab-descargaAcomp-content');
@@ -15532,31 +15633,15 @@ function ROTA7Executado() {
   return dentro.length + ' contabilizado(s) · ' + fora.length + ' descartado(s)';
 }
 
-var _descAcompMigracaoFeita = false;
 // V151 — true depois da primeira leitura completa das células nesta sessão.
 var _descAcompCargaFeita = false;
 function _descAcompCarregarSupabase() {
   try {
-    // A migração do blob antigo só faz sentido uma vez por sessão. Como esta
-    // função agora também roda em reforço periódico, repeti-la seria uma
-    // requisição inútil a cada ciclo.
-    var pMigracao = _descAcompMigracaoFeita ? Promise.resolve() :
-    fetch(SB_URL + '/configuracoes?chave=eq.descarga_acomp_data&select=valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(data) {
-      _descAcompMigracaoFeita = true;
-      if (!data || !data.length || !data[0].valor) return;
-      var remoto = null;
-      try { remoto = JSON.parse(data[0].valor); } catch(e) { return; }
-      if (!remoto) return;
-      Object.keys(remoto).forEach(function(mac) {
-        if (!_descAcompData[mac]) _descAcompData[mac] = remoto[mac];
-      });
-    }).catch(function(){});
-
+    // V200 — a migração do blob antigo ('descarga_acomp_data') foi removida: era
+    // uma leitura extra a cada abertura e devolvia a esta máquina registros que
+    // o expurgo de 30 dias já tinha retirado.
     // V151 — a primeira carga da sessão é completa; os reforços de 60s passam
-    // a pedir só o que mudou. _descAcompMigracaoFeita já marca que a carga
-    // inicial ocorreu, então serve de sinalizador para o modo incremental.
+    // a pedir só o que mudou (_descAcompCargaFeita).
     var pCelulas = _sbLerCelulasPaginado('desc_acomp_cel:', function(row) {
       var chave = String(row.chave || '');
       if (chave.indexOf('desc_acomp_cel:') !== 0) return;
@@ -15572,8 +15657,9 @@ function _descAcompCarregarSupabase() {
       } catch(e) {}
     }, _descAcompCargaFeita);
 
-    Promise.all([pMigracao, pCelulas]).then(function() {
+    Promise.all([pCelulas]).then(function() {
       _descAcompCargaFeita = true;
+      _descAcompExpurgoTalvez(); // V200
       try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e){}
       if (typeof descargaAcompRenderizar === 'function') {
         var tab = document.getElementById('tab-descargaAcomp-content');
@@ -15628,13 +15714,38 @@ function _descProgramacaoSalvarLocal() {
   try { localStorage.setItem(DESC_PROGRAMACAO_LOCAL_KEY, JSON.stringify(_descProgramacaoData)); } catch (e) {}
 }
 
-function _descProgramacaoSalvarSupabase() {
+// V203 — CAUSA DO PROGRAMADO IN DIVERGENTE: a Programação IN é UM blob só
+// ('descarga_programacao_in') e cada máquina gravava o SEU mapa inteiro por
+// cima do banco. Uma máquina com o mapa incompleto (cache antigo, evento do
+// Realtime perdido, recém-aberta) apagava do banco as programações feitas nas
+// outras. Quem já as tinha no localStorage continuava mostrando o valor certo;
+// quem lia do banco (máquina nova, cache limpo, outro navegador) via menos.
+// Agora a gravação lê o banco antes, UNE com o mapa local e só então grava:
+// nenhuma máquina apaga o que não conhece. (Nada no app remove programações,
+// então a união é sempre segura.)
+function _descProgramacaoPostar() {
+  return fetch(SB_URL + '/configuracoes', {
+    method: 'POST',
+    headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+    body: JSON.stringify({ chave: DESC_PROGRAMACAO_CHAVE, valor: JSON.stringify(_descProgramacaoData) })
+  });
+}
+function _descProgramacaoSalvarBlob() {
   try {
-    fetch(SB_URL + '/configuracoes', {
-      method: 'POST',
-      headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({ chave: DESC_PROGRAMACAO_CHAVE, valor: JSON.stringify(_descProgramacaoData) })
-    }).catch(function(){});
+    fetch(SB_URL + '/configuracoes?chave=eq.' + DESC_PROGRAMACAO_CHAVE + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      // Traz para cá o que só existe no banco (mesma regra de mescla do Realtime)
+      if (data && data.length && data[0].valor) _descProgramacaoAplicarDadosRemotos(data[0].valor);
+      return _descProgramacaoPostar();
+    }).catch(function() {
+      // Sem conseguir ler o banco, grava como antes para não perder a programação
+      // recém-feita; a próxima leitura com diferença refaz a união (auto-reparo).
+      _descProgramacaoPostar().catch(function(){});
+    });
   } catch (e) {}
 }
 
@@ -15697,6 +15808,7 @@ function _descProgramacaoPesoNoHistorico(chave, dataISO, idx) {
 // não tenha sido descarregado.
 function _descProgramacaoCongelarPesos() {
   var mudou = false;
+  var idsCongelados = []; // V204
   var idxHistorico = null;
   Object.keys(_descProgramacaoData || {}).forEach(function(chave) {
     var rec = _descProgramacaoData[chave];
@@ -15711,8 +15823,9 @@ function _descProgramacaoCongelarPesos() {
     if (p === null || !(p > 0)) return;
     rec.peso = p;
     mudou = true;
+    idsCongelados.push(chave);
   });
-  if (mudou) { _descProgramacaoSalvarLocal(); _descProgramacaoSalvarSupabase(); }
+  if (mudou) { _descProgramacaoSalvarLocal(); _descProgramacaoSalvarSupabase(idsCongelados); }
   return mudou;
 }
 
@@ -15824,7 +15937,7 @@ function _descProgramacaoRegistrarLista(listaMacs, turno, dataISO) {
     };
   });
   _descProgramacaoSalvarLocal();
-  _descProgramacaoSalvarSupabase();
+  _descProgramacaoSalvarSupabase((listaMacs || []).map(_descProgramacaoId)); // V204 — só as linhas destes MACs
 }
 
 function _descProgramacaoRegistrar(mac, turno, dataISO) {
@@ -15844,6 +15957,8 @@ function _descProgramacaoAplicarDadosRemotos(valorStr) {
     Object.keys(remoto).forEach(function(id) {
       var local = _descProgramacaoData[id];
       var remotoData = remoto[id];
+      // V204 — programação expurgada (> 30 dias, fora da fila e do Histórico) não volta pelo blob antigo
+      if (typeof _descProgVelhaDemais === 'function' && _descProgVelhaDemais(id, remotoData)) return;
       if (!local || !local.dataISO || (remotoData && String(remotoData.dataISO || '') >= String(local.dataISO || ''))) {
         // Preserva o peso congelado quando a cópia remota vem sem ele (aba de um
         // usuário ainda na versão anterior). Sem isso, um sync desfaria o
@@ -15863,13 +15978,248 @@ function _descProgramacaoAplicarDadosRemotos(valorStr) {
   } catch (e) {}
 }
 
-function _descProgramacaoCarregarSupabase() {
+// V203 — soSeMudou=true (reforço de 60s): sonda só o "atualizado_em" (~80 bytes)
+// e baixa o blob apenas quando ele mudou. Antes a Programação IN era lida só na
+// abertura e dependia do Realtime; um evento perdido deixava a máquina com um
+// Programado diferente das outras até ser recarregada.
+// Auto-reparo: se esta máquina conhece programações que o banco não tem (foram
+// apagadas por uma gravação antiga), devolve a união ao banco.
+var _descProgramacaoRemotoTs = null;
+function _descProgramacaoCarregarSupabase(soSeMudou) {
   try {
-    fetch(SB_URL + '/configuracoes?chave=eq.' + DESC_PROGRAMACAO_CHAVE + '&select=valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(data) {
-      if (data && data.length && data[0].valor) _descProgramacaoAplicarDadosRemotos(data[0].valor);
+    var base = SB_URL + '/configuracoes?chave=eq.' + DESC_PROGRAMACAO_CHAVE;
+    var cab = { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } };
+    var baixar = function() {
+      return fetch(base + '&select=valor,atualizado_em', cab).then(function(r){ return r.json(); });
+    };
+    var p = (soSeMudou === true)
+      ? fetch(base + '&select=atualizado_em', cab).then(function(r){ return r.json(); }).then(function(d) {
+          var ts = (d && d.length) ? d[0].atualizado_em : null;
+          if (ts && ts === _descProgramacaoRemotoTs) return null; // nada mudou no banco
+          return baixar();
+        })
+      : baixar();
+    return p.then(function(data) {
+      if (!data || !data.length) return;
+      _descProgramacaoRemotoTs = data[0].atualizado_em || null;
+      if (!data[0].valor) return;
+      _descProgramacaoAplicarDadosRemotos(data[0].valor);
+      var remoto = {};
+      try { remoto = JSON.parse(data[0].valor) || {}; } catch (e) { return; }
+      var faltaNoBanco = Object.keys(_descProgramacaoData || {}).some(function(id) { return !remoto[id]; });
+      if (faltaNoBanco) {
+        console.log('[programação IN] o banco estava sem programações que esta máquina tem — devolvendo a união.');
+        _descProgramacaoSalvarBlob();
+      }
     }).catch(function(){});
+  } catch (e) {}
+}
+
+// ══════════ V204 · PROGRAMAÇÃO IN — UMA LINHA POR MAC/MEC ══════════
+// Mesmo modelo da lista do Acompanhamento IN (V177): cada programação vira a
+// linha 'desc_prog_in:<MAC>' e cada máquina grava SÓ as linhas que alterou.
+// O mapa em memória (_descProgramacaoData), o localStorage e TODAS as regras —
+// trava de turno, peso congelado, dia operacional, cards e Extrato — continuam
+// exatamente iguais; muda apenas onde o dado mora no banco.
+//   • Gravação: lê as linhas dos MACs alterados, une (mesma regra de mescla de
+//     sempre: dataISO mais recente vence, peso congelado preservado) e grava só
+//     o que de fato difere do banco.
+//   • Leitura: completa na abertura, incremental (só o que mudou) a cada 60s,
+//     e linha a linha pelo Realtime.
+//   • Transição até DESC_PROG_TRANSICAO_ATE: continua lendo e gravando também o
+//     blob antigo, para as máquinas que ainda não recarregaram não ficarem para
+//     trás. O que existir só no blob é migrado para linhas automaticamente.
+//   • Expurgo de 30 dias: sai a programação com data há mais de 30 dias cujo
+//     MAC/MEC não está na fila nem em nenhum snapshot do Histórico de Relatório.
+//     Programação sem data nunca é expurgada (ela conta todo dia, como antes).
+var DESC_PROG_PREFIXO = 'desc_prog_in:';
+var DESC_PROG_TRANSICAO_ATE = '2026-10-01';   // último dia de leitura/gravação do blob antigo
+var DESC_PROG_EXPURGO_DIAS = 30;
+var _descProgNoServidor = {};   // id -> JSON da linha como está no banco (visto por esta máquina)
+var _descProgCargaFeita = false;
+var _descProgExpurgoUltimoMs = 0;
+var _descProgRefFila = null, _descProgRefFilaTs = 0;
+
+function _descProgTransicaoAtiva() {
+  var d = new Date();
+  var hoje = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  return hoje <= DESC_PROG_TRANSICAO_ATE;
+}
+
+// MACs/MECs na fila viva ou em qualquer snapshot do Histórico de Relatório IN.
+// null = fila ainda não carregada nesta máquina (aí nada é considerado velho).
+function _descProgReferenciaFila() {
+  var agora = Date.now();
+  if (_descProgRefFila && (agora - _descProgRefFilaTs) < 60000) return _descProgRefFila;
+  var macs = (typeof _descMacRankingCompleto !== 'undefined' && _descMacRankingCompleto) ? _descMacRankingCompleto : [];
+  var cols = (typeof _descColetaRankingCompleto !== 'undefined' && _descColetaRankingCompleto) ? _descColetaRankingCompleto : [];
+  if (!macs.length && !cols.length) return null;
+  var ref = {};
+  macs.concat(cols).forEach(function(m) { var k = _descProgramacaoId(m && m.mac); if (k) ref[k] = true; });
+  ((typeof _relatorioHistorico !== 'undefined' && _relatorioHistorico) ? _relatorioHistorico : []).forEach(function(h) {
+    ((h && h.filaSnapshot) || []).forEach(function(f) { var k = _descProgramacaoId(f && f.mac); if (k) ref[k] = true; });
+  });
+  _descProgRefFila = ref; _descProgRefFilaTs = agora;
+  return ref;
+}
+
+function _descProgVelhaDemais(id, rec) {
+  if (!rec || !rec.dataISO) return false;                 // sem data: nunca é velha
+  var t = new Date(rec.dataISO).getTime();
+  if (isNaN(t) || t >= Date.now() - DESC_PROG_EXPURGO_DIAS * 86400000) return false;
+  var ref = _descProgReferenciaFila();
+  if (!ref) return false;                                 // fila desconhecida: conserva
+  return !ref[_descProgramacaoId(id)];
+}
+
+// Une uma linha do banco ao mapa local — mesma regra de _descProgramacaoAplicarDadosRemotos.
+function _descProgAplicarLinha(id, remoto) {
+  if (!id || !remoto || typeof remoto !== 'object') return false;
+  _descProgNoServidor[id] = JSON.stringify(remoto);
+  if (_descProgVelhaDemais(id, remoto)) return false;
+  var local = _descProgramacaoData[id];
+  if (local && local.dataISO && !(String(remoto.dataISO || '') >= String(local.dataISO || ''))) return false;
+  if ((typeof remoto.peso !== 'number' || !(remoto.peso > 0)) && local && typeof local.peso === 'number' &&
+      local.peso > 0 && String(remoto.dataISO || '') === String(local.dataISO || '')) {
+    remoto = Object.assign({}, remoto, { peso: local.peso });
+  }
+  if (local && JSON.stringify(local) === JSON.stringify(remoto)) return false;
+  _descProgramacaoData[id] = remoto;
+  return true;
+}
+
+function _descProgAtualizarTelas() {
+  if (typeof descargaHistoricoAtualizarCardsTurno === 'function') descargaHistoricoAtualizarCardsTurno();
+  var tab = document.getElementById('tab-descargaHistorico-content');
+  if (tab && tab.classList.contains('active') && typeof descargaHistoricoRenderizar === 'function') descargaHistoricoRenderizar();
+  if (typeof _gvRedesenharSeAtivo === 'function') _gvRedesenharSeAtivo();
+}
+
+function _descProgChavesIn(ids) {
+  return ids.map(function(id) { return '"' + DESC_PROG_PREFIXO + String(id).replace(/"/g, '') + '"'; }).join(',');
+}
+
+// Grava as linhas destes ids: lê o banco, une, e envia só o que difere.
+function _descProgSalvarIds(ids) {
+  var vistos = {};
+  ids = (ids || []).filter(function(id) {
+    if (!id || vistos[id] || !_descProgramacaoData[id]) return false;
+    vistos[id] = true; return true;
+  });
+  var cadeia = Promise.resolve();
+  for (var i = 0; i < ids.length; i += 50) {
+    (function(lote) {
+      cadeia = cadeia.then(function() {
+        return fetch(SB_URL + '/configuracoes?chave=in.(' + encodeURIComponent(_descProgChavesIn(lote)) + ')&select=chave,valor', {
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+        }).then(function(r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        }).then(function(rows) {
+          var mudouLocal = false;
+          (rows || []).forEach(function(row) {
+            var id = String(row.chave).slice(DESC_PROG_PREFIXO.length);
+            try { if (_descProgAplicarLinha(id, JSON.parse(row.valor))) mudouLocal = true; } catch (e) {}
+          });
+          if (mudouLocal) { _descProgramacaoSalvarLocal(); _descProgAtualizarTelas(); }
+          var enviar = lote.filter(function(id) {
+            var rec = _descProgramacaoData[id];
+            return rec && JSON.stringify(rec) !== _descProgNoServidor[id];
+          });
+          if (!enviar.length) return;
+          var corpo = enviar.map(function(id) { return { chave: DESC_PROG_PREFIXO + id, valor: JSON.stringify(_descProgramacaoData[id]) }; });
+          return fetch(SB_URL + '/configuracoes', {
+            method: 'POST',
+            headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+            body: JSON.stringify(corpo)
+          }).then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            corpo.forEach(function(c) { _descProgNoServidor[c.chave.slice(DESC_PROG_PREFIXO.length)] = c.valor; });
+          });
+        }).catch(function(err) {
+          console.warn('[programação IN] gravação de linhas falhou — refeita no próximo ciclo:', err);
+        });
+      });
+    })(ids.slice(i, i + 50));
+  }
+  return cadeia;
+}
+
+// Ponto de entrada de gravação (nome mantido): linhas + blob antigo na transição.
+function _descProgramacaoSalvarSupabase(ids) {
+  _descProgSalvarIds(ids || Object.keys(_descProgramacaoData || {}));
+  if (_descProgTransicaoAtiva()) _descProgramacaoSalvarBlob();
+}
+
+// Envia o que esta máquina tem e o banco não (migração do blob, gravação que falhou).
+function _descProgReparar() {
+  if (!_descProgCargaFeita) return;
+  var pend = Object.keys(_descProgramacaoData || {}).filter(function(id) {
+    var rec = _descProgramacaoData[id];
+    return rec && rec.programado === true && !_descProgVelhaDemais(id, rec) &&
+           JSON.stringify(rec) !== _descProgNoServidor[id];
+  });
+  if (pend.length) _descProgSalvarIds(pend);
+}
+
+function _descProgExpurgoTalvez() {
+  if (!_descProgCargaFeita || !_descProgReferenciaFila()) return;
+  var agora = Date.now();
+  if (_descProgExpurgoUltimoMs && (agora - _descProgExpurgoUltimoMs) < 6 * 3600000) return;
+  _descProgExpurgoUltimoMs = agora;
+  var locais = Object.keys(_descProgramacaoData || {}).filter(function(id) { return _descProgVelhaDemais(id, _descProgramacaoData[id]); });
+  locais.forEach(function(id) { delete _descProgramacaoData[id]; });
+  if (locais.length) _descProgramacaoSalvarLocal();
+  var noBanco = Object.keys(_descProgNoServidor).filter(function(id) {
+    try { return _descProgVelhaDemais(id, JSON.parse(_descProgNoServidor[id])); } catch (e) { return false; }
+  });
+  if (locais.length || noBanco.length) {
+    console.log('[expurgo] programação IN: ' + locais.length + ' registro(s) com mais de ' + DESC_PROG_EXPURGO_DIAS +
+                ' dias retirados desta máquina; ' + noBanco.length + ' linha(s) enviadas para exclusão no banco.');
+  }
+  for (var i = 0; i < noBanco.length; i += 50) {
+    (function(lote) {
+      fetch(SB_URL + '/configuracoes?chave=in.(' + encodeURIComponent(_descProgChavesIn(lote)) + ')', {
+        method: 'DELETE',
+        headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'return=representation' })
+      }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }).then(function(linhas) {
+        lote.forEach(function(id) { delete _descProgNoServidor[id]; });
+        console.log('[expurgo] programação IN — banco: ' + ((linhas && linhas.length) || 0) + ' linha(s) apagada(s).');
+      }).catch(function(err) { console.warn('[expurgo] programação IN — exclusão no banco falhou:', err); });
+    })(noBanco.slice(i, i + 50));
+  }
+}
+
+// Abertura (completa) e reforço de 60s (incremental).
+var _descProgCarregando = false;
+function _descProgCarregarLinhas() {
+  if (_descProgCarregando) return Promise.resolve();
+  _descProgCarregando = true;
+  var incremental = _descProgCargaFeita;
+  var mudou = false;
+  return _sbLerCelulasPaginado(DESC_PROG_PREFIXO, function(row) {
+    if (!row || !row.chave) return;
+    var id = String(row.chave).slice(DESC_PROG_PREFIXO.length);
+    var v; try { v = JSON.parse(row.valor); } catch (e) { return; }
+    if (_descProgAplicarLinha(id, v)) mudou = true;
+  }, incremental).then(function() {
+    if (mudou) { _descProgramacaoSalvarLocal(); _descProgAtualizarTelas(); }
+    _descProgCargaFeita = true;
+    var pBlob = _descProgTransicaoAtiva() ? Promise.resolve(_descProgramacaoCarregarSupabase(incremental)) : Promise.resolve();
+    return pBlob.catch(function() {}).then(function() {
+      _descProgExpurgoTalvez();
+      _descProgReparar();
+    });
+  }).then(function() { _descProgCarregando = false; }, function() { _descProgCarregando = false; });
+}
+
+// Uma linha mudou em outra máquina (Realtime).
+function _descProgAplicarRemotoRealtime(id, valorStr) {
+  try {
+    if (_descProgAplicarLinha(id, JSON.parse(valorStr))) { _descProgramacaoSalvarLocal(); _descProgAtualizarTelas(); }
   } catch (e) {}
 }
 
@@ -16096,6 +16446,162 @@ function _descAcompStatusItem(item, rec) {
   return _descAcompStatusPorHoras(r.horaInicio, r.horaFim);
 }
 
+// ── V199 · RETENÇÃO DA TELA ACOMPANHAMENTO IN — 72 HORAS ÚTEIS ───────────────
+// A lista acumulada (_descAcompLista) nunca apaga nada, então esta tela exibia
+// TODO MAC/MEC que já passou pela fila desde a gravação por item (V177) —
+// milhares de linhas, a maioria "Finalizado anteriormente". Regra nova, SÓ DE
+// EXIBIÇÃO: a tela mostra o que foi descarregado a partir do início do 3º dia
+// útil (seg–sex) anterior ao dia atual — ex.: segunda-feira → desde quarta.
+// Nada é removido da lista, do _descAcompData nem do Supabase: Painel
+// Executivo, Histórico e diagnósticos continuam lendo tudo como antes.
+//   • ainda na fila (ativo)       → sempre aparece;
+//   • tem carimbo de fim          → vale a data do fim (dataFimISO);
+//   • fora da fila e sem fim      → vale a última vez que apareceu na fila
+//     (snapshots do Histórico) ou, na falta, a entrada na fila (entradaISO);
+//   • sem data nenhuma (legado)   → fica fora.
+// O "dia" segue a régua do Painel (_gvJanelaOperacionalAtual) para não criar
+// mais uma definição de dia operacional no app.
+var DESC_ACOMP_RETENCAO_DIAS_UTEIS = 3; // 72h úteis = 3 dias úteis antes de hoje
+
+function _descAcompRetencaoCorteMs(agoraReferencia) {
+  var jan = _gvJanelaOperacionalAtual(agoraReferencia);
+  var d = new Date(jan.dataRef.getTime());
+  var uteis = 0;
+  while (uteis < DESC_ACOMP_RETENCAO_DIAS_UTEIS) {
+    d.setDate(d.getDate() - 1);
+    var dow = d.getDay();
+    if (dow !== 0 && dow !== 6) uteis++; // sábado e domingo não contam
+  }
+  // Início do dia operacional da data de corte (o meio-dia só garante cair nela).
+  return _gvJanelaOperacionalAtual(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0)).inicio.getTime();
+}
+
+// Última vez que cada MAC/MEC apareceu na fila (snapshots do Histórico de
+// Relatório). Espelho de _descAcompPrimeiraAparicaoMapa, com o MAIOR instante.
+var _descAcompUltimaAparicaoCache = null;
+var _descAcompUltimaAparicaoCacheTs = 0;
+function _descAcompUltimaAparicaoMapa() {
+  var agora = Date.now();
+  if (_descAcompUltimaAparicaoCache && (agora - _descAcompUltimaAparicaoCacheTs) < 60000) {
+    return _descAcompUltimaAparicaoCache;
+  }
+  var mapa = {};
+  var hist = (typeof _relatorioHistorico !== 'undefined' && _relatorioHistorico) ? _relatorioHistorico : [];
+  hist.forEach(function(h) {
+    var ts = new Date(h && h.dataHoraISO).getTime();
+    if (isNaN(ts)) return;
+    ((h && h.filaSnapshot) || []).forEach(function(f) {
+      var k = String(f && f.mac != null ? f.mac : '').trim().toUpperCase();
+      if (!k) return;
+      if (mapa[k] === undefined || ts > mapa[k]) mapa[k] = ts;
+    });
+  });
+  _descAcompUltimaAparicaoCache = mapa;
+  _descAcompUltimaAparicaoCacheTs = agora;
+  return mapa;
+}
+
+function _descAcompDentroRetencao(item, corteMs) {
+  if (item === undefined || item === null) return false;
+  if (typeof item !== 'object' || item.ativo !== false) return true; // na fila atual: sempre visível
+  var rec = _descAcompData[item.mac];
+  var ms = (rec && rec.dataFimISO) ? new Date(rec.dataFimISO).getTime() : NaN;
+  if (isNaN(ms)) {
+    var ent = item.entradaISO ? new Date(item.entradaISO).getTime() : NaN;
+    var ult = _descAcompUltimaAparicaoMapa()[String(item.mac == null ? '' : item.mac).trim().toUpperCase()];
+    if (!isNaN(ent)) ms = ent;
+    if (ult !== undefined && (isNaN(ms) || ult > ms)) ms = ult;
+  }
+  return !isNaN(ms) && ms >= corteMs;
+}
+
+// ── V200 · EXPURGO DE 30 DIAS (Acompanhamento IN) ───────────────────────────
+// A lista e os registros do Acompanhamento IN nunca eram apagados: o banco e a
+// carga inicial de cada máquina cresciam para sempre. Agora, MAC/MEC que já
+// saiu da fila e cuja data mais recente conhecida (fim, entrada ou última
+// aparição na fila) passou de 30 dias é retirado DE VEZ:
+//   • da memória e do localStorage desta máquina — sem isso o cache local das
+//     outras máquinas devolveria o item ao servidor no import seguinte;
+//   • do Supabase ('desc_acomp_item:<mac>' e 'desc_acomp_cel:<mac>').
+// Nunca expurga: item ainda na fila, item sem nenhuma data (legado) ou item com
+// qualquer data dentro dos 30 dias. Roda só depois das duas cargas completas da
+// sessão (lista e registros) e no máximo uma vez a cada 6h.
+var DESC_ACOMP_EXPURGO_DIAS = 30;
+var _descAcompExpurgoUltimoMs = 0;
+
+function _descAcompExpurgoRefMs(item) {
+  var datas = [];
+  var rec = _descAcompData[item.mac];
+  if (rec && rec.dataFimISO) datas.push(new Date(rec.dataFimISO).getTime());
+  if (item.entradaISO) datas.push(new Date(item.entradaISO).getTime());
+  var ult = _descAcompUltimaAparicaoMapa()[String(item.mac == null ? '' : item.mac).trim().toUpperCase()];
+  if (ult !== undefined) datas.push(ult);
+  datas = datas.filter(function(x) { return !isNaN(x); });
+  return datas.length ? Math.max.apply(null, datas) : NaN;
+}
+
+function _descAcompExpurgoTalvez() {
+  if (!_descAcompListaCargaFeita || !_descAcompCargaFeita) return;
+  var agora = Date.now();
+  if (_descAcompExpurgoUltimoMs && (agora - _descAcompExpurgoUltimoMs) < 6 * 3600000) return;
+  _descAcompExpurgoUltimoMs = agora;
+  var corte = agora - DESC_ACOMP_EXPURGO_DIAS * 86400000;
+  var sai = {}, macs = [], noServidor = [];
+  (_descAcompLista || []).forEach(function(it) {
+    if (!it || typeof it !== 'object' || it.ativo !== false || !it.mac) return;
+    var ref = _descAcompExpurgoRefMs(it);
+    if (isNaN(ref) || ref >= corte) return;
+    if (sai[it.mac]) return;
+    sai[it.mac] = true; macs.push(it.mac);
+    // Só pede exclusão ao servidor do que veio dele nesta sessão; o que existe
+    // apenas no cache local sai daqui sem requisição.
+    if (_descAcompItemUltimoSalvo[it.mac] !== undefined) noServidor.push(it.mac);
+  });
+  if (!macs.length) return;
+  _descAcompLista = _descAcompLista.filter(function(it) { return !(it && typeof it === 'object' && sai[it.mac]); });
+  macs.forEach(function(mac) {
+    delete _descAcompData[mac];
+    delete _descAcompUltimoSalvo[mac];
+    delete _descAcompItemUltimoSalvo[mac];
+    delete _descAcompEditadoLocalEm[mac];
+    delete _descAcompItemEditadoLocalEm[mac];
+  });
+  if (typeof _inPesoPorMacCache !== 'undefined') _inPesoPorMacCache = null;
+  if (typeof _inAcompIdxCache !== 'undefined') _inAcompIdxCache = null;
+  try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e) {}
+  try { localStorage.setItem('descarga_acomp_v1', JSON.stringify(_descAcompData)); } catch(e) {}
+  console.log('[expurgo] ' + macs.length + ' MAC/MEC com mais de ' + DESC_ACOMP_EXPURGO_DIAS +
+              ' dias retirados desta máquina; ' + noServidor.length + ' enviados para exclusão no servidor.');
+  var removidos = 0, lotes = 0, falhas = 0;
+  for (var i = 0; i < noServidor.length; i += 40) {
+    var chaves = [];
+    noServidor.slice(i, i + 40).forEach(function(mac) {
+      chaves.push('"desc_acomp_item:' + String(mac).replace(/"/g, '') + '"');
+      chaves.push('"desc_acomp_cel:' + String(mac).replace(/"/g, '') + '"');
+    });
+    lotes++;
+    fetch(SB_URL + '/configuracoes?chave=in.(' + encodeURIComponent(chaves.join(',')) + ')', {
+      method: 'DELETE',
+      headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'return=representation' })
+    }).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(linhas) {
+      removidos += (linhas && linhas.length) || 0;
+    }).catch(function(err) {
+      falhas++;
+      console.warn('[expurgo] exclusão no servidor falhou:', err);
+    }).then(function() {
+      if (--lotes === 0) console.log('[expurgo] servidor: ' + removidos + ' linha(s) apagada(s)' + (falhas ? ', ' + falhas + ' lote(s) com falha' : '') + '.');
+    });
+  }
+  if (typeof descargaAcompRenderizar === 'function') {
+    var tab = document.getElementById('tab-descargaAcomp-content');
+    if (tab && tab.classList.contains('active')) descargaAcompRenderizar();
+  }
+  _gvRedesenharSeAtivo();
+}
+
 // Atualiza só a linha de um MAC (evita re-renderizar a tabela inteira e perder foco do input)
 function descargaAcompAtualizarLinha(mac) {
   var rec = _descAcompGet(mac);
@@ -16168,6 +16674,9 @@ function descargaAcompAtualizarCards() {
   // regravado no servidor por cima do certo. Removido.
   
   var macsFila = _descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){ return {mac:m.mac, ativo:true}; });
+  // V199 — retenção de 72h úteis (só exibição; ver _descAcompDentroRetencao)
+  var _corteRet = _descAcompRetencaoCorteMs();
+  macsFila = macsFila.filter(function(it) { return _descAcompDentroRetencao(it, _corteRet); });
   var totalGeral = macsFila.length;
   var naoIniciado = 0, emAndamento = 0, finalizado = 0, finalizadoAnter = 0, totalImpressoes = 0;
   var macsComConferente = 0;
@@ -16256,6 +16765,9 @@ function descargaAcompRenderizar() {
   var lista = _descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){
     return { mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: m.tipo, ativo: true };
   });
+  // V199 — retenção de 72h úteis (só exibição; ver _descAcompDentroRetencao)
+  var _corteRet = _descAcompRetencaoCorteMs();
+  lista = lista.filter(function(m) { return _descAcompDentroRetencao(m, _corteRet); });
 
   descargaAcompAtualizarCards();
   
@@ -17724,7 +18236,7 @@ function _acompOutBaseFiltrada() {
       if (s.indexOf(busca) < 0) return false;
     }
     if (dDe || dAte) {
-      var gd = _acompOutParseBRDate((r.gerado || '').substring(0, 10));
+      var gd = _acompOutParseBRDate(_dataOperacionalDoGerado(r.gerado)); // V205 — dia operacional
       if (!gd) return false;
       if (dDe && gd < dDe) return false;
       if (dAte && gd > dAte) return false;
@@ -18599,7 +19111,7 @@ function resumoMalhaRenderizar() {
   });
 
   var ordemTurnos = ['1º Turno', '2º Turno', '3º Turno'];
-  var faixas = { '1º Turno': '06:00 – 15:00', '2º Turno': '15:00 – 23:00', '3º Turno': '23:00 – 06:00' };
+  var faixas = { '1º Turno': '06:01 – 15:00', '2º Turno': '15:01 – 22:30', '3º Turno': '22:31 – 06:00' }; // V205 — rótulos iguais ao classificador
   var turnos = { '1º Turno': [], '2º Turno': [], '3º Turno': [] };
 
   unicos.forEach(function(r) {
@@ -18795,8 +19307,8 @@ function _gvTurnoDoHorario(horaStr) {
   if (_turnoFDS) return _turnoFDS;
   if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
   if (minutos <= 945) return '1º Turno';    // 06:40–15:45
-  if (minutos <= 1380) return '2º Turno';   // 15:46–23:00
-  return '3º Turno';                        // 23:01–23:59
+  if (minutos < ROTA7_VIRADA_DIA_MIN) return '2º Turno'; // 15:46–22:30 (V205 — era até 23:00)
+  return '3º Turno';                        // 22:31–23:59 (V205 — era a partir de 23:01)
 }
 
 function _gvDiaDaSemanaAtual() {
@@ -18851,10 +19363,13 @@ function _gvJanelaOperacionalAtual(agoraReferencia) {
   // (antes 22:31). Se este corte ficasse para trás, o Extrato do Dia passaria
   // a contar entre 22:31 e 23:00 registros que o classificador já considera
   // do 2º Turno, e a linha Total deixaria de bater com a soma dos turnos.
-  if (minutosAgora >= 1381) dataRef.setDate(dataRef.getDate() + 1);
+  // V205 — Decisão 1: o dia operacional vira às 22:31 (ROTA7_VIRADA_DIA_MIN), igual
+  // ao 3º Turno oficial. Era 23:01 desde a V168.
+  if (minutosAgora >= ROTA7_VIRADA_DIA_MIN) dataRef.setDate(dataRef.getDate() + 1);
 
-  var inicio = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate() - 1, 23, 1, 0, 0);
-  var fimProgramado = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), 23, 1, 0, 0);
+  var _hVir = Math.floor(ROTA7_VIRADA_DIA_MIN / 60), _mVir = ROTA7_VIRADA_DIA_MIN % 60;
+  var inicio = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate() - 1, _hVir, _mVir, 0, 0);
+  var fimProgramado = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), _hVir, _mVir, 0, 0);
   var fim = agora < fimProgramado ? agora : fimProgramado;
 
   return { agora: agora, dataRef: dataRef, inicio: inicio, fim: fim, fimProgramado: fimProgramado };
@@ -18875,7 +19390,7 @@ function _gvTurnosDecorridos(agoraReferencia) {
   var agora = (agoraReferencia instanceof Date && !isNaN(agoraReferencia.getTime()))
     ? agoraReferencia : new Date();
   var minutos = agora.getHours() * 60 + agora.getMinutes();
-  if (minutos >= 1381 || minutos <= 399) return ['3º Turno'];
+  if (minutos >= ROTA7_VIRADA_DIA_MIN || minutos <= 399) return ['3º Turno']; // V205 — 22:31
   if (minutos <= 945) return ['3º Turno', '1º Turno'];
   return ['3º Turno', '1º Turno', '2º Turno'];
 }
@@ -19072,6 +19587,422 @@ function _gvExtratoHistCarregarSupabase() {
   } catch(e) {}
 }
 
+// ═══════════ V201 · HISTÓRICO MENSAL (Extrato do Dia) ═══════════
+// Uma "foto" por dia, tirada às 22:30 (horário de corte), com os mesmos números
+// do Extrato do Dia (_gvExtratoColeta) + HC da Lista de Presença + Frota Extra.
+// Somente LEITURA das fontes existentes: nada do Painel, do Extrato ou da Lista
+// de Presença é alterado.
+//   • Banco: uma linha por dia, 'gv_hist_mensal:AAAA-MM-DD' (nunca um blob único,
+//     para duas máquinas não se atropelarem).
+//   • Foto FIXA: a primeira máquina que grava vence ("ignore-duplicates"); as
+//     demais não sobrescrevem.
+//   • Quem tira: qualquer máquina com o app aberto entre 22:30 e 22:59 (e aberta
+//     há pelo menos 3 min, para não fotografar dados ainda carregando).
+//   • Guarda só os números brutos; percentuais, HC Total, produtividade etc. são
+//     calculados na exibição/Excel — se uma regra de cálculo mudar, o histórico
+//     inteiro acompanha sem perder nada.
+var GV_HM_PREFIXO = 'gv_hist_mensal:';
+var GV_HM_CORTE_MIN = 22 * 60 + 30;   // 22:30 — horário da foto
+var GV_HM_LIMITE_MIN = ROTA7_VIRADA_DIA_MIN; // V205 — 22:31: o dia operacional vira e a foto do dia fecha
+var _gvHmFotoFeita = null;            // data (AAAA-MM-DD) já tratada nesta máquina
+var _gvHmCache = {};                  // { 'AAAA-MM-DD': foto }
+var _gvHmMes = null;                  // 'AAAA-MM' em exibição
+
+var GV_HM_COLUNAS = [
+  { g: 'CONTROLE DO HISTÓRICO', h: 'Data', t: 'txt' },
+  { h: 'Corte Fixo', t: 'txt' },
+  { g: 'HISTÓRICO IN', h: 'Plano IN (kg)', t: 'kg' },
+  { h: 'Programado IN (kg)', t: 'kg' },
+  { h: 'Executado IN (kg)', t: 'kg' },
+  { h: 'Ating. IN', t: 'pct' },
+  { h: 'Saldo IN (kg)', t: 'kg' },
+  { g: 'HISTÓRICO OUT', h: 'Plano OUT (kg)', t: 'kg' },
+  { h: 'Programado OUT (kg)', t: 'kg' },
+  { h: 'Executado OUT (kg)', t: 'kg' },
+  { h: 'Ating. OUT', t: 'pct' },
+  { h: 'Saldo OUT (kg)', t: 'kg' },
+  { g: 'HISTÓRICO CONSOLIDADO', h: 'Plano Total (kg)', t: 'kg' },
+  { h: 'Peso Movimentado (kg)', t: 'kg' },
+  { h: 'Ating. Total', t: 'pct' },
+  { h: 'Desvio Plano (kg)', t: 'kg' },
+  { g: 'HC E PRODUTIVIDADE', h: 'Conferentes', t: 'n' },
+  { h: 'Ajudantes', t: 'n' },
+  { h: 'HC Total', t: 'n' },
+  { h: 'Produtividade kg/HC', t: 'kg' },
+  { h: 'Produtividade ton/HC', t: 'dec' },
+  { g: 'CAPACIDADE', h: 'Capacidade (kg)', t: 'kg' },
+  { h: 'Eficiência Capacidade', t: 'pct' },
+  { g: 'HISTÓRICO DE FROTA', h: 'Frota Planejada', t: 'n' },
+  { h: 'Frota Programada', t: 'n' },
+  { h: 'Frota Executada', t: 'n' },
+  { h: 'Frota Extra', t: 'n' },
+  { h: '% Frota Extra', t: 'pct' },
+  { h: 'Saldo Frota', t: 'n' },
+  { h: 'Ating. Frota', t: 'pct' }
+];
+
+function _gvHmMontarFoto() {
+  var e = _gvExtratoColeta();
+  var dia = (typeof _lpDados !== 'undefined' && _lpDados && _lpDados.dias && _lpDados.dias[e.data]) || {};
+  var hc = { Conferente: 0, Ajudante: 0, Terceiros: 0 };
+  ['inbound', 'outbound'].forEach(function(fx) {
+    LP_TURNOS.forEach(function(t) {
+      var d = (dia[fx] && dia[fx][t]) || {};
+      LP_FUNCOES.forEach(function(f) { hc[f] += _lpNum(d[f]); });
+    });
+  });
+  var fp = (typeof _fpColeta === 'function') ? _fpColeta() : {};
+  return {
+    data: e.data, corte: '22:30', fotoISO: new Date().toISOString(),
+    in: e.in, out: e.out, fp: e.fp,
+    planoTotal: e.planoTotal, movimentado: e.movimentado, capacidadeKg: e.capacidadeKg,
+    conferentes: hc.Conferente, ajudantes: hc.Ajudante, terceiros: hc.Terceiros,
+    frotaExtra: fp.recursosExtrasCount || 0
+  };
+}
+
+// Converte a foto nos 30 valores das colunas (null = sem valor).
+function _gvHmValores(dataISO, f) {
+  var p = dataISO.split('-');
+  var dataBR = p[2] + '/' + p[1] + '/' + p[0];
+  if (!f) {
+    var v = [dataBR, '—'];
+    for (var i = 2; i < GV_HM_COLUNAS.length; i++) v.push(null);
+    return v;
+  }
+  var div = function(a, b) { return b ? a / b : null; };
+  var fin = f.in || {}, fout = f.out || {}, ffp = f.fp || {};
+  var hcTotal = (f.conferentes || 0) + (f.ajudantes || 0) + (f.terceiros || 0);
+  return [
+    dataBR, f.corte || '22:30',
+    fin.plano, fin.programado, fin.executado, div(fin.executado, fin.plano), fin.saldo,
+    fout.plano, fout.programado, fout.executado, div(fout.executado, fout.plano), fout.saldo,
+    f.planoTotal, f.movimentado, div(f.movimentado, f.planoTotal), (f.movimentado || 0) - (f.planoTotal || 0),
+    f.conferentes, f.ajudantes, hcTotal, div(f.movimentado, hcTotal), div((f.movimentado || 0) / 1000, hcTotal),
+    f.capacidadeKg, div(f.movimentado, f.capacidadeKg),
+    ffp.plano, ffp.programado, ffp.executado, f.frotaExtra, div(f.frotaExtra, ffp.programado), ffp.saldo, div(ffp.executado, ffp.plano)
+  ];
+}
+
+// ── V202 · FOTO AMARRADA ─────────────────────────────────────────────────────
+// 1. Horário fixo: a máquina OFICIAL fotografa às 22:30:00 em ponto (timer
+//    exato) — o ciclo de 60s fica só de reforço, se o timer atrasar.
+// 2. Máquina oficial x reserva: definida no botão do Histórico mensal e gravada
+//    no banco. As demais máquinas só fotografam se, às 22:45, o dia ainda estiver
+//    sem foto — e a foto fica marcada como "reserva", com o horário real.
+// 3. Tira primeiro, envia depois: a foto é congelada no localStorage no instante
+//    do corte e reenviada a cada minuto até o banco confirmar (inclusive depois
+//    das 23:00 e depois de reiniciar o navegador). Queda de internet às 22:30
+//    não perde a foto.
+var GV_HM_RESERVA_ESPERA_MS = 30000;        // V205 — reserva entra 30 s depois (antes era 22:45, já no dia seguinte)
+var GV_HM_CONFIG_CHAVE = 'gv_hist_mensal_config';
+var GV_HM_PENDENTES_LS = 'gv_hm_pendentes';
+var _gvHmConfig = null;                     // { id, nome, em } da máquina oficial
+var _gvHmEnviando = false;
+
+function _gvHmMaquinaId() {
+  var id = null;
+  try { id = localStorage.getItem('gv_hm_maquina_id'); } catch (e) {}
+  if (!id) {
+    id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    try { localStorage.setItem('gv_hm_maquina_id', id); } catch (e) {}
+  }
+  return id;
+}
+
+function _gvHmSouOficial() {
+  return !!(_gvHmConfig && _gvHmConfig.id && _gvHmConfig.id === _gvHmMaquinaId());
+}
+
+function _gvHmLerConfig() {
+  return fetch(SB_URL + '/configuracoes?chave=eq.' + GV_HM_CONFIG_CHAVE + '&select=valor', {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(rows) {
+    _gvHmConfig = null;
+    try { if (rows && rows.length && rows[0].valor) _gvHmConfig = JSON.parse(rows[0].valor); } catch (e) {}
+    return _gvHmConfig;
+  });
+}
+
+function _gvHmPendentesLer() {
+  try { return JSON.parse(localStorage.getItem(GV_HM_PENDENTES_LS) || '{}') || {}; } catch (e) { return {}; }
+}
+function _gvHmPendentesGravar(p) {
+  try { localStorage.setItem(GV_HM_PENDENTES_LS, JSON.stringify(p)); } catch (e) {}
+}
+
+// Envia as fotos congeladas que ainda não foram confirmadas pelo banco.
+function _gvHmEnviarPendentes() {
+  if (_gvHmEnviando) return Promise.resolve();
+  var pend = _gvHmPendentesLer();
+  var datas = Object.keys(pend);
+  if (!datas.length) return Promise.resolve();
+  _gvHmEnviando = true;
+  var cadeia = Promise.resolve();
+  datas.forEach(function(dataISO) {
+    cadeia = cadeia.then(function() {
+      var chave = GV_HM_PREFIXO + dataISO;
+      return fetch(SB_URL + '/configuracoes', {
+        method: 'POST',
+        headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=ignore-duplicates,return=minimal' }),
+        body: JSON.stringify({ chave: chave, valor: JSON.stringify(pend[dataISO]) })
+      }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        // Confirma lendo de volta: só sai da fila quando o dia existe no banco
+        // (com esta foto ou com a de outra máquina que gravou antes — a foto é fixa).
+        return fetch(SB_URL + '/configuracoes?chave=eq.' + encodeURIComponent(chave) + '&select=chave', {
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+        });
+      }).then(function(r) { return r.json(); }).then(function(rows) {
+        if (!rows || !rows.length) throw new Error('não confirmado');
+        var p2 = _gvHmPendentesLer(); delete p2[dataISO]; _gvHmPendentesGravar(p2);
+        console.log('[histórico mensal] foto de ' + dataISO + ' confirmada no banco.');
+      }).catch(function(err) {
+        console.warn('[histórico mensal] envio da foto de ' + dataISO + ' falhou — nova tentativa em 1 min:', err);
+      });
+    });
+  });
+  return cadeia.then(function() { _gvHmEnviando = false; }, function() { _gvHmEnviando = false; });
+}
+
+function _gvHmTalvezFotografar() {
+  try {
+    _gvHmEnviarPendentes(); // reenvia o que ficou para trás, a qualquer hora
+    var agora = new Date();
+    var min = agora.getHours() * 60 + agora.getMinutes();
+    if (min < GV_HM_CORTE_MIN || min >= GV_HM_LIMITE_MIN) return;
+    if (typeof performance !== 'undefined' && performance.now() < 180000) return; // app recém-aberto
+    var dataISO = _gvExtratoDataISO(0);
+    if (_gvHmFotoFeita === dataISO) return;
+    if (_gvHmPendentesLer()[dataISO]) { _gvHmFotoFeita = dataISO; return; } // já congelada aqui
+    _gvHmFotoFeita = dataISO;
+    var chave = GV_HM_PREFIXO + dataISO;
+    _gvHmLerConfig().then(function(cfg) {
+      var oficial = _gvHmSouOficial();
+      // Reserva: com máquina oficial definida, as outras esperam 30 s e só
+      // fotografam se o dia continuar sem foto (sempre antes da virada das 22:31).
+      var espera = (!oficial && cfg && cfg.id) ? GV_HM_RESERVA_ESPERA_MS : 0;
+      return new Promise(function(res) { setTimeout(res, espera); }).then(function() {
+      return fetch(SB_URL + '/configuracoes?chave=eq.' + encodeURIComponent(chave) + '&select=chave', {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+      }).then(function(r) { return r.json(); }).then(function(rows) {
+        if (rows && rows.length) return; // dia já fotografado — a foto é fixa
+        var foto = _gvHmMontarFoto();
+        if (foto.data !== dataISO) return; // já virou o dia: não fotografa o dia seguinte
+        var _agCap = new Date();
+        var hhmm = String(_agCap.getHours()).padStart(2, '0') + ':' + String(_agCap.getMinutes()).padStart(2, '0');
+        foto.origem = oficial ? 'oficial' : 'reserva';
+        foto.maquina = oficial ? (cfg.nome || 'Máquina oficial') : _gvHmMaquinaId();
+        foto.corte = oficial ? '22:30' : (hhmm + ' (reserva)');
+        var pend = _gvHmPendentesLer(); pend[dataISO] = foto; _gvHmPendentesGravar(pend); // congela antes de enviar
+        console.log('[histórico mensal] foto de ' + dataISO + ' tirada às ' + hhmm + ' (' + foto.origem + ').');
+        return _gvHmEnviarPendentes();
+      });
+      });
+    }).catch(function(err) {
+      _gvHmFotoFeita = null; // tenta de novo no próximo minuto
+      console.warn('[histórico mensal] falha ao preparar a foto:', err);
+    });
+  } catch (e) {}
+}
+
+// Timer exato para 22:30:00 (reagendado todo dia) + ciclo de 60s de reforço.
+function _gvHmAgendarCorte() {
+  var agora = new Date();
+  var alvo = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(),
+                      Math.floor(GV_HM_CORTE_MIN / 60), GV_HM_CORTE_MIN % 60, 0, 500);
+  if (alvo.getTime() <= agora.getTime()) alvo.setDate(alvo.getDate() + 1);
+  setTimeout(function() { _gvHmTalvezFotografar(); _gvHmAgendarCorte(); }, alvo.getTime() - agora.getTime());
+}
+_gvHmAgendarCorte();
+setInterval(_gvHmTalvezFotografar, 60000);
+
+function gvHistoricoMensalDefinirOficial() {
+  var atual = _gvHmConfig && _gvHmConfig.id ? _gvHmConfig : null;
+  if (atual && atual.id !== _gvHmMaquinaId() &&
+      !confirm('A máquina oficial hoje é "' + (atual.nome || '—') + '". Transferir para esta máquina?')) return;
+  var nome = prompt('Nome desta máquina (ex.: PC da Operação):', (atual && atual.id === _gvHmMaquinaId() && atual.nome) || 'PC da Operação');
+  if (nome === null) return;
+  var cfg = { id: _gvHmMaquinaId(), nome: String(nome).trim() || 'Máquina oficial', em: new Date().toISOString() };
+  fetch(SB_URL + '/configuracoes', {
+    method: 'POST',
+    headers: Object.assign({}, SB_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify({ chave: GV_HM_CONFIG_CHAVE, valor: JSON.stringify(cfg) })
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _gvHmConfig = cfg;
+    if (typeof showToast === 'function') showToast('Esta máquina agora tira a foto oficial das 22:30', 'success');
+    _gvHmStatusOficial();
+  }).catch(function() {
+    if (typeof showToast === 'function') showToast('Não foi possível gravar a máquina oficial — tente de novo', 'error');
+  });
+}
+
+function _gvHmStatusOficial() {
+  var el = document.getElementById('gv-hm-oficial');
+  if (!el) return;
+  var txt;
+  if (_gvHmSouOficial()) txt = '● Esta máquina é a oficial da foto (' + (_gvHmConfig.nome || '') + ') — mantenha-a ligada e com o app aberto às 22:30.';
+  else if (_gvHmConfig && _gvHmConfig.id) txt = 'Máquina oficial: ' + (_gvHmConfig.nome || '—') + ' · esta máquina é reserva (fotografa às 22:30 e 30 s se faltar a foto oficial).';
+  else txt = 'Nenhuma máquina oficial definida — qualquer máquina aberta fotografa às 22:30.';
+  var pend = Object.keys(_gvHmPendentesLer());
+  if (pend.length) txt += ' · ' + pend.length + ' foto(s) aguardando envio ao banco.';
+  el.textContent = txt;
+}
+
+function _gvHmCarregar(mes, cb) {
+  fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(GV_HM_PREFIXO + mes + '-') + '*&select=chave,valor', {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(rows) {
+    (rows || []).forEach(function(row) {
+      try { _gvHmCache[String(row.chave).slice(GV_HM_PREFIXO.length)] = JSON.parse(row.valor); } catch (e) {}
+    });
+    cb(true);
+  }).catch(function() { cb(false); });
+}
+
+// Dias do mês exibidos: até o último dia (meses passados) ou até hoje (mês atual).
+function _gvHmDiasDoMes(mes) {
+  var p = mes.split('-'), ano = +p[0], m = +p[1];
+  var ultimo = new Date(ano, m, 0).getDate();
+  var hojeISO = _gvExtratoDataISO(0);
+  var dias = [];
+  for (var d = 1; d <= ultimo; d++) {
+    var iso = mes + '-' + String(d).padStart(2, '0');
+    if (iso > hojeISO) break;
+    dias.push(iso);
+  }
+  return dias;
+}
+
+function _gvHmFormatar(v, t) {
+  if (v === null || v === undefined || (typeof v === 'number' && !isFinite(v))) return '—';
+  if (t === 'txt') return String(v);
+  if (t === 'pct') return Math.round(v * 100) + '%';
+  if (t === 'dec') return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Math.round(v).toLocaleString('pt-BR');
+}
+
+function gvHistoricoMensalAbrir() {
+  var m = document.getElementById('gv-hm-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'gv-hm-modal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    m.innerHTML =
+      '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:8px;width:100%;max-width:1600px;max-height:90vh;display:flex;flex-direction:column;font-family:\'Poppins\',sans-serif">' +
+        '<div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid #2b2b2b;flex-wrap:wrap">' +
+          '<span style="font-size:15px;font-weight:700;color:#fff;flex:1">Histórico mensal <span style="font-size:11px;color:#9a9a9a;font-weight:400">· foto fixa diária às 22:30</span></span>' +
+          '<input type="month" id="gv-hm-mes" onchange="gvHistoricoMensalTrocarMes(this.value)" style="padding:6px 8px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#e8e8e8;font-family:inherit;font-size:12px">' +
+          '<button onclick="gvHistoricoMensalExportar()" style="padding:7px 16px;border-radius:4px;border:1px solid #e8e8e8;background:#e8e8e8;color:#111;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Baixar Excel</button>' +
+          '<button onclick="gvHistoricoMensalFechar()" style="padding:7px 16px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Fechar</button>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px solid #2b2b2b;flex-wrap:wrap">' +
+          '<span id="gv-hm-oficial" style="font-size:11px;color:#e8e8e8;flex:1"></span>' +
+          '<button onclick="gvHistoricoMensalDefinirOficial()" style="padding:5px 12px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Definir esta máquina como oficial</button>' +
+        '</div>' +
+        '<div id="gv-hm-status" style="padding:6px 18px;font-size:11px;color:#9a9a9a"></div>' +
+        '<div id="gv-hm-tabela" style="overflow:auto;padding:0 18px 18px"></div>' +
+      '</div>';
+    m.addEventListener('click', function(ev) { if (ev.target === m) gvHistoricoMensalFechar(); });
+    document.body.appendChild(m);
+  }
+  m.style.display = 'flex';
+  var mes = _gvHmMes || _gvExtratoDataISO(0).slice(0, 7);
+  document.getElementById('gv-hm-mes').value = mes;
+  gvHistoricoMensalTrocarMes(mes);
+}
+
+function gvHistoricoMensalFechar() {
+  var m = document.getElementById('gv-hm-modal');
+  if (m) m.style.display = 'none';
+}
+
+function gvHistoricoMensalTrocarMes(mes) {
+  if (!/^\d{4}-\d{2}$/.test(mes || '')) return;
+  _gvHmMes = mes;
+  _gvHmStatusOficial();
+  _gvHmLerConfig().then(_gvHmStatusOficial, function() {});
+  var st = document.getElementById('gv-hm-status');
+  if (st) st.textContent = 'Carregando…';
+  _gvHmRenderizar();
+  _gvHmCarregar(mes, function(ok) {
+    if (_gvHmMes !== mes) return;
+    if (st) st.textContent = ok ? '' : 'Não foi possível consultar o banco — exibindo o que já estava carregado.';
+    _gvHmRenderizar();
+  });
+}
+
+function _gvHmRenderizar() {
+  var box = document.getElementById('gv-hm-tabela');
+  if (!box || !_gvHmMes) return;
+  var th = 'style="background:#000;color:#fff;padding:6px 8px;font-size:11px;font-weight:700;white-space:nowrap;border:1px solid #2b2b2b"';
+  var grupos = '', cab = '', span = 0, nome = null;
+  GV_HM_COLUNAS.forEach(function(c, i) {
+    if (c.g) {
+      if (nome !== null) grupos += '<th colspan="' + span + '" style="background:#f0b429;color:#111;padding:5px 8px;font-size:11px;font-weight:800;border:1px solid #2b2b2b">' + nome + '</th>';
+      nome = c.g; span = 0;
+    }
+    span++;
+    cab += '<th ' + th + '>' + c.h + '</th>';
+  });
+  grupos += '<th colspan="' + span + '" style="background:#f0b429;color:#111;padding:5px 8px;font-size:11px;font-weight:800;border:1px solid #2b2b2b">' + nome + '</th>';
+  var hojeISO = _gvExtratoDataISO(0);
+  var corpo = _gvHmDiasDoMes(_gvHmMes).map(function(iso) {
+    var foto = _gvHmCache[iso] || _gvHmPendentesLer()[iso];
+    var v = _gvHmValores(iso, foto);
+    if (!foto) v[1] = (iso === hojeISO) ? 'aguardando foto' : 'sem foto';
+    else if (!_gvHmCache[iso]) v[1] += ' · enviando';
+    return '<tr>' + v.map(function(x, i) {
+      var t = GV_HM_COLUNAS[i].t;
+      return '<td style="padding:5px 8px;font-size:11px;color:' + (foto ? '#e8e8e8' : '#6b6b6b') + ';border:1px solid #2b2b2b;white-space:nowrap;text-align:' + (t === 'txt' ? 'left' : 'right') + '">' + _gvHmFormatar(x, t) + '</td>';
+    }).join('') + '</tr>';
+  }).join('');
+  box.innerHTML = '<table style="border-collapse:collapse;min-width:100%"><thead><tr>' + grupos + '</tr><tr>' + cab + '</tr></thead><tbody>' + corpo + '</tbody></table>';
+}
+
+function gvHistoricoMensalExportar() {
+  if (!_gvHmMes) return;
+  if (typeof XLSX === 'undefined') { if (typeof showToast === 'function') showToast('Biblioteca de Excel indisponível', 'error'); return; }
+  var linhaGrupos = [], merges = [], inicio = 0, nome = null;
+  GV_HM_COLUNAS.forEach(function(c, i) {
+    if (c.g) {
+      if (nome !== null && i - 1 > inicio) merges.push({ s: { r: 0, c: inicio }, e: { r: 0, c: i - 1 } });
+      nome = c.g; inicio = i;
+    }
+    linhaGrupos.push(c.g || '');
+  });
+  if (GV_HM_COLUNAS.length - 1 > inicio) merges.push({ s: { r: 0, c: inicio }, e: { r: 0, c: GV_HM_COLUNAS.length - 1 } });
+  var aoa = [linhaGrupos, GV_HM_COLUNAS.map(function(c) { return c.h; })];
+  _gvHmDiasDoMes(_gvHmMes).forEach(function(iso) {
+    var foto = _gvHmCache[iso];
+    var v = _gvHmValores(iso, foto);
+    aoa.push(v.map(function(x, i) {
+      if (x === null || x === undefined || (typeof x === 'number' && !isFinite(x))) return i === 1 ? '—' : '';
+      return x;
+    }));
+  });
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = merges;
+  ws['!cols'] = GV_HM_COLUNAS.map(function(c) { return { wch: Math.max(11, c.h.length + 2) }; });
+  var fmt = { kg: '#,##0', n: '#,##0', pct: '0%', dec: '#,##0.00' };
+  for (var r = 2; r < aoa.length; r++) {
+    GV_HM_COLUNAS.forEach(function(c, i) {
+      var cel = ws[XLSX.utils.encode_cell({ r: r, c: i })];
+      if (cel && cel.t === 'n' && fmt[c.t]) cel.z = fmt[c.t];
+    });
+  }
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Histórico ' + _gvHmMes);
+  XLSX.writeFile(wb, 'Historico_Mensal_' + _gvHmMes + '.xlsx');
+}
+
 function gvExtratoTrocarDia(dia) {
   _gvExtratoDia = dia;
   gvExtratoRenderizar();
@@ -19150,7 +20081,11 @@ function gvExtratoRenderizar() {
         'font-size:12px;font-weight:700;cursor:pointer;font-family:\'Poppins\',sans-serif">' + rotulo + '</button>';
     };
     navDiv.innerHTML = btn('ext-btn-hoje', 'Hoje', _gvExtratoDia === 'hoje') +
-                       btn('ext-btn-ontem', 'Ontem', _gvExtratoDia === 'ontem');
+                       btn('ext-btn-ontem', 'Ontem', _gvExtratoDia === 'ontem') +
+                       // V201 — Histórico mensal (foto diária às 22:30)
+                       '<button id="ext-btn-hist-mensal" onclick="gvHistoricoMensalAbrir()" ' +
+                       'style="padding:7px 18px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;' +
+                       'font-size:12px;font-weight:700;cursor:pointer;font-family:\'Poppins\',sans-serif">Histórico mensal</button>';
   }
 
   var kg = function(v) { return Math.round(v || 0).toLocaleString('pt-BR') + ' kg'; };
@@ -19495,7 +20430,7 @@ function _gvCxTabela(n) {
 
   return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 18px;box-sizing:border-box">' +
     '<div style="font-size:12px;font-weight:800;color:#e5e5e5;margin-bottom:2px">Capacidade x Executado — por turno</div>' +
-    '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">KG · Capacidade: HC Ajudante + Terceiros (Lista de Presença) · Executado: Descarga IN + Carregamento OUT · Só turnos já iniciados (dia operacional 23:01→23:01, começa no 3º Turno)</div>' +
+    '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">KG · Capacidade: HC Ajudante + Terceiros (Lista de Presença) · Executado: Descarga IN + Carregamento OUT · Só turnos já iniciados (dia operacional 22:31→22:31, começa no 3º Turno)</div>' +
     '<div style="overflow-x:auto">' +
       '<table style="width:100%;border-collapse:collapse;min-width:760px">' +
         '<thead>' +
@@ -19715,61 +20650,6 @@ function _gvPesoProgramadoHistoricoIN(turnoAlvo) {
   return ordem.reduce(function(total, turno) {
     return total + (Number(cards[turno]) || 0);
   }, 0);
-}
-
-// ── V199 · PROGRAMADO IN DO PAINEL = CARD "FILA DE PROGRAMADOS" DA DESCARGA ──
-// CAUSA DO DEFEITO: o card lia só o balde do TURNO VIGENTE de
-// descargaPesoProgramadoPorTurno(_gvTurnoDoHorario). MAC/MEC impressos e ainda
-// marcados na tela Descarga ficavam fora do card por dois motivos:
-//   1) TRAVA DE TURNO (_descProgramacaoRegistrarLista): reimprimir num turno
-//      seguinte mantém a 1ª programação — o que foi impresso no 3º Turno continua
-//      no 3º e some do card do 1º Turno;
-//   2) régua do Painel (1º Turno = 06:40–15:45): impressão feita entre 06:01 e
-//      06:39, início real do turno, cai no balde do 3º Turno e também some.
-// Além disso o card usava peso CONGELADO e a tela Descarga usa o peso PENDENTE
-// vivo — os dois números nunca fechariam depois que a descarga começa.
-//
-// REGRA (só card e barra "Programado" do Painel; Extrato do Dia e Histórico de
-// Relatório IN seguem com o cálculo por turno, sem nenhuma alteração):
-// soma todo MAC/MEC registrado por "Imprimir Selecionados" no dia operacional
-// atual, usando a MESMA fila e o MESMO peso do card "Fila de Programados"
-// (_descColetaRanking → c.peso · _descMacRanking → m.pesoTotal).
-// Descarregou → saiu da fila → sai daqui e passa a contar no Executado.
-// Devolve null quando a fila ainda não existe (sem relatório carregado).
-function _gvPesoProgramadoFilaIN() {
-  // Painel aberto sem passar pela aba Descarga: a fila ainda não foi montada.
-  if ((typeof _descMacRanking === 'undefined' || !_descMacRanking || !_descMacRanking.length) &&
-      (typeof _descColetaRanking === 'undefined' || !_descColetaRanking || !_descColetaRanking.length) &&
-      typeof _relData !== 'undefined' && _relData && _relData.length &&
-      typeof descargaRenderizar === 'function') {
-    try { descargaRenderizar(); } catch (e) {}
-  }
-  var coletas = (typeof _descColetaRanking !== 'undefined' && _descColetaRanking) ? _descColetaRanking : [];
-  var macs = (typeof _descMacRanking !== 'undefined' && _descMacRanking) ? _descMacRanking : [];
-  if (!coletas.length && !macs.length) return null;
-
-  var programacoes = (typeof _descProgramacaoData === 'object' && _descProgramacaoData) ? _descProgramacaoData : {};
-  var acomp = (typeof _descAcompData === 'object' && _descAcompData) ? _descAcompData : {};
-  var contados = {};
-  var total = 0;
-
-  function somar(mac, peso) {
-    var chave = _descProgramacaoId(mac);
-    if (!chave || contados[chave]) return;
-    var rec = programacoes[chave];
-    if (!rec || rec.programado !== true) {
-      // Compatibilidade: registro antigo ainda só no Acompanhamento IN
-      var leg = acomp[mac] || acomp[chave];
-      if (!leg || !leg.programado) return;
-      rec = { dataISO: leg.programadoDataISO || '' };
-    }
-    if (!_descProgramacaoNoDiaOperacional(rec, true)) return;
-    contados[chave] = true;
-    total += peso || 0;
-  }
-  coletas.forEach(function(c) { somar(c.mac, c.peso); });
-  macs.forEach(function(m) { somar(m.mac, m.pesoTotal); });
-  return Math.max(0, total);
 }
 
 // ── V176 · EXECUTADO REGISTRADO FORA DO SNAPSHOT DA JANELA ───────────────────
@@ -20170,13 +21050,13 @@ function _gvColetarDadosIN() {
     });
   }
 
-  // V199 — o card "Programado" do Dashboard IN usa a MESMA base do card "Fila de
-  // Programados" da tela Descarga (ver _gvPesoProgramadoFilaIN). A leitura por
-  // turno, com peso congelado, continua na coluna "Programados" do Extrato do Dia.
-  // Sem fila montada (nenhum relatório carregado), mantém o cálculo anterior.
+  // O card "Programado" do Dashboard IN mostra o peso do TURNO VIGENTE — não a
+  // soma dos três turnos. A leitura acumulada do dia fica na coluna "Programados"
+  // do Extrato do Dia, que preserva cada turno separadamente.
+  // Fonte: Histórico de Relatório IN, com peso congelado no ato da programação e
+  // um MAC/MEC contado uma única vez (a primeira programação trava o turno).
   var turnoVigenteIN = _gvTurnoDoHorario(agoraHora);
-  var programadoHistoricoIN = (typeof _gvPesoProgramadoFilaIN === 'function') ? _gvPesoProgramadoFilaIN() : null;
-  if (programadoHistoricoIN === null) programadoHistoricoIN = _gvPesoProgramadoHistoricoIN(turnoVigenteIN);
+  var programadoHistoricoIN = _gvPesoProgramadoHistoricoIN(turnoVigenteIN);
   if (programadoHistoricoIN !== null) pesoProgramado = programadoHistoricoIN;
 
   // ── Peso em Trânsito (destino GRU) — fonte separada, vem da aba Trânsito ──
@@ -20375,7 +21255,7 @@ function _fpColeta() {
   _rpBase.forEach(function(r) {
     if (!r) return;
     if (!(r.frota || r.ocup || r.motorista || r.cavalinho)) return;
-    if (!r.gerado || r.gerado.substring(0, 10) !== hojeStrRP) return;
+    if (!r.gerado || _dataOperacionalDoGerado(r.gerado) !== hojeStrRP) return; // V205
     if (String(r.tipo || '').trim() === 'Carro Extra') recursosExtrasCount++;
   });
 
@@ -21757,7 +22637,7 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfo = fluxo.horaPrimeiroImport
-      ? 'Dia operacional · 3º Turno: 23:01–06:39 · primeiro importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
+      ? 'Dia operacional · 3º Turno: 22:31–06:39 · primeiro importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
       : 'Sem importação registrada na janela operacional atual';
 
     var corpoTabela = fluxo.horaPrimeiroImport
@@ -21847,7 +22727,7 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfoO = fo.temTms
-      ? 'CARREGAMENTO · KG · Dia operacional · 3º Turno: 23:01–06:39 · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) na janela'
+      ? 'CARREGAMENTO · KG · Dia operacional · 3º Turno: 22:31–06:39 · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) na janela'
       : 'CARREGAMENTO · KG · Dia operacional · sem import TMS na janela — Plano = soma da lista do Acompanhamento';
 
     entregaDiv.innerHTML =
