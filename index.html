@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V205--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V207--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6357,7 +6357,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V205';
+var ROTA7_VERSAO = 'V207';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -7153,6 +7153,8 @@ function _sbResincronizarFontesPainel() {
     // V203/V204 — Programação IN (card Programado / coluna Programados do Extrato):
     // linhas incrementais; o blob antigo é sondado dentro de _descProgCarregarLinhas na transição.
     if (typeof _descProgCarregarLinhas === 'function') _descProgCarregarLinhas();
+    // V207 — Lista de Presença (HC → Capacidade do Painel): só lia na abertura da página
+    if (typeof lpCarregarSupabase === 'function') lpCarregarSupabase(true);
   } catch (e) {}
 }
 
@@ -7224,6 +7226,13 @@ function sbInicializarRealtime() {
               if (typeof v !== 'string') return;
               try { _descAcompListaAplicarItemRemoto(_macItem, JSON.parse(v)); } catch(e) {}
             });
+          }
+        } else if (chave.indexOf('lp_cel:') === 0 || chave.indexOf('lp_meta:') === 0) {
+          // V207 — uma célula do HC (ou uma meta) mudou em outra máquina
+          if (payload.new && typeof payload.new.valor === 'string' && typeof _lpAplicarRealtime === 'function') {
+            _lpAplicarRealtime(chave, payload.new.valor);
+          } else if (payload.new && typeof _lpAplicarRealtime === 'function') {
+            _sbLerValorChave(chave).then(function(v) { if (typeof v === 'string') _lpAplicarRealtime(chave, v); });
           }
         } else if (chave.indexOf('desc_prog_in:') === 0) {
           // V204 — uma programação (uma linha) mudou em outra máquina
@@ -7357,6 +7366,38 @@ function sbToRec(o) {
   };
 }
 
+// ── V206 · REGISTRO NOVO NUNCA GRAVA POR CIMA DE OUTRO ─────────────────────────
+// A gravação é "PATCH pelo id; se não existir, POST". Se o id de um registro NOVO
+// já existisse no banco (id reaproveitado, linha excluída antes, outra máquina),
+// o PATCH escrevia por cima da linha de outra pessoa — e a programação "sumia".
+// Agora, antes da 1ª gravação, confere se o id está livre; se não estiver, troca
+// por outro id novo. Depois da 1ª gravação o fluxo é o mesmo de sempre.
+async function _progGarantirIdLivre(r) {
+  for (var tentativa = 0; tentativa < 5; tentativa++) {
+    var res = await fetch(SB_URL + '/programados?id=eq.' + encodeURIComponent(String(r._id)) +
+                          '&select=id,destino,saida,dia,tipo,frota', { headers: SB_HEADERS });
+    if (!res.ok) throw new Error('verificação de id falhou: ' + res.status);
+    var rows = await res.json();
+    var ehEle = (rows || []).length > 0 && rows.every(function(x) {
+      return String(x.destino || '') === String(r.destino || '') && String(x.saida || '') === String(r.saida || '') &&
+             String(x.dia || '') === String(r.dia || '') && String(x.tipo || '') === String(r.tipo || '') &&
+             String(x.frota || '') === String(r.frota || '');
+    });
+    if (!rows || !rows.length || ehEle) return;
+    var idAntigo = r._id;
+    if (nextId <= idAntigo) nextId = idAntigo + 1;
+    r._id = _novoIdProg();
+    console.warn('[programação] o id ' + idAntigo + ' já existia no banco — registro gravado com o id ' + r._id + '.');
+    try { saveLocal(); renderProg(); renderHist(); } catch (e) {}
+  }
+  throw new Error('não foi possível obter um id livre');
+}
+async function fbSave(r) {
+  if (r && r._novo) await _progGarantirIdLivre(r);
+  await _fbSaveBruto(r);
+  if (r && r._novo) { delete r._novo; try { saveLocal(); } catch (e) {} }
+}
+
 // Salvar/atualizar um registro (upsert seguro: PATCH primeiro, POST se não existir)
 // Evita duplicação de linhas caso a tabela não tenha constraint UNIQUE em "id"
 // (merge-duplicates via POST só funciona com essa constraint; sem ela, cada
@@ -7378,7 +7419,7 @@ function _removerColunasAusentes(payload) {
   if (_sbSemColunaCavalinho) delete payload.cavalinho;
 }
 
-async function fbSave(r) {
+async function _fbSaveBruto(r) {
   // V62 FIX — nunca enviar registro sem id numérico válido; isso gerava
   // a linha "-Infinity" no Supabase que quebrava a sincronização
   if (!r || r._id === null || r._id === undefined) return;
@@ -7532,6 +7573,7 @@ function _deleteSalvarFila() {
 
 function deleteFromSheets(id) {
   var idStr = String(id);
+  _deletePendentes.add(idStr); _deleteSalvarFila(); // V206 — escondido até o banco confirmar
   fetch(SB_URL + '/programados?id=eq.' + encodeURIComponent(idStr), {
     method: 'PATCH',
     headers: Object.assign({}, SB_HEADERS, {'Prefer': 'return=representation'}),
@@ -7540,7 +7582,9 @@ function deleteFromSheets(id) {
     if (!res.ok) throw new Error('status ' + res.status);
     return res.json();
   }).then(function(rows) {
-    if (!rows || !rows.length) throw new Error('nenhuma linha afetada no servidor (id não encontrado)');
+    // V206 — id inexistente no banco (registro que nunca chegou a subir): não há o
+    // que excluir; sai da fila em vez de ficar pendente para sempre (o que também
+    // travava a atualização automática de versão e esconderia um registro futuro).
     // Confirmado de verdade: some da fila de pendências, se estava
     _deletePendentes.delete(idStr);
     _deleteSalvarFila();
@@ -7562,11 +7606,9 @@ function _deleteReenviarUm(id) {
     if (!res.ok) throw new Error('status ' + res.status);
     return res.json();
   }).then(function(rows) {
-    if (rows && rows.length) {
-      _deletePendentes.delete(idStr);
-      _deleteSalvarFila();
-      console.log('[delete] Pendente confirmado ok: id=' + idStr);
-    }
+    _deletePendentes.delete(idStr); // V206 — confirmado, ou id inexistente no banco
+    _deleteSalvarFila();
+    console.log('[delete] Pendente resolvido: id=' + idStr + (rows && rows.length ? '' : ' (não existia no banco)'));
   }).catch(function(){});
 }
 
@@ -7619,6 +7661,7 @@ async function fbGetAll() {
 // Carregar dados do Firebase
 function loadData() {
   loadLocal();
+  var _locaisAntesDoBanco = progData.slice(); // V206
   renderProg();
   renderHist();
   showSyncStatus('↻ Conectando ao Supabase...');
@@ -7628,23 +7671,39 @@ function loadData() {
       // V62 FIX — descartar registros com id inválido (ex: "-Infinity") que quebram
       // upserts no Supabase e a correspondência na tela dos outros usuários
       var filtered = records.filter(function(r){
-        if (_deletedIds.has(String(r._id))) return false;
+        // V206 — só esconde exclusão ainda não confirmada no banco (_deletePendentes).
+        // A lista histórica _deletedIds nunca era limpa: um id reaproveitado por um
+        // registro NOVO ficava escondido para sempre ("sumia" depois de preenchido).
+        if (_deletePendentes.has(String(r._id))) return false;
         var num = parseInt(r._id);
         return isFinite(num) && num > 0;
       });
-      progData = deduplicar(filtered);
+      // V206 — registros deste aparelho que ainda não chegaram ao banco (falha de
+      // rede, página recarregada no meio do envio) NÃO são descartados na abertura:
+      // continuam na tela e são reenviados. Antes o banco substituía tudo e o que
+      // estava pendente se perdia — típico no fechamento do turno.
+      var _idsBanco = new Set(filtered.map(function(r){ return String(r._id); }));
+      var _pendLocais = _locaisAntesDoBanco.filter(function(r) {
+        var k = String(r._id);
+        return (_syncPendentes.has(k) || r._novo) && !_idsBanco.has(k) && !_deletePendentes.has(k);
+      });
+      _pendLocais.forEach(function(r){ _syncPendentes.add(String(r._id)); });
+      if (_pendLocais.length) { _syncSalvarFila(); setTimeout(_syncReenviarPendentes, 1500); }
+      progData = deduplicar(filtered.concat(_pendLocais));
       var maxId = 0;
       progData.forEach(function(r){ var n = parseInt(r._id)||0; if (isFinite(n) && n > maxId) maxId = n; });
       nextId = Math.max(nextId, maxId + 1);
       saveLocal(); renderProg(); renderHist();
       showToast('✅ ' + progData.length + ' registros carregados!', 'success');
+      setTimeout(progLimparAntigos, 2000); // V206 — só roda com a lista do banco em mãos
     } else if (progData.length > 0) {
       showToast('💾 Supabase conectado — clique "Salvar Tudo" para enviar dados', 'success');
     } else {
       showToast('✅ Supabase conectado!', 'success');
     }
     iniciarEscutaRealtime();
-    setTimeout(progLimparAntigos, 2000); // limpa registros de dias anteriores do banco compartilhado
+    // V206 — a limpeza de registros antigos saiu daqui: rodava mesmo quando o banco
+    // não respondia, em cima do cache local desatualizado deste aparelho.
   }).catch(function() {
     hideSyncStatus();
     showToast('⚠️ Supabase offline — usando cache local', 'info');
@@ -7725,7 +7784,7 @@ function sbPollUmaVez() {
   _sbPollRunning = true;
   fbGetAll().then(function(recs) {
     if (!recs || !recs.length) { _sbPollRunning = false; return; }
-    var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+    var f = recs.filter(function(r){ return !_deletePendentes.has(String(r._id)); }); // V206
     var hash = f.map(function(r){ return r._id+':'+r.gerado; }).join('|');
     if (hash === _sbLastHash) { _sbPollRunning = false; return; }
     _sbLastHash = hash;
@@ -7734,7 +7793,7 @@ function sbPollUmaVez() {
     // simplesmente sumiram do Supabase (esses foram excluídos por alguém — não devem voltar)
     var sbIds = new Set(f.map(function(r){ return String(r._id); }));
     var localPendentes = progData.filter(function(r) {
-      return _syncPendentes.has(String(r._id)) && !sbIds.has(String(r._id)) && !_deletedIds.has(String(r._id));
+      return (_syncPendentes.has(String(r._id)) || r._novo) && !sbIds.has(String(r._id)) && !_deletePendentes.has(String(r._id)); // V206
     });
     progData = deduplicar(f.concat(localPendentes));
     var maxIdPoll = 0;
@@ -8611,13 +8670,13 @@ function syncManual() {
   _sbLastHash = ''; // limpa o cache de hash para forçar atualização completa
   fbGetAll().then(function(recs) {
     if (recs && recs.length > 0) {
-      var f = recs.filter(function(r){ return !_deletedIds.has(String(r._id)); });
+      var f = recs.filter(function(r){ return !_deletePendentes.has(String(r._id)); }); // V206
       // Bug fix: MERGE ao invés de replace — preserva SÓ registros genuinamente
       // pendentes de envio (rastreados em _syncPendentes), nunca registros que
       // simplesmente sumiram do Supabase (esses foram excluídos por alguém — não devem voltar)
       var sbIds = new Set(f.map(function(r){ return String(r._id); }));
       var localPendentes = progData.filter(function(r) {
-        return _syncPendentes.has(String(r._id)) && !sbIds.has(String(r._id)) && !_deletedIds.has(String(r._id));
+        return (_syncPendentes.has(String(r._id)) || r._novo) && !sbIds.has(String(r._id)) && !_deletePendentes.has(String(r._id)); // V206
       });
       progData = deduplicar(f.concat(localPendentes));
       var maxIdMan = 0;
@@ -8785,8 +8844,12 @@ function saveLocal() {
 // Compartilha _deletedIds entre todos os usuários — proteção extra: mesmo que o soft-delete
 // de uma linha específica tenha algum problema no servidor, nenhum colega verá o registro
 // reaparecer, pois todo mundo vai ignorá-lo localmente também.
+var _deletedIdsUltimoEnvio = null;
 function _deletedIdsSalvarSupabase() {
   try {
+    var _vDel = JSON.stringify(Array.from(_deletedIds));
+    if (_vDel === _deletedIdsUltimoEnvio) return; // V206 — nada mudou, não reenvia
+    _deletedIdsUltimoEnvio = _vDel;
     fetch(SB_URL + '/configuracoes', {
       method: 'POST',
       headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
@@ -8806,10 +8869,9 @@ function _deletedIdsCarregarSupabase() {
         remotos.forEach(function(id) { if (!_deletedIds.has(id)) { _deletedIds.add(id); mudou = true; } });
         if (mudou) {
           try { localStorage.setItem('prog_deleted_v4', JSON.stringify(Array.from(_deletedIds))); } catch(e){}
-          // Remove da tela local qualquer registro que outro usuário já excluiu
-          var antesLen = progData.length;
-          progData = progData.filter(function(r) { return !_deletedIds.has(String(r._id)); });
-          if (progData.length !== antesLen) { renderProg(); renderHist(); }
+          // V206 — não remove mais registros da tela por esta lista: quem manda é o
+          // campo "deletado" do banco (a leitura já traz só os ativos). Remover por id
+          // escondia registros novos que reaproveitavam um id antigo.
         }
       }
     }).catch(function(){});
@@ -9252,11 +9314,69 @@ function lpSalvar() {
   try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
 }
 
-function lpCarregarSupabase() {
+// ── V207 · LISTA DE PRESENÇA SEMPRE ATUALIZADA (era lida UMA vez, na abertura) ──
+// CAUSA do "Capacidade do dia = 0 kg" com o HC preenchido: o Painel só enxergava o
+// que estava na Lista de Presença NO MOMENTO em que a página foi aberta.
+//   • Máquina que fica ligada dias seguidos (a do Painel/TV) nunca mais recebia o HC
+//     digitado depois — a Lista de Presença não entrava no reforço de 60 s nem no
+//     Realtime. A tela de HC mostra o número certo porque quem digitou o tem na memória.
+//   • A leitura era UMA requisição sem paginação: o Supabase devolve no máximo 1000
+//     linhas por chamada (uma linha por célula preenchida) e os dias mais NOVOS eram
+//     os cortados quando o total passava disso.
+// Agora: leitura paginada por chave (mesmo leitor do Acompanhamento IN), reforço
+// incremental a cada 60 s (só o que mudou), Realtime por célula, e uma guarda que
+// impede uma leitura de sobrescrever a célula que a pessoa acabou de digitar.
+var _lpCargaFeita = false;
+var _lpCarregando = null;
+var _lpEditadoLocalEm = {};   // chave -> instante da última digitação nesta máquina
+var _lpCiclosMeta = 0;
+
+function _lpEditadaAgora(chave) {
+  var t = _lpEditadoLocalEm[chave];
+  return !!(t && (Date.now() - t) < 20000);
+}
+
+// 'mudou' | 'igual' | 'ignorada' (ignorada = digitada aqui há menos de 20 s)
+function _lpAplicarCelulaRemota(chave, valor) {
+  var partes = String(chave).slice(LP_PREFIXO_CELULA.length).split(':');
+  if (partes.length !== 4) return 'igual';
+  if (_lpEditadaAgora(chave)) return 'ignorada';
+  var dia = partes[0], fluxo = partes[1], turno = partes[2], funcao = partes[3];
+  if (!_lpDados.dias[dia]) _lpDados.dias[dia] = { inbound: {}, outbound: {} };
+  if (!_lpDados.dias[dia][fluxo]) _lpDados.dias[dia][fluxo] = {};
+  if (!_lpDados.dias[dia][fluxo][turno]) _lpDados.dias[dia][fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
+  if (_lpDados.dias[dia][fluxo][turno][funcao] === valor) return 'igual';
+  _lpDados.dias[dia][fluxo][turno][funcao] = valor;
+  return 'mudou';
+}
+
+function _lpAplicarMetaRemota(chave, valor) {
+  var campo = String(chave).slice(LP_PREFIXO_META.length);
+  if (['ajudante', 'conferente', 'atuacao'].indexOf(campo) === -1) return 'igual';
+  if (_lpEditadaAgora(chave)) return 'ignorada';
+  if (!_lpDados.metas) _lpDados.metas = {};
+  if (String(_lpDados.metas[campo]) === String(valor)) return 'igual';
+  _lpDados.metas[campo] = valor;
+  return 'mudou';
+}
+
+// Atualiza as telas depois de uma leitura que trouxe mudança (sem tirar o foco de quem está digitando).
+function _lpAtualizarTelas(forcarLista) {
+  var el = document.getElementById('tab-listaPresenca-content');
+  var ae = document.activeElement;
+  var digitando = !!(el && ae && ae.tagName === 'INPUT' && el.contains(ae));
+  if (el && el.classList.contains('active') && (forcarLista || !digitando)) lpRenderizar();
+  if (typeof _gvRedesenharSeAtivo === 'function') _gvRedesenharSeAtivo();
+}
+
+function lpCarregarSupabase(incremental) {
+  if (_lpCarregando) return _lpCarregando;
+  var inc = !!(incremental && _lpCargaFeita);
+  var mudou = false;
   try {
-    // 1) Migração: traz o que existir no blob antigo (formato usado antes desta
-    //    correção), para não perder o histórico já salvo.
-    var pMigracao = fetch(SB_URL + '/configuracoes?chave=eq.' + LP_CHAVE + '&select=valor', {
+    // 1) Migração: só na 1ª leitura da sessão. Traz o que existir no blob antigo
+    //    (formato usado antes da gravação por célula), para não perder histórico.
+    var pMigracao = inc ? Promise.resolve() : fetch(SB_URL + '/configuracoes?chave=eq.' + LP_CHAVE + '&select=valor', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     }).then(function(r){ return r.json(); }).then(function(data) {
       if (!data || !data.length || !data[0].valor) return;
@@ -9269,45 +9389,39 @@ function lpCarregarSupabase() {
       });
     }).catch(function(){});
 
-    // 2) Estado atual, célula a célula — fonte de verdade para tudo já salvo no
-    //    formato novo. Busca só as linhas desta funcionalidade (prefixo lp_cel:/
-    //    lp_meta:), não a tabela configuracoes inteira — com o Acompanhamento IN/OUT
-    //    e o Relatório TMS também gravando por célula agora, a tabela ficou grande
-    //    demais para buscar tudo de uma vez em toda carga (causava timeout no banco).
-    var pCelulas = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(LP_PREFIXO_CELULA) + '*&select=chave,valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(rows) {
-      (rows || []).forEach(function(row) {
-        var chave = String(row.chave || '');
-        if (chave.indexOf(LP_PREFIXO_CELULA) === 0) {
-          var partes = chave.slice(LP_PREFIXO_CELULA.length).split(':');
-          if (partes.length !== 4) return;
-          var dia = partes[0], fluxo = partes[1], turno = partes[2], funcao = partes[3];
-          if (!_lpDados.dias[dia]) _lpDados.dias[dia] = { inbound: {}, outbound: {} };
-          if (!_lpDados.dias[dia][fluxo]) _lpDados.dias[dia][fluxo] = {};
-          if (!_lpDados.dias[dia][fluxo][turno]) _lpDados.dias[dia][fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
-          _lpDados.dias[dia][fluxo][turno][funcao] = row.valor;
-        }
-      });
-    }).catch(function(){});
+    // 2) Células (lp_cel:) — paginadas por chave; incrementais depois da 1ª leitura.
+    var pCelulas = _sbLerCelulasPaginado(LP_PREFIXO_CELULA, function(row) {
+      if (!row || !row.chave) return true;
+      var r = _lpAplicarCelulaRemota(row.chave, row.valor);
+      if (r === 'mudou') mudou = true;
+      return r !== 'ignorada';
+    }, inc);
 
-    var pMetas2 = fetch(SB_URL + '/configuracoes?chave=like.' + encodeURIComponent(LP_PREFIXO_META) + '*&select=chave,valor', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    }).then(function(r){ return r.json(); }).then(function(rows) {
-      (rows || []).forEach(function(row) {
-        var chave = String(row.chave || '');
-        if (chave.indexOf(LP_PREFIXO_META) === 0) {
-          var campo = chave.slice(LP_PREFIXO_META.length);
-          if (['ajudante','conferente','atuacao'].indexOf(campo) !== -1) _lpDados.metas[campo] = row.valor;
-        }
-      });
-    }).catch(function(){});
+    // 3) Metas (lp_meta:) — 3 linhas; no reforço só a cada 5 ciclos.
+    var lerMetas = !inc || (++_lpCiclosMeta % 5 === 0);
+    var pMetas = lerMetas ? _sbLerCelulasPaginado(LP_PREFIXO_META, function(row) {
+      if (!row || !row.chave) return true;
+      var r = _lpAplicarMetaRemota(row.chave, row.valor);
+      if (r === 'mudou') mudou = true;
+      return r !== 'ignorada';
+    }, inc) : Promise.resolve();
 
-    Promise.all([pMigracao, pCelulas, pMetas2]).then(function() {
-      try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {}
-      var el = document.getElementById('tab-listaPresenca-content');
-      if (el && el.classList.contains('active')) lpRenderizar();
-    });
+    _lpCarregando = Promise.all([pMigracao, pCelulas, pMetas]).then(function() {
+      _lpCargaFeita = true;
+      if (mudou || !inc) { try { localStorage.setItem('lista_presenca_v2', JSON.stringify(_lpDados)); } catch (e) {} }
+      if (!inc) _lpAtualizarTelas(true);          // carga da abertura: como sempre foi
+      else if (mudou) _lpAtualizarTelas(false);   // reforço: só se algo mudou
+    }).catch(function(){}).then(function() { _lpCarregando = null; });
+    return _lpCarregando;
+  } catch (e) { return Promise.resolve(); }
+}
+
+// Uma célula/meta mudou em outra máquina (Realtime).
+function _lpAplicarRealtime(chave, valor) {
+  try {
+    var r = (String(chave).indexOf(LP_PREFIXO_META) === 0)
+      ? _lpAplicarMetaRemota(chave, valor) : _lpAplicarCelulaRemota(chave, valor);
+    if (r === 'mudou') { lpSalvar(); _lpAtualizarTelas(false); }
   } catch (e) {}
 }
 
@@ -9336,6 +9450,7 @@ function lpMetaAlterada() {
     conferente: (document.getElementById('lp-meta-conferente') || {}).value || '',
     atuacao: (document.getElementById('lp-meta-atuacao') || {}).value || ''
   };
+  ['ajudante', 'conferente', 'atuacao'].forEach(function(c) { _lpEditadoLocalEm[LP_PREFIXO_META + c] = Date.now(); }); // V207
   lpRenderizar();
   lpSalvar();
   _lpGravarChave(LP_PREFIXO_META + 'ajudante', _lpDados.metas.ajudante);
@@ -9347,6 +9462,7 @@ function lpQtdAlterada(fluxo, turno, funcao, valor) {
   if (!dia[fluxo]) return;
   if (!dia[fluxo][turno]) dia[fluxo][turno] = { Conferente:'', Ajudante:'', Terceiros:'' };
   dia[fluxo][turno][funcao] = valor;
+  _lpEditadoLocalEm[_lpChaveCelula(_lpDataSel, fluxo, turno, funcao)] = Date.now(); // V207
   lpRenderizar();
   lpSalvar();
   _lpGravarChave(_lpChaveCelula(_lpDataSel, fluxo, turno, funcao), valor);
@@ -10560,7 +10676,7 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
     // New record — ocup/prev_fech nascem zerados e passam a ser preenchidos
     // automaticamente assim que o Acompanhamento OUT tiver dados para este veículo.
     const rec = {
-      _id: _novoIdProg(),
+      _id: _novoIdProg(), _novo: true,
       gerado: now(),
       origem: gradeRow ? gradeRow.origem : 'GRU',
       destino, regiao: gradeRow ? gradeRow.regiao : '',
@@ -10598,7 +10714,7 @@ function salvarTodos() {
       if (rec) { rec.tipo=tipo; rec.frota=frota; rec.motorista=motorista; rec.cavalinho=cavalinho; rec.gerado=now(); count++; }
     } else {
       const gradeRow = gradeData.find(g => g.destino===r.destino && g.saida===r.saida && g.dia===r.dia);
-      progData.push({ _id: _novoIdProg(), gerado: now(), origem: r.origem, destino: r.destino, regiao: r.regiao, composicao: r.composicao, saida: r.saida, dia: r.dia, tipo, frota, motorista, cavalinho, ocup: 0, prev_fech: '', obs: '', tipo_prior: '', data_crit: '', id: '' });
+      progData.push({ _id: _novoIdProg(), _novo: true, gerado: now(), origem: r.origem, destino: r.destino, regiao: r.regiao, composicao: r.composicao, saida: r.saida, dia: r.dia, tipo, frota, motorista, cavalinho, ocup: 0, prev_fech: '', obs: '', tipo_prior: '', data_crit: '', id: '' });
       count++;
     }
   });
@@ -11247,7 +11363,7 @@ function salvarProg() {
   };
 
   const rec = {
-    _id: _novoIdProg(),
+    _id: _novoIdProg(), _novo: true,
     gerado: now(),
     origem, destino, regiao, composicao, saida, dia, tipo, frota, motorista, cavalinho,
     ocup, prev_fech: formatDTLocal(prev_fech), obs, tipo_prior,
@@ -12506,7 +12622,7 @@ function salvarPlatCard(rowId, destino, saida, dia) {
     rec = existing;
   } else {
     rec = {
-      _id: _novoIdProg(), gerado: now(),
+      _id: _novoIdProg(), _novo: true, gerado: now(),
       origem: gradeRow ? gradeRow.origem : 'GRU',
       destino, regiao: gradeRow ? gradeRow.regiao : '',
       composicao: gradeRow ? gradeRow.composicao : '',
@@ -12966,7 +13082,7 @@ function salvarAddPlat() {
     rec = existing;
   } else {
     rec = {
-      _id: _novoIdProg(), gerado: now(), origem: 'GRU',
+      _id: _novoIdProg(), _novo: true, gerado: now(), origem: 'GRU',
       destino: destino,
       regiao: gradeRow ? gradeRow.regiao : '',
       composicao: composicao || (gradeRow ? gradeRow.composicao : destino),
@@ -19768,6 +19884,17 @@ function _gvHmEnviarPendentes() {
   return cadeia.then(function() { _gvHmEnviando = false; }, function() { _gvHmEnviando = false; });
 }
 
+// V207 — antes de fotografar, traz o HC mais recente (leitura incremental, no máx. 8 s):
+// uma máquina com a Lista de Presença desatualizada gravaria HC/Capacidade errados
+// numa foto que é FIXA.
+function _gvHmAtualizarListaPresenca() {
+  if (typeof lpCarregarSupabase !== 'function') return Promise.resolve();
+  return Promise.race([
+    Promise.resolve(lpCarregarSupabase(true)).catch(function(){}),
+    new Promise(function(res) { setTimeout(res, 8000); })
+  ]);
+}
+
 function _gvHmTalvezFotografar() {
   try {
     _gvHmEnviarPendentes(); // reenvia o que ficou para trás, a qualquer hora
@@ -19790,6 +19917,7 @@ function _gvHmTalvezFotografar() {
         headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
       }).then(function(r) { return r.json(); }).then(function(rows) {
         if (rows && rows.length) return; // dia já fotografado — a foto é fixa
+        return _gvHmAtualizarListaPresenca().then(function() {
         var foto = _gvHmMontarFoto();
         if (foto.data !== dataISO) return; // já virou o dia: não fotografa o dia seguinte
         var _agCap = new Date();
@@ -19800,6 +19928,7 @@ function _gvHmTalvezFotografar() {
         var pend = _gvHmPendentesLer(); pend[dataISO] = foto; _gvHmPendentesGravar(pend); // congela antes de enviar
         console.log('[histórico mensal] foto de ' + dataISO + ' tirada às ' + hhmm + ' (' + foto.origem + ').');
         return _gvHmEnviarPendentes();
+        });
       });
       });
     }).catch(function(err) {
@@ -20490,6 +20619,30 @@ function _gvCxConsolidado(n) {
     _gvCxTabela(n);
 }
 
+// V207 — Dia PASSADO: o Executado vem da foto guardada (a fila e o Acompanhamento
+// já foram limpos), mas a CAPACIDADE vem da Lista de Presença, que é a fonte e não
+// é apagada. A foto congelava a capacidade calculada no momento em que foi salva:
+// se o HC ainda não tinha chegado àquela máquina (ou foi preenchido/corrigido
+// depois), o dia ficava para sempre com "Capacidade 0 kg". Se a Lista de Presença
+// não tiver o turno nesta máquina, vale o que a foto guardou. Dia passado tem os
+// 3 turnos iniciados por definição.
+function _gvCxRegComCapacidadeViva(reg, dataISO) {
+  try {
+    if (!reg || typeof _gvCapacidadeHCTurno !== 'function') return reg;
+    var novo = { data: reg.data, ts: reg.ts, turnos: {} };
+    GV_CX_TURNOS.forEach(function(t) {
+      var r = Object.assign({}, (reg.turnos || {})[t] || {});
+      var vIn  = Math.round(_gvCapacidadeHCTurno(dataISO, t, 'inbound')  * 1000);
+      var vOut = Math.round(_gvCapacidadeHCTurno(dataISO, t, 'outbound') * 1000);
+      if (vIn  > 0) r.capIn  = vIn;
+      if (vOut > 0) r.capOut = vOut;
+      r.iniciado = true;
+      novo.turnos[t] = r;
+    });
+    return novo;
+  } catch (e) { return reg; }
+}
+
 function gvCapExecRenderizar() {
   var navVisao = document.getElementById('cx-nav-visao');
   var navDia = document.getElementById('cx-nav-dia');
@@ -20505,6 +20658,7 @@ function gvCapExecRenderizar() {
 
   var dataISO = _gvCxDataAtual();
   var reg = (dataISO === hojeISO) ? hojeDados : _gvCapExecHistLer()[dataISO];
+  if (reg && dataISO !== hojeISO) reg = _gvCxRegComCapacidadeViva(reg, dataISO); // V207
   var aviso = '';
   if (!reg) {
     aviso = 'Sem histórico salvo para ' + _gvCxISOParaBR(dataISO) + '. O histórico começa no dia em que esta tela passou a ser usada.';
