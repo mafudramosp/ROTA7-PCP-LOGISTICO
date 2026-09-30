@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V211--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V214--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6365,7 +6365,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V211';
+var ROTA7_VERSAO = 'V214';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -16834,13 +16834,23 @@ function descargaAcompAtualizarCards(lista) {
     // fila há mais de 72h e sem registro. Abaixo disso, a linha continua no fluxo
     // normal (Não iniciado / Em andamento / Finalizado) e segue contando na fila.
     var st = _descAcompStatusItem(item, rec);
+    // V212 — CAUSA DA DIFERENÇA COM O PAINEL. "Peso KG Produzido" somava
+    // item.pesoTotal, que _descAcompListaMerge() atualiza a cada import do TMS
+    // para o peso MAIS RECENTE — inclusive depois de o MAC já estar finalizado
+    // (correção de CTRC, arredondamento etc.). O Painel usa o peso CONGELADO no
+    // instante exato da Hora Fim (_inPesoOficialDe/_inPesoCongeladoDe — V196/V197),
+    // que não muda depois. Reaproveita a mesma função aqui, com o peso da lista
+    // como fallback (idêntico ao que o Painel faz com o peso do snapshot), para
+    // este card nunca mais divergir do Executado do Painel por essa razão.
+    var chaveMac = String(mac == null ? '' : mac).trim().toUpperCase();
+    var pesoOficial = (typeof _inPesoOficialDe === 'function') ? _inPesoOficialDe(chaveMac, peso) : peso;
     if (st.valor === 'finalizado-anteriormente') {
       finalizadoAnter++;
-      pesoProduzido += peso;
+      pesoProduzido += pesoOficial;
       return;
     }
 
-    if (st.valor === 'finalizado') { finalizado++; pesoProduzido += peso; }
+    if (st.valor === 'finalizado') { finalizado++; pesoProduzido += pesoOficial; }
     else if (st.valor === 'em-andamento') emAndamento++;
     else naoIniciado++;
 
@@ -17071,13 +17081,61 @@ function _descAcompListaFiltrada(base) {
     lista = lista.filter(function(m) { return _descAcompTurnoDe(_descAcompGet(m.mac)) === _descAcompFiltroTurno; });
   }
   if (_descAcompFiltroData) {
+    // V213 — MAC com Hora Fim mas SEM o carimbo dataFimISO (registro salvo antes
+    // da V176, ou algum caminho que não gravou o carimbo) ficava sempre fora do
+    // filtro de Data, mesmo sendo de hoje — e o Painel (que não exige esse
+    // carimbo; reconstrói o dia a partir da Hora Fim) continuava contando. Sem o
+    // carimbo, só dá para supor "hoje", igual o Painel já faz.
+    var _hojeOpISO = _descAcompDiaOperacionalISO(Date.now());
     lista = lista.filter(function(m) {
       var rec = _descAcompGet(m.mac);
-      var dia = rec.dataFimISO ? _descAcompDiaOperacionalISO(rec.dataFimISO) : null;
+      var dia = null;
+      if (rec.dataFimISO) dia = _descAcompDiaOperacionalISO(rec.dataFimISO);
+      else if (rec.horaFim && String(rec.horaFim).trim()) dia = _hojeOpISO;
       return dia === _descAcompFiltroData;
     });
   }
   return lista;
+}
+
+// ══════════ V214 · EXECUTADO DO PAINEL = MESMA CONTA DO ACOMPANHAMENTO IN ══════
+// O card "Executado" do Painel (Descarga IN) vinha de fluxoIn.linhas[].executado
+// — a cascata do Extrato do Dia, um caminho de cálculo próprio, separado do que
+// alimenta o Acompanhamento IN. As duas contas usavam a mesma regra de peso
+// travado (_inPesoOficialDe) mas com deduplicação/fontes diferentes, e podiam
+// divergir por uma diferença de alguns MACs. Em vez de perseguir cada uma dessas
+// diferenças, o card do Painel passa a chamar a MESMA soma do card "Peso KG
+// Produzido": mesma lista (_descAcompLista), mesmo status (Finalizado +
+// Finalizado Anteriormente), mesmo peso travado, mesma regra de dia operacional
+// — sempre para HOJE, independente do que estiver filtrado na tela do
+// Acompanhamento IN neste momento. Os dois cards nunca mais divergem porque
+// passam a ser literalmente a mesma conta.
+// Isto NÃO muda a linha "Executado" do turno na tabela do Extrato do Dia logo
+// abaixo (_gvFluxoFilaIN) nem os velocímetros de turno — se um dia precisarmos
+// unificar tudo, é outra etapa, feita à parte.
+function _inPesoProduzidoTurno(turno) {
+  var hojeISO = (typeof _descAcompDiaOperacionalISO === 'function') ? _descAcompDiaOperacionalISO(Date.now()) : null;
+  var base = (typeof _descAcompLista !== 'undefined' && _descAcompLista.length) ? _descAcompLista
+    : ((typeof _descAcompFilaCompleta === 'function') ? _descAcompFilaCompleta().map(function(m) {
+        return { mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: m.tipo, ativo: true };
+      }) : []);
+  if (typeof _descAcompRetencaoCorteMs === 'function' && typeof _descAcompDentroRetencao === 'function') {
+    var corte = _descAcompRetencaoCorteMs();
+    base = base.filter(function(m) { return _descAcompDentroRetencao(m, corte); });
+  }
+  var total = 0;
+  base.forEach(function(m) {
+    var rec = _descAcompGet(m.mac);
+    var st = _descAcompStatusItem(m, rec);
+    if (st.valor !== 'finalizado' && st.valor !== 'finalizado-anteriormente') return;
+    if (_descAcompTurnoDe(rec) !== turno) return;
+    var dia = rec.dataFimISO ? _descAcompDiaOperacionalISO(rec.dataFimISO)
+      : ((rec.horaFim && String(rec.horaFim).trim()) ? hojeISO : null);
+    if (dia !== hojeISO) return;
+    var chaveMac = String(m.mac == null ? '' : m.mac).trim().toUpperCase();
+    total += _inPesoOficialDe(chaveMac, m.pesoTotal || 0);
+  });
+  return total;
 }
 
 // V210 — filtro por Turno (mesma coluna/regra da V209)
@@ -22651,13 +22709,10 @@ function gestaoVistaRenderizar() {
     // três turnos, ficando numa escala diferente do Programado ao lado.
     // Sem a linha do turno, mantém o executado do dia.
     var turnoVigenteIn = dados.turnoProgramadoIN || _gvTurnoDoHorario(new Date().toTimeString().substring(0, 5));
-    if (fluxoIn && fluxoIn.linhas && turnoVigenteIn) {
-      for (var iLnI = 0; iLnI < fluxoIn.linhas.length; iLnI++) {
-        if (fluxoIn.linhas[iLnI].turno === turnoVigenteIn) {
-          pesoExecutadoTurno = fluxoIn.linhas[iLnI].executado || 0;
-          break;
-        }
-      }
+    // V214 — antes lido de fluxoIn.linhas[].executado (a cascata do Extrato);
+    // agora é a MESMA conta do card "Peso KG Produzido" do Acompanhamento IN.
+    if (turnoVigenteIn) {
+      pesoExecutadoTurno = (typeof _inPesoProduzidoTurno === 'function') ? _inPesoProduzidoTurno(turnoVigenteIn) : 0;
     }
   }
 
