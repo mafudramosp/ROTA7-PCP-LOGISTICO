@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V207--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V211--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6174,6 +6174,13 @@ document.addEventListener('click',function(e){
   
   <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <input type="text" id="descarga-acomp-search" placeholder="Buscar por MAC..." style="width:280px;padding:8px 12px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;font-family:'Poppins',sans-serif" onkeyup="descargaAcompFiltrarPorMAC(this.value)">
+    <select id="descarga-acomp-turno" onchange="descargaAcompFiltrarTurno(this.value)" title="Filtra pelo turno da coluna Turno (mesma regra do Painel Executivo)" style="padding:8px 12px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#334155;font-family:'Poppins',sans-serif;cursor:pointer">
+      <option value="todos">Turno: Todos</option>
+      <option value="1º Turno">1º Turno</option>
+      <option value="2º Turno">2º Turno</option>
+      <option value="3º Turno">3º Turno</option>
+    </select>
+    <input type="date" id="descarga-acomp-data" onchange="descargaAcompFiltrarData(this.value)" title="Produtividade por dia: filtra pela data da Hora Fim (dia operacional — mesma virada 22:31 do resto do app). Só finalizados aparecem; mostra só dias dentro da janela de 72h úteis já exibida nesta tela." style="padding:7px 10px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#334155;font-family:'Poppins',sans-serif;cursor:pointer">
     <button id="descarga-acomp-btn-fila" onclick="descargaAcompAlternarSomenteFila()" title="Mostra apenas os MAC/MEC que ainda estão na fila de descarga. Apenas oculta — nenhum registro é apagado." style="padding:8px 14px;font-size:12px;font-weight:700;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#334155;cursor:pointer;font-family:'Poppins',sans-serif;white-space:nowrap">Somente na fila</button>
     <span id="descarga-acomp-fila-info" style="font-size:11px;color:#94a3b8"></span>
   </div>
@@ -6197,6 +6204,7 @@ document.addEventListener('click',function(e){
           <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">Fim</th>
           <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap">Tempo Total</th>
           <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap" title="Toneladas ÷ (tempo total em decimal × qtd. ajudantes) — ton/hora-homem, quanto maior melhor">Produtividade</th>
+          <th style="padding:8px 10px;text-align:center;color:#fff;font-size:10px;font-weight:700;white-space:nowrap" title="V209 — mesma regra do Painel Executivo: usa a Hora Fim; sem Hora Fim, usa a Hora Início; sem nenhuma das duas, usa a hora atual. É o turno em que esta linha está sendo contada no Painel agora mesmo.">Turno</th>
         </tr>
       </thead>
       <tbody id="descarga-acomp-tbody"></tbody>
@@ -6357,7 +6365,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V207';
+var ROTA7_VERSAO = 'V211';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -16441,6 +16449,27 @@ function descargaAcompStatusAlterado(mac, status) {
 }
 
 // Calcula tempo total (HH:MM) a partir dos horários de início/fim, se ambos preenchidos
+// V209 — coluna Turno do Acompanhamento IN: MESMA régua do Painel Executivo
+// (_gvColetarDadosIN → horaRef = Hora Fim; sem Hora Fim, Hora Início; sem
+// nenhuma das duas, a hora atual), para que o conferente veja, linha a linha,
+// exatamente em qual turno cada MAC está contando no Painel — sem precisar
+// adivinhar ou somar peso na mão para conferir.
+// V210 — cálculo isolado do valor (sem HTML), para o filtro e a célula usarem a mesma regra
+function _descAcompTurnoDe(rec) {
+  var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
+  var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
+  var agoraHora = new Date().toTimeString().substring(0, 5);
+  var horaRef = temFim ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHora);
+  return (typeof _gvTurnoDoHorario === 'function') ? _gvTurnoDoHorario(horaRef) : null;
+}
+function _descAcompTurnoTd(rec) {
+  var turno = _descAcompTurnoDe(rec);
+  var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
+  var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
+  var cor = temFim ? '#16a34a' : (temInicio ? '#ca8a04' : '#94a3b8');
+  return '<td style="padding:8px 10px;text-align:center;font-size:10.5px;font-weight:700;color:' + cor + ';white-space:nowrap">' + (turno || '—') + '</td>';
+}
+
 function _descAcompTempoTotal(rec) {
   if (!rec.horaInicio || !rec.horaFim) return '—';
   var ini = rec.horaInicio.split(':'), fim = rec.horaFim.split(':');
@@ -16776,48 +16805,48 @@ function descargaAcompSalvarHistoricoSheets() {
     .catch(function(){ if (typeof showToast === 'function') showToast('❌ Erro ao enviar para o Sheets', 'error'); });
 }
 
-function descargaAcompAtualizarCards() {
+// V211 — CARDS PASSAM A CONTAR A MESMA LISTA QUE ESTÁ NA TELA. Antes esta função
+// recalculava sozinha, a partir de _descAcompLista + retenção de 72h só, sem
+// levar em conta a busca por MAC, o "Somente na fila" nem (V209/V210) o Turno —
+// os cards mostravam o total geral enquanto a tabela já estava filtrada, e os
+// números pareciam não bater. Agora ela recebe a lista pronta de
+// descargaAcompRenderizar (ou, quando chamada sem argumento — depois de editar
+// uma única célula, para não redesenhar a tabela toda — recalcula com
+// _descAcompListaFiltrada(), o mesmo caminho, sempre com os MESMOS filtros).
+// Card "Total de Impressões" (sem uso prático nesta tela) virou "Peso KG
+// Produzido": soma o peso de tudo que já tem Hora Fim (Finalizado + Finalizado
+// Anteriormente) dentro do que está filtrado.
+function descargaAcompAtualizarCards(lista) {
   var cardsDiv = document.getElementById('descarga-acomp-cards');
   if (!cardsDiv) return;
-  
-  // V193 — CAUSA DO "EXECUTADO ZERANDO". Aqui havia uma recarga de _descAcompData
-  // a partir do localStorage "para garantir sincronização". A memória é a fonte
-  // da verdade (o Supabase entra nela pelo Realtime/reforço) e o localStorage é só
-  // cópia. Quando a gravação local falhava em silêncio (cota cheia — o relatório
-  // TMS em cache ocupa MBs) ou chegava atrasada, esta linha trocava a memória por
-  // uma cópia velha a cada redesenho: a Hora Fim lançada por outro usuário (ou
-  // pelo próprio) sumia, o Executado do Painel caía, e o registro velho ainda era
-  // regravado no servidor por cima do certo. Removido.
-  
-  var macsFila = _descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){ return {mac:m.mac, ativo:true}; });
-  // V199 — retenção de 72h úteis (só exibição; ver _descAcompDentroRetencao)
-  var _corteRet = _descAcompRetencaoCorteMs();
-  macsFila = macsFila.filter(function(it) { return _descAcompDentroRetencao(it, _corteRet); });
-  var totalGeral = macsFila.length;
-  var naoIniciado = 0, emAndamento = 0, finalizado = 0, finalizadoAnter = 0, totalImpressoes = 0;
+  if (lista === undefined) lista = _descAcompListaFiltrada();
+
+  var totalGeral = lista.length;
+  var naoIniciado = 0, emAndamento = 0, finalizado = 0, finalizadoAnter = 0, pesoProduzido = 0;
   var macsComConferente = 0;
-  
-  macsFila.forEach(function(item){
+
+  lista.forEach(function(item){
     var mac = item.mac !== undefined ? item.mac : item;
     var rec = _descAcompGet(mac);
-    totalImpressoes += rec.impressoes || 0;
-    
+    var peso = item.pesoTotal || 0;
+
     // V176 — o rótulo "Finalizado Anteriormente" agora só vale para item fora da
     // fila há mais de 72h e sem registro. Abaixo disso, a linha continua no fluxo
     // normal (Não iniciado / Em andamento / Finalizado) e segue contando na fila.
     var st = _descAcompStatusItem(item, rec);
     if (st.valor === 'finalizado-anteriormente') {
       finalizadoAnter++;
+      pesoProduzido += peso;
       return;
     }
-    
-    if (st.valor === 'finalizado') finalizado++;
+
+    if (st.valor === 'finalizado') { finalizado++; pesoProduzido += peso; }
     else if (st.valor === 'em-andamento') emAndamento++;
     else naoIniciado++;
-    
+
     if (rec.conferente && rec.conferente.trim() !== '') macsComConferente++;
   });
-  
+
   var total = totalGeral - finalizadoAnter;
   var corConferente = total === 0 ? '#9ca3af' : (macsComConferente === total ? '#16a34a' : macsComConferente > 0 ? '#ca8a04' : '#dc2626');
   var cards = [
@@ -16826,7 +16855,7 @@ function descargaAcompAtualizarCards() {
     { l: 'Em Andamento', v: emAndamento, cor: '#ca8a04' },
     { l: 'Finalizado', v: finalizado, cor: '#16a34a' },
     { l: 'Finalizado Anteriormente', v: finalizadoAnter, cor: '#7c3aed' },
-    { l: 'Total de Impressões', v: totalImpressoes, cor: '#475569' },
+    { l: 'Peso KG Produzido', v: Math.round(pesoProduzido).toLocaleString('pt-BR') + ' kg', cor: '#475569' },
     { l: 'Conferente Atribuído', v: macsComConferente + '/' + total, cor: corConferente }
   ];
   cardsDiv.innerHTML = cards.map(function(c){
@@ -16892,27 +16921,34 @@ function descargaAcompRenderizar() {
   if (searchInput && searchInput.value !== _descAcompFiltro) {
     searchInput.value = _descAcompFiltro;
   }
+  var turnoSelect = document.getElementById('descarga-acomp-turno');
+  if (turnoSelect && turnoSelect.value !== _descAcompFiltroTurno) {
+    turnoSelect.value = _descAcompFiltroTurno;
+  }
+  var dataInput = document.getElementById('descarga-acomp-data');
+  if (dataInput) {
+    if (!dataInput.max) dataInput.max = _descAcompDiaOperacionalISO(Date.now()); // não deixa escolher o futuro
+    if (dataInput.value !== _descAcompFiltroData) dataInput.value = _descAcompFiltroData;
+  }
 
   if (!lista.length) {
-    tbody.innerHTML = '<tr><td colspan="12" style="padding:30px;text-align:center;color:#94a3b8">Nenhum MAC registrado ainda — importe o relatório TMS</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" style="padding:30px;text-align:center;color:#94a3b8">Nenhum MAC registrado ainda — importe o relatório TMS</td></tr>';
+    descargaAcompAtualizarCards([]); // V211 — sem import, sem card com número de outra hora
     return;
   }
 
-  // Aplicar filtro
-  if (_descAcompFiltro) {
-    lista = lista.filter(function(m) {
-      return String(m.mac).toUpperCase().indexOf(_descAcompFiltro) >= 0;
-    });
-  }
-
-  // "Somente na fila": oculta o que saiu da fila de descarga (ativo = false).
-  var _ocultosForaDaFila = 0;
-  if (_descAcompSomenteFila) {
-    var _antesFila = lista.length;
-    lista = lista.filter(function(m) { return m.ativo !== false; });
-    _ocultosForaDaFila = _antesFila - lista.length;
-  }
+  // V211 — contagem de quanto o toggle "Somente na fila" sozinho esconde (para o
+  // rótulo do botão), calculada sobre a busca por MAC já aplicada.
+  var _paraContadorFila = _descAcompFiltro
+    ? lista.filter(function(m) { return String(m.mac).toUpperCase().indexOf(_descAcompFiltro) >= 0; })
+    : lista;
+  var _ocultosForaDaFila = _descAcompSomenteFila
+    ? _paraContadorFila.filter(function(m) { return m.ativo === false; }).length : 0;
   _descAcompAtualizarBotaoFila(_ocultosForaDaFila);
+
+  // V211 — busca por MAC + somente-fila + turno + data, tudo num único lugar
+  // (ver _descAcompListaFiltrada) — é o mesmo caminho que os cards usam.
+  lista = _descAcompListaFiltrada(lista);
 
   // Separar arquivados (fora da fila há mais de 72h, sem registro) dos demais.
   // V176 — antes o critério era só "saiu da fila", o que jogava para o fim da
@@ -16942,8 +16978,18 @@ function descargaAcompRenderizar() {
   // Concatenar em aberto/finalizados + arquivados (arquivados sempre no final)
   lista = listAativos.concat(listainativos);
 
+  // V211 — cards a partir da MESMA lista que está prestes a ser desenhada: os
+  // números do topo sempre condizem com as linhas visíveis na tabela.
+  descargaAcompAtualizarCards(lista);
+
   if (!lista.length) {
-    tbody.innerHTML = '<tr><td colspan="15" style="padding:30px;text-align:center;color:#94a3b8">Nenhum resultado para "' + _descAcompFiltro + '"</td></tr>';
+    var _partesVazio = [];
+    if (_descAcompFiltro) _partesVazio.push('busca "' + _descAcompFiltro + '"');
+    if (_descAcompFiltroTurno !== 'todos') _partesVazio.push('Turno: ' + _descAcompFiltroTurno);
+    if (_descAcompFiltroData) _partesVazio.push('Data: ' + _descAcompFiltroData.split('-').reverse().join('/'));
+    if (_descAcompSomenteFila) _partesVazio.push('Somente na fila');
+    var _msgVazio = _partesVazio.length ? ('Nenhum resultado para ' + _partesVazio.join(' · ')) : 'Nenhum MAC para mostrar';
+    tbody.innerHTML = '<tr><td colspan="16" style="padding:30px;text-align:center;color:#94a3b8">' + _msgVazio + '</td></tr>';
     return;
   }
 
@@ -16988,6 +17034,7 @@ function descargaAcompRenderizar() {
       '<td style="padding:8px 10px;text-align:center"><input type="time" value="' + (rec.horaFim||'') + '" style="font-size:11px;padding:3px 4px;border:1px solid #e2e8f0;border-radius:4px" onchange="descargaAcompCampoAlterado(\'' + macEsc + '\',\'horaFim\',this.value)"></td>' +
       '<td style="padding:8px 10px;text-align:center;font-family:monospace;font-weight:700;color:#475569" id="acomp-tempo-' + macEsc + '">' + _descAcompTempoTotal(rec) + '</td>' +
       '<td style="padding:8px 10px;text-align:center;font-family:monospace;font-weight:700;color:#1e293b" id="acomp-prod-' + macEsc + '">' + _descAcompProdutividade(rec, m.pesoTotal) + '</td>' +
+      _descAcompTurnoTd(rec) +
     '</tr>';
   }).join('');
 }
@@ -16999,6 +17046,70 @@ function descargaAcompRenderizar() {
 // gravada nesta máquina.
 var _descAcompSomenteFila = false;
 try { _descAcompSomenteFila = (localStorage.getItem('desc_acomp_somente_fila') === '1'); } catch (e) {}
+
+// V211 — filtragem completa (busca por MAC + somente-fila + turno + data), na
+// MESMA ordem usada por descargaAcompRenderizar. Tabela e cards chamam esta
+// função, então card e linha visível NUNCA mais divergem. "base" é opcional
+// (lista já com a retenção de 72h aplicada); sem ela, recalcula do zero — é o
+// caso das chamadas após editar uma célula, que só atualizam os cards.
+function _descAcompListaFiltrada(base) {
+  var lista = base;
+  if (!lista) {
+    lista = _descAcompLista.length ? _descAcompLista : _descAcompFilaCompleta().map(function(m){
+      return { mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: m.tipo, ativo: true };
+    });
+    var corte = _descAcompRetencaoCorteMs();
+    lista = lista.filter(function(m) { return _descAcompDentroRetencao(m, corte); });
+  }
+  if (_descAcompFiltro) {
+    lista = lista.filter(function(m) { return String(m.mac).toUpperCase().indexOf(_descAcompFiltro) >= 0; });
+  }
+  if (_descAcompSomenteFila) {
+    lista = lista.filter(function(m) { return m.ativo !== false; });
+  }
+  if (_descAcompFiltroTurno !== 'todos') {
+    lista = lista.filter(function(m) { return _descAcompTurnoDe(_descAcompGet(m.mac)) === _descAcompFiltroTurno; });
+  }
+  if (_descAcompFiltroData) {
+    lista = lista.filter(function(m) {
+      var rec = _descAcompGet(m.mac);
+      var dia = rec.dataFimISO ? _descAcompDiaOperacionalISO(rec.dataFimISO) : null;
+      return dia === _descAcompFiltroData;
+    });
+  }
+  return lista;
+}
+
+// V210 — filtro por Turno (mesma coluna/regra da V209)
+var _descAcompFiltroTurno = 'todos';
+try { _descAcompFiltroTurno = localStorage.getItem('desc_acomp_filtro_turno') || 'todos'; } catch (e) {}
+function descargaAcompFiltrarTurno(v) {
+  _descAcompFiltroTurno = v || 'todos';
+  try { localStorage.setItem('desc_acomp_filtro_turno', _descAcompFiltroTurno); } catch (e) {}
+  descargaAcompRenderizar();
+}
+
+// V211 — filtro por Data (produtividade por dia). O "dia" de um MAC é o dia
+// operacional da sua Hora Fim (mesma virada 22:31 usada em todo o app — ver
+// _descAcompDiaOperacionalISO). Item sem Hora Fim não tem "dia" de produção
+// ainda, então não aparece quando este filtro está ativo — é o comportamento
+// certo para uma tela de produtividade por dia.
+var _descAcompFiltroData = '';
+try { _descAcompFiltroData = localStorage.getItem('desc_acomp_filtro_data') || ''; } catch (e) {}
+function descargaAcompFiltrarData(v) {
+  _descAcompFiltroData = v || '';
+  try { localStorage.setItem('desc_acomp_filtro_data', _descAcompFiltroData); } catch (e) {}
+  descargaAcompRenderizar();
+}
+function _descAcompDiaOperacionalISO(instante) {
+  var d = new Date(instante);
+  if (isNaN(d.getTime())) return null;
+  var min = d.getHours() * 60 + d.getMinutes();
+  var ref = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (min >= ROTA7_VIRADA_DIA_MIN) ref.setDate(ref.getDate() + 1);
+  var pad = function(n) { return String(n).padStart(2, '0'); };
+  return ref.getFullYear() + '-' + pad(ref.getMonth() + 1) + '-' + pad(ref.getDate());
+}
 
 function descargaAcompAlternarSomenteFila() {
   _descAcompSomenteFila = !_descAcompSomenteFila;
@@ -20502,17 +20613,26 @@ function _gvCxCardTurno(l) {
   // superação sumiria justamente de quem precisa vê-la.
   var pctReal = Math.round(l.pct);
   var pct = Math.max(0, Math.min(100, pctReal));
-  var cor = _gvCxCor(pctReal);
   var semCap = (l.cap <= 0);
+  // V208 — "0%" com Executado > 0 parecia erro do app: a conta está certa
+  // (Executado ÷ Capacidade, e Capacidade é 0 por falta de HC na Lista de
+  // Presença), mas o número exibido dava a entender que nada tinha sido feito.
+  // Sem capacidade para comparar, o selo/velocímetro mostram "—" em vez de
+  // "0%", e o aviso deixa claro que o executado abaixo é real.
+  var semRef = semCap && (l.exec > 0);
+  var cor = semRef ? '#f0b429' : _gvCxCor(pctReal);
+  var selo = semRef ? '—' : (pctReal + '%');
+  var centroGauge = semRef ? '—' : (pctReal + '%');
   return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:8px;padding:16px 18px;box-sizing:border-box">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
       '<span style="font-size:14px;font-weight:700;color:#fff">' + l.turno + '</span>' +
-      '<span style="font-size:10.5px;font-weight:800;color:' + cor + ';border:1px solid ' + cor + ';border-radius:4px;padding:2px 8px">' + pctReal + '%</span>' +
+      '<span style="font-size:10.5px;font-weight:800;color:' + cor + ';border:1px solid ' + cor + ';border-radius:4px;padding:2px 8px">' + selo + '</span>' +
     '</div>' +
-    _gvGaugeSvg(pct, cor, 'Executado ÷ Capacidade', pctReal + '%') +
+    _gvGaugeSvg(pct, cor, 'Executado ÷ Capacidade', centroGauge) +
     (!l.iniciado
       ? '<div style="font-size:10px;color:#8a8a8a;text-align:center;margin-top:4px">Turno ainda não iniciado</div>'
-      : (semCap ? '<div style="font-size:10px;color:#f0b429;text-align:center;margin-top:4px">Sem HC lançado na Lista de Presença</div>' : '')) +
+      : (semRef ? '<div style="font-size:10px;color:#f0b429;text-align:center;margin-top:4px">Sem HC lançado — o executado abaixo é real, sem capacidade para comparar</div>'
+        : (semCap ? '<div style="font-size:10px;color:#f0b429;text-align:center;margin-top:4px">Sem HC lançado na Lista de Presença</div>' : ''))) +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">' +
       _gvCxMini('Capacidade', _gvCxKg(l.cap), '#ffffff') +
       _gvCxMini('Executado', _gvCxKg(l.exec), cor) +
@@ -20540,7 +20660,9 @@ function _gvCxTabela(n) {
       '<td style="' + tdNum + ';color:#f0b429">' + fmt(l.execOut) + '</td>' +
       '<td style="' + tdNum + ';font-weight:700">' + fmt(l.exec) + '</td>' +
       '<td style="' + tdNum + ';color:' + _gvCxSaldoInfo(l.cap, l.exec).cor + '">' + _gvCxSaldoInfo(l.cap, l.exec).txt + '</td>' +
-      '<td style="' + tdNum + ';color:' + (l.iniciado ? _gvCxCor(pct) : '#6b6b6b') + ';font-weight:800">' + (l.iniciado ? pct + '%' : '—') + '</td>' +
+      // V208 — mesma correção da tabela: cap 0 com exec > 0 mostrava "0%".
+      '<td style="' + tdNum + ';color:' + (!l.iniciado ? '#6b6b6b' : ((l.cap <= 0 && l.exec > 0) ? '#f0b429' : _gvCxCor(pct))) + ';font-weight:800">' +
+        (!l.iniciado ? '—' : ((l.cap <= 0 && l.exec > 0) ? '—' : (pct + '%'))) + '</td>' +
     '</tr>';
   }).join('');
 
