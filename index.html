@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V214--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V215--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6365,7 +6365,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V214';
+var ROTA7_VERSAO = 'V215';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -21158,6 +21158,30 @@ function _inFinalizadoAntesDaJanela(rec, janela, entrouHoje) {
   return !_inInstanteFimNaJanela({ horaFim: horaFim }, horaFim, janela, false);
 }
 
+// ── V215 · EXECUTADO DO IN SÓ CONTA FINALIZAÇÃO DO DIA OPERACIONAL DE HOJE ──
+// CAUSA DO EXECUTADO FANTASMA NO PAINEL (ex.: 61.929 kg com o Acompanhamento IN
+// zerado). O Painel somava no Executado TODO MAC/MEC do snapshot de hoje que
+// tivesse Hora Fim preenchida, sem olhar EM QUE DIA aquela descarga terminou.
+// Carga finalizada ontem que o TMS ainda devolve na fila (baixa atrasada) tem
+// Hora Fim num horário que também "já aconteceu" hoje — e voltava a contar como
+// produção de hoje, no dia e no turno daquele horário. O Acompanhamento IN nunca
+// teve esse problema porque trava pelo DIA OPERACIONAL do carimbo dataFimISO
+// (_inPesoProduzidoTurno, V214); por isso os dois números divergiam.
+// Esta é a mesma régua, isolada numa função só, para o caminho dos snapshots
+// (_gvColetarDadosIN), a cascata do Extrato do Dia (_gvFluxoFilaIN) e o
+// complemento fora do snapshot (_inExecutadoForaDoSnapshot) usarem UMA única
+// definição de "executado hoje" — a do Acompanhamento IN.
+// Registro sem dataFimISO (anterior à V176) não tem como ser datado e continua
+// valendo como hoje, exatamente como na V213 e no _inPesoProduzidoTurno.
+function _inFimNoDiaOperacionalDeHoje(rec) {
+  if (!rec) return false;
+  if (!(rec.horaFim && String(rec.horaFim).trim())) return false;
+  if (typeof _descAcompDiaOperacionalISO !== 'function') return true; // sem a régua, comportamento anterior
+  if (!rec.dataFimISO) return true;                                   // legado: sem carimbo, só dá para supor hoje
+  var hojeISO = _descAcompDiaOperacionalISO(Date.now());
+  return _descAcompDiaOperacionalISO(rec.dataFimISO) === hojeISO;
+}
+
 // ── V196 · PESO DECLARADO NO INSTANTE DA FINALIZAÇÃO ────────────────────────
 // CAUSA DO EXECUTADO RETROCEDENDO. A V194 fixou o peso oficial no import MAIS
 // RECENTE. Enquanto a carga está aberta isso está correto — acompanha a correção
@@ -21282,6 +21306,9 @@ function _inExecutadoForaDoSnapshot(janela, jaContados) {
       if (!recente) return;
     }
     if (!_inInstanteFimNaJanela(rec, horaFim, janela, _inEntrouNaJanela(chave, janela))) return; // concluído em outro dia operacional
+    // V215 — trava de dia do Acompanhamento IN: carimbo de outro dia operacional
+    // não vira produção de hoje nem por este caminho.
+    if (!_inFimNoDiaOperacionalDeHoje(rec)) return;
 
     // V196 — mesma régua do caminho principal: finalizado, o peso não se mexe mais.
     var peso = _inPesoCongeladoDe(chave) || pesos[chave];
@@ -21343,24 +21370,27 @@ function _gvColetarDadosIN() {
     var rec = acompData[info.mac] || acompData[mac] || {};
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
+    // V215 — Hora Fim de dia operacional anterior não é produção de hoje: a carga
+    // segue no Plano (ainda está na fila do TMS), mas fora do Executado.
+    var fimHoje = temFim && _inFimNoDiaOperacionalDeHoje(rec);
 
-    if (temFim) pesoExecutado += peso;
+    if (fimHoje) pesoExecutado += peso;
     else if (temInicio) pesoProgramado += peso;
     else { pesoSemProgramacao += peso; semProgramacaoLista.push({ mac: mac, origem: info.origem, peso: peso }); }
 
     // O Executado pertence ao turno em que a descarga foi concluída; para
     // registros ainda abertos, usa-se o início. Isso mantém a virada 22:31–05:59
     // unida mesmo quando a operação começou antes da meia-noite.
-    var horaRef = temFim ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHora);
+    var horaRef = fimHoje ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHora);
     var t = _gvTurnoDoHorario(horaRef);
     if (t) {
       turnoTotal[t]++;
       turnoTotalPeso[t] += peso;
-      if (temFim) {
+      if (fimHoje) {
         turnoFeito[t]++;
         turnoFeitoPeso[t] += peso;
       }
-      turnoItens[t].push({ label: 'MAC ' + mac + ' — ' + info.origem, peso: peso, finalizado: temFim });
+      turnoItens[t].push({ label: 'MAC ' + mac + ' — ' + info.origem, peso: peso, finalizado: fimHoje });
     }
 
     pesoPorDestino[info.origem] = (pesoPorDestino[info.origem] || 0) + peso;
@@ -22451,8 +22481,12 @@ function _gvFluxoFilaIN() {
     var rec = acompData[macOriginal] || acompData[mac] || {};
     var temInicio = !!(rec.horaInicio && String(rec.horaInicio).trim());
     var temFim = !!(rec.horaFim && String(rec.horaFim).trim());
-    var t = turnoDe(temFim ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHora));
-    if (temFim) linhas[t].executado += peso;
+    // V215 — mesma trava do Painel/Acompanhamento IN: só entra no Executado do
+    // turno quem foi finalizado dentro do dia operacional de hoje. O que sobra
+    // permanece em Pendente, que é onde a carga realmente está.
+    var fimHoje = temFim && _inFimNoDiaOperacionalDeHoje(rec);
+    var t = turnoDe(fimHoje ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHora));
+    if (fimHoje) linhas[t].executado += peso;
   });
 
   // V176 — mesma recuperação aplicada ao card Executado do painel: MAC/MEC
