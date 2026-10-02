@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V217--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V214--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1225,13 +1225,7 @@
 //     nada disso é ativado — o navegador segue 100% nativo.
 // Também define a VIRADA OFICIAL DO DIA OPERACIONAL (Decisão 1 — 22:31), fonte
 // única usada pelo Painel, Extrato, Malha do dia, Frotas e Lista de Presença.
-// V215 — TODOS OS TURNOS DESLOCADOS +1h. Cada régua do app (Painel, Histórico,
-// Malha, Prioridade de Carregamento, fim de semana) andou exatamente 60 minutos
-// para frente, mantendo as diferenças que já existiam entre elas. A virada do dia
-// operacional acompanha (22:31 → 23:31) e, com ela, a foto do Histórico mensal
-// (22:30 → 23:30), o "hoje" da Malha/Frotas/Lista de Presença e o dia usado nos
-// filtros do Acompanhamento IN — todos leem esta constante.
-var ROTA7_VIRADA_DIA_MIN = 23 * 60 + 31; // 23:31 — abre o dia operacional seguinte e o 3º Turno
+var ROTA7_VIRADA_DIA_MIN = 22 * 60 + 31; // 22:31 — abre o dia operacional seguinte e o 3º Turno
 (function () {
   var RD = window.Date;
   if (RD.__rota7) return;
@@ -5221,10 +5215,10 @@ function _gvTurnoCustomOut(horaStr) {
   // definida junto de _gvTurnoDoHorario) — fonte única para IN e OUT não divergirem.
   var _turnoFDS = (typeof _gvTurnoFimDeSemana === 'function') ? _gvTurnoFimDeSemana(minutos, new Date().getDay()) : null;
   if (_turnoFDS) return _turnoFDS;
-  if (minutos < 460) return '3º Turno';     // 00:00–07:39 (madrugada, atravessa a meia-noite) — V215 +1h
-  if (minutos <= 1005) return '1º Turno';   // 07:40–16:45 — V215 +1h
-  if (minutos < ROTA7_VIRADA_DIA_MIN) return '2º Turno'; // 16:46–23:30 — V215 +1h
-  return '3º Turno';                        // 23:31–23:59 — V215 +1h
+  if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
+  if (minutos <= 945) return '1º Turno';    // 06:40–15:45
+  if (minutos < ROTA7_VIRADA_DIA_MIN) return '2º Turno'; // 15:46–22:30 (V205 — era até 23:00)
+  return '3º Turno';                        // 22:31–23:59 (V205 — era a partir de 23:01)
 }
 
 // Peso total (kg) registrado HOJE no Histórico de Relatório OUT, só do turno informado,
@@ -5284,10 +5278,10 @@ function _hroTurnoClassificar(horaStr) {
   if (isNaN(h)) return null;
   if (isNaN(m)) m = 0;
   var minutos = h * 60 + m;
-  if (minutos <= 420) return '3º Turno';    // 23:31–07:00 (atravessa a meia-noite) — V215 +1h
-  if (minutos <= 960) return '1º Turno';    // 07:01–16:00 — V215 +1h
-  if (minutos <= 1410) return '2º Turno';   // 16:01–23:30 — V215 +1h
-  return '3º Turno';                        // 23:31–23:59 — V215 +1h
+  if (minutos <= 360) return '3º Turno';    // 22:31–06:00 (atravessa a meia-noite)
+  if (minutos <= 900) return '1º Turno';    // 06:01–15:00
+  if (minutos <= 1350) return '2º Turno';   // 15:01–22:30
+  return '3º Turno';                        // 22:31–23:59
 }
 
 // Data de referência dos 3 cards de turno: usa a mesma data selecionada no filtro
@@ -5335,8 +5329,8 @@ function _hroPesoTurno3(dataRef) {
     if (isNaN(d.getTime())) return;
     var diaStr = d.toLocaleDateString('pt-BR');
     var minutos = d.getHours() * 60 + d.getMinutes();
-    var pertenceNoite = (diaStr === dataStr) && minutos >= 1411;        // 23:31–23:59 do dia de referência — V215 +1h
-    var pertenceMadrugada = (diaStr === proximoStr) && minutos <= 419;  // 00:00–06:59 do dia seguinte — V215 +1h
+    var pertenceNoite = (diaStr === dataStr) && minutos >= 1351;        // 22:31–23:59 do dia de referência
+    var pertenceMadrugada = (diaStr === proximoStr) && minutos <= 359;  // 00:00–05:59 do dia seguinte
     if (!pertenceNoite && !pertenceMadrugada) return;
     total += parseFloat(String(s.pesoTotal).replace(/\./g, '').replace(',', '.')) || 0;
   });
@@ -6019,7 +6013,7 @@ document.addEventListener('click',function(e){
        mesma fileira. V182 — os 3 cards de turno passam a ficar logo após
        "Qtd. Crit. Entrega", na mesma linha dos outros 6, em vez de formarem uma
        segunda fileira própria. Mesma classe .rel-stat-card, mesmo tamanho.
-       1º Turno 07:01–16:00 · 2º Turno 16:01–23:30 · 3º Turno 23:31–07:00 (V215 +1h)
+       1º Turno 06:00–14:59 · 2º Turno 15:00–22:30 · 3º Turno 22:31–05:59
        (soma a virada de dia com a madrugada do dia seguinte). -->
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <div class="rel-stat-card"><div class="rel-stat-label">Total CTRCs</div><div class="rel-stat-val" id="hro-c-ctrcs">0</div></div>
@@ -6029,8 +6023,8 @@ document.addEventListener('click',function(e){
     <div class="rel-stat-card"><div class="rel-stat-label">Total de Notas</div><div class="rel-stat-val" id="hro-c-notas">0</div></div>
     <div class="rel-stat-card"><div class="rel-stat-label">Qtd. Crit. Entrega</div><div class="rel-stat-val" id="hro-c-crit">0</div></div>
     <div class="rel-stat-card" title="06:00–14:59"><div class="rel-stat-label">Peso 1º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t1">0</div></div>
-    <div class="rel-stat-card" title="16:01–23:30"><div class="rel-stat-label">Peso 2º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t2">0</div></div>
-    <div class="rel-stat-card" title="23:31–07:00 (inclui a madrugada do dia seguinte)"><div class="rel-stat-label">Peso 3º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t3">0</div></div>
+    <div class="rel-stat-card" title="15:00–22:30"><div class="rel-stat-label">Peso 2º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t2">0</div></div>
+    <div class="rel-stat-card" title="22:31–05:59 (inclui a madrugada do dia seguinte)"><div class="rel-stat-label">Peso 3º Turno (kg)</div><div class="rel-stat-val" id="hro-c-peso-t3">0</div></div>
   </div>
 
   <div class="table-wrap">
@@ -6186,7 +6180,7 @@ document.addEventListener('click',function(e){
       <option value="2º Turno">2º Turno</option>
       <option value="3º Turno">3º Turno</option>
     </select>
-    <input type="date" id="descarga-acomp-data" onchange="descargaAcompFiltrarData(this.value)" title="Produtividade por dia: filtra pela data da Hora Fim (dia operacional — mesma virada 23:31 do resto do app). Só finalizados aparecem; mostra só dias dentro da janela de 72h úteis já exibida nesta tela." style="padding:7px 10px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#334155;font-family:'Poppins',sans-serif;cursor:pointer">
+    <input type="date" id="descarga-acomp-data" onchange="descargaAcompFiltrarData(this.value)" title="Produtividade por dia: filtra pela data da Hora Fim (dia operacional — mesma virada 22:31 do resto do app). Só finalizados aparecem; mostra só dias dentro da janela de 72h úteis já exibida nesta tela." style="padding:7px 10px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#334155;font-family:'Poppins',sans-serif;cursor:pointer">
     <button id="descarga-acomp-btn-fila" onclick="descargaAcompAlternarSomenteFila()" title="Mostra apenas os MAC/MEC que ainda estão na fila de descarga. Apenas oculta — nenhum registro é apagado." style="padding:8px 14px;font-size:12px;font-weight:700;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#334155;cursor:pointer;font-family:'Poppins',sans-serif;white-space:nowrap">Somente na fila</button>
     <span id="descarga-acomp-fila-info" style="font-size:11px;color:#94a3b8"></span>
   </div>
@@ -6371,7 +6365,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V217';
+var ROTA7_VERSAO = 'V214';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -8524,12 +8518,13 @@ function cgTurnoAtual() {
   var h = agora.getHours();
   var m = agora.getMinutes();
   var hm = h * 60 + m;
-  // Turno 1: 08:00 (480) – 15:40 (940) — V215 +1h
-  if (hm >= 480 && hm < 960) return { turno: 1, inicio: '08:00', fim: '15:40' };
-  // Turno 2: 16:00 (960) – 23:30 (1410) — V215 +1h
-  if (hm >= 960 && hm <= 1410) return { turno: 2, inicio: '16:00', fim: '23:30' };
-  // Turno 3: 23:31 – 07:59 — cruza meia-noite — V215 +1h
-  return { turno: 3, inicio: '23:31', fim: '07:50' };
+  // Turno 1: 07:00 (420) – 14:40 (880). V205 — 14:41–14:59 continua no 1º Turno
+  // (antes caía no 3º e gravava/lia a base errada).
+  if (hm >= 420 && hm < 900) return { turno: 1, inicio: '07:00', fim: '14:40' };
+  // Turno 2: 15:00 (900) – 22:30 (1350)
+  if (hm >= 900 && hm <= 1350) return { turno: 2, inicio: '15:00', fim: '22:30' };
+  // Turno 3: 22:31 – 06:59 — cruza meia-noite (V205 — início oficial 22:31)
+  return { turno: 3, inicio: '22:31', fim: '06:50' };
 }
 
 function cgChaveTurno() {
@@ -8539,7 +8534,7 @@ function cgChaveTurno() {
   // V205 — a data da chave é o DIA OPERACIONAL no horário de Brasília. Antes usava
   // toISOString() (horário de Londres): a chave mudava às 21:00 (no meio do 2º
   // Turno) e à meia-noite (no meio do 3º), e a base do turno "sumia" duas vezes.
-  // Agora o 3º Turno inteiro (23:31 → 07:59) fica numa chave só.
+  // Agora o 3º Turno inteiro (22:31 → 06:59) fica numa chave só.
   var dRef = (typeof _diaOperacionalRef === 'function') ? _diaOperacionalRef() : new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
   var data = dRef.getFullYear() + '-' + String(dRef.getMonth() + 1).padStart(2, '0') + '-' + String(dRef.getDate()).padStart(2, '0');
   return 'cg_baseline_' + data + '_T' + t.turno;
@@ -9109,10 +9104,10 @@ function calcTurnoCorte(horaStr) {
   if (isNaN(h)) return '—';
   if (isNaN(m)) m = 0;
   var minutos = h * 60 + m;
-  if (minutos <= 420) return '3º Turno';    // 23:31–07:00 (atravessa a meia-noite) — V215 +1h
-  if (minutos <= 960) return '1º Turno';    // 07:01–16:00 — V215 +1h
-  if (minutos <= 1410) return '2º Turno';   // 16:01–23:30 — V215 +1h
-  return '3º Turno';                        // 23:31–23:59 — V215 +1h
+  if (minutos <= 360) return '3º Turno';    // 22:31–06:00 (atravessa a meia-noite)
+  if (minutos <= 900) return '1º Turno';    // 06:01–15:00
+  if (minutos <= 1350) return '2º Turno';   // 15:01–22:30
+  return '3º Turno';                        // 22:31–23:59
 }
 
 function calcPrioridade(r) {
@@ -16389,10 +16384,10 @@ function descargaAcompCampoAlterado(mac, campo, valor) {
         // (17:00 lançado às 15:30, muito comum): o registro ganhava carimbo de ONTEM
         // e o Painel o descartava do Plano E do Executado, sem aviso nenhum. Agora
         // só recua de madrugada com hora de fim noturna — a virada de verdade.
-        //   460 = 07:40 (abertura do 1º Turno) · 1260 = 21:00 — V215 +1h
+        //   400 = 06:40 (abertura do 1º Turno) · 1200 = 20:00
         var _minAgoraFim = _agoraFim.getHours() * 60 + _agoraFim.getMinutes();
         var _minHoraFim = _hf * 60 + _mf;
-        if (_minAgoraFim < 460 && _minHoraFim > 1260) _dtFim.setDate(_dtFim.getDate() - 1);
+        if (_minAgoraFim < 400 && _minHoraFim > 1200) _dtFim.setDate(_dtFim.getDate() - 1);
         rec.dataFimISO = _dtFim.toISOString();
       }
     } else {
@@ -17118,36 +17113,30 @@ function _descAcompListaFiltrada(base) {
 // Isto NÃO muda a linha "Executado" do turno na tabela do Extrato do Dia logo
 // abaixo (_gvFluxoFilaIN) nem os velocímetros de turno — se um dia precisarmos
 // unificar tudo, é outra etapa, feita à parte.
-// V216 — a mesma conta, agora para QUALQUER dia operacional (diaISO). Sem diaISO,
-// é hoje — o comportamento da V214 para o card "Executado" do topo.
-// MAC com Hora Fim mas sem o carimbo dataFimISO só pode ser atribuído a HOJE
-// (é o que o Painel sempre fez); num dia passado ele não entra, senão o mesmo
-// MAC contaria em todos os dias consultados.
-function _inPesoProduzidoTurnoData(turno, diaISO) {
+function _inPesoProduzidoTurno(turno) {
   var hojeISO = (typeof _descAcompDiaOperacionalISO === 'function') ? _descAcompDiaOperacionalISO(Date.now()) : null;
-  var alvo = diaISO || hojeISO;
   var base = (typeof _descAcompLista !== 'undefined' && _descAcompLista.length) ? _descAcompLista
     : ((typeof _descAcompFilaCompleta === 'function') ? _descAcompFilaCompleta().map(function(m) {
         return { mac: m.mac, dest: m.dest, pesoTotal: m.pesoTotal, ctrcs: m.ctrcs, tipo: m.tipo, ativo: true };
       }) : []);
-  var corte = (typeof _descAcompRetencaoCorteMs === 'function') ? _descAcompRetencaoCorteMs() : 0;
+  if (typeof _descAcompRetencaoCorteMs === 'function' && typeof _descAcompDentroRetencao === 'function') {
+    var corte = _descAcompRetencaoCorteMs();
+    base = base.filter(function(m) { return _descAcompDentroRetencao(m, corte); });
+  }
   var total = 0;
   base.forEach(function(m) {
     var rec = _descAcompGet(m.mac);
     var st = _descAcompStatusItem(m, rec);
     if (st.valor !== 'finalizado' && st.valor !== 'finalizado-anteriormente') return;
     if (_descAcompTurnoDe(rec) !== turno) return;
-    var dia = null;
-    if (rec.dataFimISO) dia = _descAcompDiaOperacionalISO(rec.dataFimISO);
-    else if (rec.horaFim && String(rec.horaFim).trim() && alvo === hojeISO &&
-             (typeof _descAcompDentroRetencao !== 'function' || _descAcompDentroRetencao(m, corte))) dia = hojeISO;
-    if (dia !== alvo) return;
+    var dia = rec.dataFimISO ? _descAcompDiaOperacionalISO(rec.dataFimISO)
+      : ((rec.horaFim && String(rec.horaFim).trim()) ? hojeISO : null);
+    if (dia !== hojeISO) return;
     var chaveMac = String(m.mac == null ? '' : m.mac).trim().toUpperCase();
     total += _inPesoOficialDe(chaveMac, m.pesoTotal || 0);
   });
   return total;
 }
-function _inPesoProduzidoTurno(turno) { return _inPesoProduzidoTurnoData(turno, null); }
 
 // V210 — filtro por Turno (mesma coluna/regra da V209)
 var _descAcompFiltroTurno = 'todos';
@@ -17159,7 +17148,7 @@ function descargaAcompFiltrarTurno(v) {
 }
 
 // V211 — filtro por Data (produtividade por dia). O "dia" de um MAC é o dia
-// operacional da sua Hora Fim (mesma virada 23:31 usada em todo o app — ver
+// operacional da sua Hora Fim (mesma virada 22:31 usada em todo o app — ver
 // _descAcompDiaOperacionalISO). Item sem Hora Fim não tem "dia" de produção
 // ainda, então não aparece quando este filtro está ativo — é o comportamento
 // certo para uma tela de produtividade por dia.
@@ -18129,8 +18118,8 @@ function _acompOutTurnoAuto(rec, modo) {
   var t = (typeof _gvTurnoCustomOut === 'function') ? _gvTurnoCustomOut(hora) : null;
   if (t) return t;
   var hh = parseInt(String(hora).split(':')[0], 10); if (isNaN(hh)) hh = 0;
-  if (hh >= 7 && hh < 16) return '1º Turno';  // V215 +1h
-  if (hh >= 16 && hh < 24) return '2º Turno'; // V215 +1h
+  if (hh >= 6 && hh < 15) return '1º Turno';
+  if (hh >= 15 && hh < 23) return '2º Turno';
   return '3º Turno';
 }
 
@@ -19366,10 +19355,10 @@ function _resumoMalhaClassificarTurno(horaStr) {
   if (isNaN(h)) return null;
   if (isNaN(m)) m = 0;
   var minutos = h * 60 + m;
-  if (minutos <= 420) return '3º Turno';    // 23:31–07:00 (atravessa a meia-noite) — V215 +1h
-  if (minutos <= 960) return '1º Turno';    // 07:01–16:00 — V215 +1h
-  if (minutos <= 1410) return '2º Turno';   // 16:01–23:30 — V215 +1h
-  return '3º Turno';                        // 23:31–23:59 — V215 +1h
+  if (minutos <= 360) return '3º Turno';    // 22:31–06:00 (atravessa a meia-noite)
+  if (minutos <= 900) return '1º Turno';    // 06:01–15:00
+  if (minutos <= 1350) return '2º Turno';   // 15:01–22:30
+  return '3º Turno';                        // 22:31–23:59
 }
 
 function resumoMalhaRenderizar() {
@@ -19407,7 +19396,7 @@ function resumoMalhaRenderizar() {
   });
 
   var ordemTurnos = ['1º Turno', '2º Turno', '3º Turno'];
-  var faixas = { '1º Turno': '07:01 – 16:00', '2º Turno': '16:01 – 23:30', '3º Turno': '23:31 – 07:00' }; // V215 +1h — rótulos iguais ao classificador
+  var faixas = { '1º Turno': '06:01 – 15:00', '2º Turno': '15:01 – 22:30', '3º Turno': '22:31 – 06:00' }; // V205 — rótulos iguais ao classificador
   var turnos = { '1º Turno': [], '2º Turno': [], '3º Turno': [] };
 
   unicos.forEach(function(r) {
@@ -19575,10 +19564,10 @@ function _gvDomingoTurnoVigente(dataRef) {
 
 function _gvTurnoFimDeSemana(minutos, diaSemana, dataRef) {
   if (diaSemana !== 0 && diaSemana !== 6) return null; // dia de semana normal: não se aplica
-  if (minutos >= 1260 || minutos < 421) return '3º Turno'; // 21:00–06:59 (+ o minuto 07:00) — V215 +1h
-  if (diaSemana === 0) return _gvDomingoTurnoVigente(dataRef); // domingo: 07:00–20:59 inteiro — V215 +1h
-  if (minutos <= 840) return '1º Turno';  // sábado 07:01–14:00 — V215 +1h
-  return '2º Turno';                       // sábado 14:01–20:59 — V215 +1h
+  if (minutos >= 1200 || minutos < 361) return '3º Turno'; // 20:00–05:59 (+ o minuto 06:00)
+  if (diaSemana === 0) return _gvDomingoTurnoVigente(dataRef); // domingo: 06:00–19:59 inteiro
+  if (minutos <= 780) return '1º Turno';  // sábado 06:01–13:00
+  return '2º Turno';                       // sábado 13:01–19:59
 }
 
 function _gvTurnoDoHorario(horaStr) {
@@ -19601,10 +19590,10 @@ function _gvTurnoDoHorario(horaStr) {
   var minutos = h * 60 + m;
   var _turnoFDS = _gvTurnoFimDeSemana(minutos, new Date().getDay());
   if (_turnoFDS) return _turnoFDS;
-  if (minutos < 460) return '3º Turno';     // 00:00–07:39 (madrugada, atravessa a meia-noite) — V215 +1h
-  if (minutos <= 1005) return '1º Turno';   // 07:40–16:45 — V215 +1h
-  if (minutos < ROTA7_VIRADA_DIA_MIN) return '2º Turno'; // 16:46–23:30 — V215 +1h
-  return '3º Turno';                        // 23:31–23:59 — V215 +1h
+  if (minutos < 400) return '3º Turno';     // 00:00–06:39 (madrugada, atravessa a meia-noite)
+  if (minutos <= 945) return '1º Turno';    // 06:40–15:45
+  if (minutos < ROTA7_VIRADA_DIA_MIN) return '2º Turno'; // 15:46–22:30 (V205 — era até 23:00)
+  return '3º Turno';                        // 22:31–23:59 (V205 — era a partir de 23:01)
 }
 
 function _gvDiaDaSemanaAtual() {
@@ -19686,8 +19675,8 @@ function _gvTurnosDecorridos(agoraReferencia) {
   var agora = (agoraReferencia instanceof Date && !isNaN(agoraReferencia.getTime()))
     ? agoraReferencia : new Date();
   var minutos = agora.getHours() * 60 + agora.getMinutes();
-  if (minutos >= ROTA7_VIRADA_DIA_MIN || minutos <= 459) return ['3º Turno']; // V215 — 23:31 / 07:39
-  if (minutos <= 1005) return ['3º Turno', '1º Turno'];
+  if (minutos >= ROTA7_VIRADA_DIA_MIN || minutos <= 399) return ['3º Turno']; // V205 — 22:31
+  if (minutos <= 945) return ['3º Turno', '1º Turno'];
   return ['3º Turno', '1º Turno', '2º Turno'];
 }
 
@@ -19898,8 +19887,8 @@ function _gvExtratoHistCarregarSupabase() {
 //     calculados na exibição/Excel — se uma regra de cálculo mudar, o histórico
 //     inteiro acompanha sem perder nada.
 var GV_HM_PREFIXO = 'gv_hist_mensal:';
-var GV_HM_CORTE_MIN = 23 * 60 + 30;   // 23:30 — horário da foto (V215 — acompanhou a virada)
-var GV_HM_LIMITE_MIN = ROTA7_VIRADA_DIA_MIN; // V215 — 23:31: o dia operacional vira e a foto do dia fecha
+var GV_HM_CORTE_MIN = 22 * 60 + 30;   // 22:30 — horário da foto
+var GV_HM_LIMITE_MIN = ROTA7_VIRADA_DIA_MIN; // V205 — 22:31: o dia operacional vira e a foto do dia fecha
 var _gvHmFotoFeita = null;            // data (AAAA-MM-DD) já tratada nesta máquina
 var _gvHmCache = {};                  // { 'AAAA-MM-DD': foto }
 var _gvHmMes = null;                  // 'AAAA-MM' em exibição
@@ -19949,7 +19938,7 @@ function _gvHmMontarFoto() {
   });
   var fp = (typeof _fpColeta === 'function') ? _fpColeta() : {};
   return {
-    data: e.data, corte: '23:30', fotoISO: new Date().toISOString(),
+    data: e.data, corte: '22:30', fotoISO: new Date().toISOString(),
     in: e.in, out: e.out, fp: e.fp,
     planoTotal: e.planoTotal, movimentado: e.movimentado, capacidadeKg: e.capacidadeKg,
     conferentes: hc.Conferente, ajudantes: hc.Ajudante, terceiros: hc.Terceiros,
@@ -19970,7 +19959,7 @@ function _gvHmValores(dataISO, f) {
   var fin = f.in || {}, fout = f.out || {}, ffp = f.fp || {};
   var hcTotal = (f.conferentes || 0) + (f.ajudantes || 0) + (f.terceiros || 0);
   return [
-    dataBR, f.corte || '23:30',
+    dataBR, f.corte || '22:30',
     fin.plano, fin.programado, fin.executado, div(fin.executado, fin.plano), fin.saldo,
     fout.plano, fout.programado, fout.executado, div(fout.executado, fout.plano), fout.saldo,
     f.planoTotal, f.movimentado, div(f.movimentado, f.planoTotal), (f.movimentado || 0) - (f.planoTotal || 0),
@@ -20104,7 +20093,7 @@ function _gvHmTalvezFotografar() {
         var hhmm = String(_agCap.getHours()).padStart(2, '0') + ':' + String(_agCap.getMinutes()).padStart(2, '0');
         foto.origem = oficial ? 'oficial' : 'reserva';
         foto.maquina = oficial ? (cfg.nome || 'Máquina oficial') : _gvHmMaquinaId();
-        foto.corte = oficial ? '23:30' : (hhmm + ' (reserva)');
+        foto.corte = oficial ? '22:30' : (hhmm + ' (reserva)');
         var pend = _gvHmPendentesLer(); pend[dataISO] = foto; _gvHmPendentesGravar(pend); // congela antes de enviar
         console.log('[histórico mensal] foto de ' + dataISO + ' tirada às ' + hhmm + ' (' + foto.origem + ').');
         return _gvHmEnviarPendentes();
@@ -20143,7 +20132,7 @@ function gvHistoricoMensalDefinirOficial() {
   }).then(function(r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     _gvHmConfig = cfg;
-    if (typeof showToast === 'function') showToast('Esta máquina agora tira a foto oficial das 23:30', 'success');
+    if (typeof showToast === 'function') showToast('Esta máquina agora tira a foto oficial das 22:30', 'success');
     _gvHmStatusOficial();
   }).catch(function() {
     if (typeof showToast === 'function') showToast('Não foi possível gravar a máquina oficial — tente de novo', 'error');
@@ -20154,9 +20143,9 @@ function _gvHmStatusOficial() {
   var el = document.getElementById('gv-hm-oficial');
   if (!el) return;
   var txt;
-  if (_gvHmSouOficial()) txt = '● Esta máquina é a oficial da foto (' + (_gvHmConfig.nome || '') + ') — mantenha-a ligada e com o app aberto às 23:30.';
-  else if (_gvHmConfig && _gvHmConfig.id) txt = 'Máquina oficial: ' + (_gvHmConfig.nome || '—') + ' · esta máquina é reserva (fotografa às 23:30 e 30 s se faltar a foto oficial).';
-  else txt = 'Nenhuma máquina oficial definida — qualquer máquina aberta fotografa às 23:30.';
+  if (_gvHmSouOficial()) txt = '● Esta máquina é a oficial da foto (' + (_gvHmConfig.nome || '') + ') — mantenha-a ligada e com o app aberto às 22:30.';
+  else if (_gvHmConfig && _gvHmConfig.id) txt = 'Máquina oficial: ' + (_gvHmConfig.nome || '—') + ' · esta máquina é reserva (fotografa às 22:30 e 30 s se faltar a foto oficial).';
+  else txt = 'Nenhuma máquina oficial definida — qualquer máquina aberta fotografa às 22:30.';
   var pend = Object.keys(_gvHmPendentesLer());
   if (pend.length) txt += ' · ' + pend.length + ' foto(s) aguardando envio ao banco.';
   el.textContent = txt;
@@ -20207,7 +20196,7 @@ function gvHistoricoMensalAbrir() {
     m.innerHTML =
       '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:8px;width:100%;max-width:1600px;max-height:90vh;display:flex;flex-direction:column;font-family:\'Poppins\',sans-serif">' +
         '<div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid #2b2b2b;flex-wrap:wrap">' +
-          '<span style="font-size:15px;font-weight:700;color:#fff;flex:1">Histórico mensal <span style="font-size:11px;color:#9a9a9a;font-weight:400">· foto fixa diária às 23:30</span></span>' +
+          '<span style="font-size:15px;font-weight:700;color:#fff;flex:1">Histórico mensal <span style="font-size:11px;color:#9a9a9a;font-weight:400">· foto fixa diária às 22:30</span></span>' +
           '<input type="month" id="gv-hm-mes" onchange="gvHistoricoMensalTrocarMes(this.value)" style="padding:6px 8px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#e8e8e8;font-family:inherit;font-size:12px">' +
           '<button onclick="gvHistoricoMensalExportar()" style="padding:7px 16px;border-radius:4px;border:1px solid #e8e8e8;background:#e8e8e8;color:#111;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Baixar Excel</button>' +
           '<button onclick="gvHistoricoMensalFechar()" style="padding:7px 16px;border-radius:4px;border:1px solid #2f2f2f;background:#1a1a1a;color:#9a9a9a;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Fechar</button>' +
@@ -20487,14 +20476,7 @@ function _gvCapExecColeta() {
       iniciado: iniciado,
       capIn:   iniciado ? Math.round(_gvCapacidadeHCTurno(dataISO, t, 'inbound')  * 1000) : 0,
       capOut:  iniciado ? Math.round(_gvCapacidadeHCTurno(dataISO, t, 'outbound') * 1000) : 0,
-      // V216 — CAUSA DO EXEC. IN INFLADO. Vinha de _gvFluxoFilaIN (a cascata do
-      // Extrato do Dia), um terceiro caminho de cálculo: ele conta o MAC que
-      // ENTROU na fila dentro do dia operacional e tem Hora Fim, distribuindo pelo
-      // turno da Hora Fim — sem exigir que essa Hora Fim seja deste mesmo dia. MAC
-      // que entrou hoje mas foi finalizado antes, ou que reapareceu na fila do TMS
-      // depois de fechado, era somado de novo. Agora usa a MESMA conta do card
-      // "Peso KG Produzido" do Acompanhamento IN (V214), por dia e por turno.
-      execIn:  iniciado ? Math.round(_inPesoProduzidoTurnoData(t, dataISO)) : 0,
+      execIn:  iniciado ? Math.round(_gvCxExecDoTurno(fIn,  t)) : 0,
       execOut: iniciado ? Math.round(_gvCxExecDoTurno(fOut, t)) : 0
     };
   });
@@ -20757,7 +20739,7 @@ function _gvCxTabela(n) {
 
   return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 18px;box-sizing:border-box">' +
     '<div style="font-size:12px;font-weight:800;color:#e5e5e5;margin-bottom:2px">Capacidade x Executado — por turno</div>' +
-    '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">KG · Capacidade: HC Ajudante + Terceiros (Lista de Presença) · Executado: Descarga IN + Carregamento OUT · Só turnos já iniciados (dia operacional 23:31→23:31, começa no 3º Turno)</div>' +
+    '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">KG · Capacidade: HC Ajudante + Terceiros (Lista de Presença) · Executado: Descarga IN + Carregamento OUT · Só turnos já iniciados (dia operacional 22:31→22:31, começa no 3º Turno)</div>' +
     '<div style="overflow-x:auto">' +
       '<table style="width:100%;border-collapse:collapse;min-width:760px">' +
         '<thead>' +
@@ -20834,14 +20816,6 @@ function _gvCxRegComCapacidadeViva(reg, dataISO) {
       var vOut = Math.round(_gvCapacidadeHCTurno(dataISO, t, 'outbound') * 1000);
       if (vIn  > 0) r.capIn  = vIn;
       if (vOut > 0) r.capOut = vOut;
-      // V216 — Exec. IN do dia passado: a foto guardada foi calculada pela cascata
-      // antiga (que inflava). Enquanto o Acompanhamento IN ainda tiver os MAC/MEC
-      // daquele dia (expurgo de 30 dias), vale a conta nova; passado esse prazo,
-      // não há mais de onde recalcular e a foto é mantida como está.
-      if (typeof _inPesoProduzidoTurnoData === 'function') {
-        var eIn = Math.round(_inPesoProduzidoTurnoData(t, dataISO));
-        if (eIn > 0) r.execIn = eIn;
-      }
       r.iniciado = true;
       novo.turnos[t] = r;
     });
@@ -21172,19 +21146,6 @@ function _inFinalizadoAntesDaJanela(rec, janela, entrouHoje) {
   if (!horaFim) return false;
   var d = new Date(rec.dataFimISO);
   if (isNaN(d.getTime()) || d.getTime() >= janela.inicio.getTime()) return false;
-  // ── V217 · CAUSA DA SOMA A MAIS NO EXECUTADO POR TURNO ────────────────────
-  // A regra da V194 (logo abaixo) ignora o carimbo dataFimISO sempre que a Hora
-  // Fim "já aconteceu" hoje. Isso cobre o caso real para o qual foi feita, mas
-  // vale largo demais: um MAC finalizado ONTEM às 09:00, que continua na fila do
-  // TMS hoje (o TMS só baixa depois), era recontado hoje às 10:00 — entrava de
-  // novo no Plano, no Entrou Depois e no Executado do turno da Hora Fim.
-  // O carimbo errado que a V194 corrige só pode nascer da regra de virada da
-  // meia-noite, que recua um dia APENAS quando a Hora Fim é noturna (> 21:00 —
-  // ver a trava em descargaAcompCampoAlterado). Fora dessa faixa, o carimbo é
-  // confiável: carga finalizada em dia operacional anterior não é carga de hoje.
-  var _pFim = String(horaFim).split(':');
-  var _minFim = (parseInt(_pFim[0], 10) || 0) * 60 + (parseInt(_pFim[1], 10) || 0);
-  if (_minFim <= 1260) return true; // Hora Fim diurna com carimbo de outro dia: não conta hoje
   // V194 — CAUSA DA COLETA 510-151949372 FORA DO EXECUTADO. O carimbo dataFimISO
   // vem do relógio do aparelho de quem lançou, e a regra de lançamento joga para
   // o DIA ANTERIOR toda Hora Fim mais de 1h à frente desse relógio (feita para a
@@ -21388,7 +21349,7 @@ function _gvColetarDadosIN() {
     else { pesoSemProgramacao += peso; semProgramacaoLista.push({ mac: mac, origem: info.origem, peso: peso }); }
 
     // O Executado pertence ao turno em que a descarga foi concluída; para
-    // registros ainda abertos, usa-se o início. Isso mantém a virada 23:31–06:59
+    // registros ainda abertos, usa-se o início. Isso mantém a virada 22:31–05:59
     // unida mesmo quando a operação começou antes da meia-noite.
     var horaRef = temFim ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHora);
     var t = _gvTurnoDoHorario(horaRef);
@@ -22154,8 +22115,8 @@ function _gvFluxoFilaOUT() {
     var t = _gvTurnoDoHorario(horaStr);
     if (t) return t;
     var hh = parseInt(String(horaStr||'').split(':')[0], 10); if (isNaN(hh)) hh = 0;
-    if (hh >= 7 && hh < 16) return '1º Turno';  // V215 +1h
-    if (hh >= 16 && hh < 24) return '2º Turno'; // V215 +1h
+    if (hh >= 6 && hh < 15) return '1º Turno';
+    if (hh >= 15 && hh < 23) return '2º Turno';
     return '3º Turno';
   }
 
@@ -22390,8 +22351,8 @@ function _gvFluxoFilaIN() {
     var t = _gvTurnoDoHorario(horaStr);
     if (t) return t;
     var hh = parseInt(String(horaStr||'').split(':')[0], 10); if (isNaN(hh)) hh = 0;
-    if (hh >= 7 && hh < 16) return '1º Turno';  // V215 +1h
-    if (hh >= 16 && hh < 24) return '2º Turno'; // V215 +1h
+    if (hh >= 6 && hh < 15) return '1º Turno';
+    if (hh >= 15 && hh < 23) return '2º Turno';
     return '3º Turno';
   }
 
@@ -23007,7 +22968,7 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfo = fluxo.horaPrimeiroImport
-      ? 'Dia operacional · 3º Turno: 23:31–07:39 · primeiro importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
+      ? 'Dia operacional · 3º Turno: 22:31–06:39 · primeiro importado em: ' + fluxo.dataPrimeiroImport + ' às ' + fluxo.horaPrimeiroImport
       : 'Sem importação registrada na janela operacional atual';
 
     var corpoTabela = fluxo.horaPrimeiroImport
@@ -23097,7 +23058,7 @@ function gestaoVistaRenderizar() {
       '</tr>';
 
     var subInfoO = fo.temTms
-      ? 'CARREGAMENTO · KG · Dia operacional · 3º Turno: 23:31–07:39 · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) na janela'
+      ? 'CARREGAMENTO · KG · Dia operacional · 3º Turno: 22:31–06:39 · 1º import TMS às ' + fo.horaPrimeiroImport + ' · ' + fo.qtdImportsHoje + ' import(s) na janela'
       : 'CARREGAMENTO · KG · Dia operacional · sem import TMS na janela — Plano = soma da lista do Acompanhamento';
 
     entregaDiv.innerHTML =
