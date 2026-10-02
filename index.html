@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V215--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V216--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6365,7 +6365,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V215';
+var ROTA7_VERSAO = 'V216';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -7975,7 +7975,11 @@ function _relPintarQuandoPronto() {
     if (corpo && corpo.children && corpo.children.length) return; // já está desenhado
     try { if (typeof relFiltrar === 'function') relFiltrar(); }
     catch(e) { console.warn('[rel] relFiltrar falhou:', e); }
-    try { if (typeof descargaRenderizar === 'function') descargaRenderizar(); }
+    // V216 — repintura do relatório que já estava salvo nesta máquina: nada aqui
+    // é novidade para o servidor, então o merge não gera gravação.
+    try {
+      if (typeof descargaRenderizar === 'function') (window._descAcompSemGravar || function(f){ f(); })(descargaRenderizar);
+    }
     catch(e) { console.warn('[rel] descargaRenderizar falhou:', e); }
   };
   pintar();
@@ -8264,7 +8268,12 @@ function _relAplicarDados(registros, ts, forcar) {
   // Executado do Painel, que sai dessa lista, continuava divergindo.
   // As outras duas são só desenho, então respeitam a aba ativa.
   setTimeout(function() {
-    try { if (typeof descargaRenderizar === 'function') descargaRenderizar(); }
+    // V216 — este relatório veio de OUTRA máquina: o merge da lista do
+    // Acompanhamento IN roda normalmente (números iguais aos de antes), mas sem
+    // regravar no Supabase o que a máquina que importou já publicou.
+    try {
+      if (typeof descargaRenderizar === 'function') (window._descAcompSemGravar || function(f){ f(); })(descargaRenderizar);
+    }
     catch (e) { console.warn('[rel] descargaRenderizar falhou:', e); }
     try {
       if (typeof cargaCriticaRenderizar === 'function') {
@@ -14981,12 +14990,121 @@ document.addEventListener('visibilitychange', function() {
   try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(e){}
 });
 
+// ══════════ V216 · CONSUMO DE REALTIME DO SUPABASE ═══════════════════════════
+// CAUSA DO ESTOURO DA COTA DE MENSAGENS. Cada linha gravada em "configuracoes"
+// vira UM evento do canal cfg-realtime, e o Supabase cobra uma mensagem POR
+// CLIENTE CONECTADO: 1 gravação × 10 máquinas abertas = 10 mensagens. O merge da
+// lista do Acompanhamento IN (_descAcompListaMerge) grava uma linha por MAC/MEC
+// e rodava em DUAS situações que multiplicavam esse custo:
+//
+//   1) EM TODA MÁQUINA. Quando alguém importa o TMS, o relatório chega às outras
+//      pelo Realtime e a V180 roda descargaRenderizar() em todas elas — inclusive
+//      com a aba fechada. Cada uma refazia o merge e regravava os MESMOS itens no
+//      servidor, porque a marca "já salvei" (_descAcompItemUltimoSalvo) é local.
+//      Com N máquinas o mesmo import custava N× gravações, e cada gravação era
+//      entregue às N máquinas: custo N². Agora o merge das telas que apenas
+//      RECEBEM ou REPINTAM roda só em memória — os números na tela continuam
+//      idênticos, a gravação fica com quem importou, e as linhas voltam para todo
+//      mundo pelo Realtime, exatamente como antes.
+//
+//   2) A CADA IMPORT, POR VARIAÇÃO DE PESO. O peso da coluna M encolhe conforme
+//      os CTRCs são baixados, então pesoTotal/ctrcs mudavam em quase todos os
+//      itens da fila a cada import e a lista inteira era regravada. Esses dois
+//      campos não precisam trafegar: toda máquina recalcula o peso pelo próprio
+//      relatório (_inPesoPorMacTodos / _pesoConsolidado no merge). O que precisa
+//      ser compartilhado é o esqueleto do item — e o peso no momento em que ele
+//      SAI da fila, que é quando o relatório deixa de ser fonte (V183).
+//
+// Nada muda no que a tela mostra nem na regra de peso: só deixa de haver escrita
+// repetida de informação que cada máquina já sabe calcular sozinha.
+var _descAcompMergeSomenteMemoria = false;
+function _descAcompSemGravar(fn) {
+  var anterior = _descAcompMergeSomenteMemoria;
+  _descAcompMergeSomenteMemoria = true;
+  try { return fn(); }
+  finally { _descAcompMergeSomenteMemoria = anterior; }
+}
+
+// Identidade do item que PRECISA viver no servidor. Fora daqui (pesoTotal,
+// ctrcs) é informação derivada do relatório, que toda máquina recalcula.
+function _descAcompItemEstrutura(item) {
+  if (!item) return '';
+  return [item.mac, item.dest || '', item.tipo || '',
+          (item.ativo === false ? 'fora' : 'fila'), item.entradaISO || ''].join('|');
+}
+
+// Itens que esta máquina viu como novidade enquanto estava em modo
+// somente-memória. Normalmente a linha chega do servidor em segundos (publicada
+// por quem importou) e a pendência se cancela sozinha — ver _descAcompVarrerPendentes.
+var _descAcompPendentePublicar = {};
+var _DESC_ACOMP_PENDENTE_MS = 90000;
+// Espera própria desta aba (90–150 s). Sem isso, numa falha da máquina que
+// importou TODAS publicariam ao mesmo tempo; com a defasagem, a primeira publica
+// e as demais recebem pelo Realtime e cancelam a pendência.
+var _DESC_ACOMP_PENDENTE_JITTER = Math.floor(Math.random() * 60000);
+
+function _descAcompVarrerPendentes() {
+  try {
+    var agora = Date.now();
+    var macs = Object.keys(_descAcompPendentePublicar);
+    if (!macs.length) return;
+    var porMac = {};
+    _descAcompLista.forEach(function(it) { if (it && it.mac) porMac[it.mac] = it; });
+    macs.forEach(function(mac) {
+      var item = porMac[mac];
+      // já publicado por outra máquina (chegou pelo Realtime) ou item sumiu: encerra
+      if (!item || !_descAcompItemPrecisaGravar(item, _descAcompItemUltimoSalvo[mac])) {
+        delete _descAcompPendentePublicar[mac];
+        return;
+      }
+      if ((agora - _descAcompPendentePublicar[mac]) < (_DESC_ACOMP_PENDENTE_MS + _DESC_ACOMP_PENDENTE_JITTER)) return;
+      delete _descAcompPendentePublicar[mac];
+      _descAcompItemUltimoSalvo[mac] = JSON.stringify(item);
+      _descAcompItemEditadoLocalEm[mac] = Date.now();
+      _descAcompListaSalvarItemSupabase(item);
+      console.warn('[Acomp IN] item publicado pela rede de segurança (ninguém havia publicado): ' + mac);
+    });
+  } catch (e) {}
+}
+setInterval(_descAcompVarrerPendentes, 30000);
+
+function _descAcompItemPrecisaGravar(item, jsonSalvo) {
+  if (!jsonSalvo) return true;                       // ainda não existe no servidor
+  var salvo;
+  try { salvo = JSON.parse(jsonSalvo); } catch (e) { return true; }
+  if (_descAcompItemEstrutura(item) !== _descAcompItemEstrutura(salvo)) return true;
+  // Item FORA da fila: nenhum relatório traz mais esse MAC/MEC, então o valor
+  // gravado passa a ser a única fonte do peso e precisa subir.
+  if (item.ativo === false) {
+    if ((parseFloat(item.pesoTotal) || 0) !== (parseFloat(salvo.pesoTotal) || 0)) return true;
+    if ((parseFloat(item.ctrcs) || 0) !== (parseFloat(salvo.ctrcs) || 0)) return true;
+  }
+  return false;
+}
+
 function _descAcompListaSalvar() {
   try { localStorage.setItem('descarga_acomp_lista_v1', JSON.stringify(_descAcompLista)); } catch(ex) {}
   _descAcompLista.forEach(function(item) {
     if (!item || !item.mac) return;
     var atual = JSON.stringify(item);
     if (_descAcompItemUltimoSalvo[item.mac] === atual) return; // este item não mudou desde a última gravação
+    // V216 — merge disparado por relatório de outra máquina ou por repintura:
+    // vale em memória, não grava. Quem importou é quem publica. Se o item for
+    // mesmo novidade para o servidor, fica em observação: se a máquina que
+    // importou não publicar (queda de rede, aba fechada no meio), a rede de
+    // segurança abaixo publica por ela — sem perder nada.
+    if (_descAcompMergeSomenteMemoria) {
+      if (_descAcompItemPrecisaGravar(item, _descAcompItemUltimoSalvo[item.mac]) &&
+          !_descAcompPendentePublicar[item.mac]) {
+        _descAcompPendentePublicar[item.mac] = Date.now();
+      }
+      return;
+    }
+    delete _descAcompPendentePublicar[item.mac];
+    // V216 — oscilação só de peso/CTRCs enquanto o item segue na fila não vai ao
+    // servidor. A marca de "salvo" NÃO é atualizada aqui de propósito: assim que
+    // houver mudança estrutural de verdade, o item sobe inteiro, já com o peso.
+    if (!_descAcompItemPrecisaGravar(item, _descAcompItemUltimoSalvo[item.mac])) return;
     _descAcompItemUltimoSalvo[item.mac] = atual;
     _descAcompItemEditadoLocalEm[item.mac] = Date.now();
     _descAcompListaSalvarItemSupabase(item);
@@ -23274,7 +23392,8 @@ function gestaoVistaRenderizar() {
       if ((typeof _descMacRanking === 'undefined' || !_descMacRanking.length) &&
           typeof _relData !== 'undefined' && _relData.length &&
           typeof descargaRenderizar === 'function') {
-        try { descargaRenderizar(); } catch (e) {}
+        // V216 — aqui a fila é montada só para desenhar este card; não é import.
+        try { (window._descAcompSemGravar || function(f){ f(); })(descargaRenderizar); } catch (e) {}
       }
       var filaMacs = (typeof _descMacRanking !== 'undefined' && _descMacRanking) ? _descMacRanking : [];
 
