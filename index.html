@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V216--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V217--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6365,7 +6365,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V216';
+var ROTA7_VERSAO = 'V217';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -20587,15 +20587,33 @@ function _gvCapExecColeta() {
   // Turno não iniciado entra zerado e marcado, não some da tela.
   var decorridos = (typeof _gvTurnosDecorridos === 'function')
     ? _gvTurnosDecorridos() : GV_CX_TURNOS.slice();
+  // V217 — TELA INTEIRA ZERADA NO FIM DE SEMANA. _gvTurnosDecorridos conhece só
+  // os cortes de DIA ÚTIL (06:40 / 15:46 / 23:01) — o próprio comentário dela diz
+  // isso, e _gvFluxoFilaIN já compensa desde a V196. Esta tela não compensava.
+  // No sábado e no domingo o turno vigente é outro: o domingo é um turno SÓ
+  // (06:00–19:59), que alterna entre 1º e 2º de domingo em domingo, e o sábado
+  // vira para o 2º às 13:01. Num domingo de 2º Turno, portanto, o turno que tem
+  // TODO o HC e TODO o executado do dia era marcado como "ainda não iniciado" e
+  // zerado à força até as 15:46 — e os cards do topo, que somam os três turnos,
+  // ficavam em 0 kg com a operação rodando (04/10/2026, domingo de 2º Turno).
+  // Correção aditiva, igual à da V196: nenhum turno sai, só entra quem tem
+  // movimento real. Dia útil fica exatamente como estava.
+  var _cxDiaSemana = new Date().getDay();
+  var _cxFimDeSemana = (_cxDiaSemana === 0 || _cxDiaSemana === 6);
   var turnos = {};
   GV_CX_TURNOS.forEach(function(t) {
-    var iniciado = decorridos.indexOf(t) >= 0;
+    var capIn   = Math.round(_gvCapacidadeHCTurno(dataISO, t, 'inbound')  * 1000);
+    var capOut  = Math.round(_gvCapacidadeHCTurno(dataISO, t, 'outbound') * 1000);
+    var execIn  = Math.round(_gvCxExecDoTurno(fIn,  t));
+    var execOut = Math.round(_gvCxExecDoTurno(fOut, t));
+    var iniciado = (decorridos.indexOf(t) >= 0) ||
+                   (_cxFimDeSemana && (capIn + capOut + execIn + execOut) > 0);
     turnos[t] = {
       iniciado: iniciado,
-      capIn:   iniciado ? Math.round(_gvCapacidadeHCTurno(dataISO, t, 'inbound')  * 1000) : 0,
-      capOut:  iniciado ? Math.round(_gvCapacidadeHCTurno(dataISO, t, 'outbound') * 1000) : 0,
-      execIn:  iniciado ? Math.round(_gvCxExecDoTurno(fIn,  t)) : 0,
-      execOut: iniciado ? Math.round(_gvCxExecDoTurno(fOut, t)) : 0
+      capIn:   iniciado ? capIn   : 0,
+      capOut:  iniciado ? capOut  : 0,
+      execIn:  iniciado ? execIn  : 0,
+      execOut: iniciado ? execOut : 0
     };
   });
   return { data: dataISO, turnos: turnos, ts: new Date().toISOString() };
