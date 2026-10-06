@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V217--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V219--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6365,7 +6365,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V217';
+var ROTA7_VERSAO = 'V219';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -20575,9 +20575,102 @@ function _gvCxExecDoTurno(fluxo, turno) {
   return achado;
 }
 
+// ══════════ V218 · 3º TURNO PELA NOITE EM QUE COMEÇA ════════════════════════
+// Decisão do Patrick (out/2026): nesta tela o 3º Turno pertence à data em que
+// ELE COMEÇA (a noite), não à data em que termina — é assim que o HC dele é
+// lançado na Lista de Presença, e era esse descasamento que partia o turno em
+// dois dias: capacidade de um lado, executado do outro.
+//
+// Três ajustes, todos confinados ao Capacidade X Executado:
+//   1) a capacidade do 3º Turno passa a ser lida da data da NOITE (dia
+//      operacional − 1), que é onde a equipe lança o HC;
+//   2) o executado OUT do 3º Turno deixa de ser ancorado em QUANDO A LINHA FOI
+//      GERADA e passa a ser ancorado no instante REAL do fechamento (ver
+//      _cxExecOutTerceiroTurno, logo abaixo);
+//   3) a tela passa a exibir, na data X, o 1º e o 2º Turno do dia operacional X
+//      e o 3º Turno do dia operacional X+1 — que é a noite de X.
+// O histórico continua gravado por DIA OPERACIONAL, sem migração: só a leitura
+// é que compõe a tela a partir dos dois dias. Nada fora desta tela muda.
+
+// Instante real em que um carregamento foi fechado.
+// O Acompanhamento OUT guarda a Hora Fim como texto "HH:MM", sem data — por isso
+// o dia era deduzido do campo "Gerado em" da linha de programação, e um veículo
+// programado às 20:00 e fechado às 02:00 caía no dia operacional ERRADO. Aqui a
+// data vem do "Gerado em" + a primeira ocorrência daquele horário a partir dele:
+// fim anterior ao instante da geração significa que virou a meia-noite.
+function _cxFimRealOut(r, rec) {
+  try {
+    var hf = String((rec || {}).horaFim || '').trim();
+    if (!hf) return null;
+    var p = hf.split(':');
+    var hh = parseInt(p[0], 10), mm = parseInt(p[1], 10);
+    if (isNaN(hh)) return null;
+    if (isNaN(mm)) mm = 0;
+    var geradoTxt = String((r || {}).gerado || '').trim();
+    if (!geradoTxt) return null;
+    var ger = (typeof parseDateTimeBR === 'function') ? parseDateTimeBR(geradoTxt) : null;
+    if (!ger && typeof _acompOutParseBRDate === 'function') ger = _acompOutParseBRDate(geradoTxt);
+    if (!ger || isNaN(ger.getTime())) ger = new Date(geradoTxt);
+    if (!ger || isNaN(ger.getTime())) return null;
+    var d = new Date(ger.getFullYear(), ger.getMonth(), ger.getDate(), hh, mm, 0, 0);
+    if (d.getTime() < ger.getTime()) d.setDate(d.getDate() + 1); // fechou depois da meia-noite
+    return d;
+  } catch (e) { return null; }
+}
+
+// COMPLEMENTO do executado OUT do 3º Turno — nunca substitui o cálculo oficial.
+//
+// V219 — a V218 trocava o executado OUT do 3º Turno por um cálculo próprio. Isso
+// era frágil: bastava esta função não enxergar as linhas para o turno inteiro
+// zerar, que foi exatamente o que aconteceu. Agora o número oficial continua
+// vindo de _gvFluxoFilaOUT() e aqui só é SOMADO o que ficava de fora dele.
+//
+// O que ficava de fora: _gvItensOutHoje() só aceita a linha se o "Gerado em"
+// estiver dentro da janela operacional. Um veículo programado às 20:00 (antes da
+// virada das 22:31) e fechado às 02:00 pertence ao 3º Turno desta janela, mas era
+// descartado por ter sido gerado na janela anterior. São essas, e só essas, que
+// entram aqui — linha sem "Gerado em" ou com data ilegível já é aceita lá, e
+// linha gerada dentro da janela já foi contada lá. Sem risco de contar duas vezes.
+function _cxExecOutNoturnoForaDaJanela(janela) {
+  try {
+    if (!janela || typeof progData === 'undefined' || !progData.length) return 0;
+    var base = progData;
+    if (typeof _acompOutLinhasAdiantadas === 'function') base = base.concat(_acompOutLinhasAdiantadas());
+    var acomp = (typeof _acompOutData !== 'undefined') ? _acompOutData : {};
+    var mapaTms = (typeof _tmsPesoPorFrotaMapa === 'function') ? _tmsPesoPorFrotaMapa() : {};
+    var total = 0;
+    base.forEach(function(r) {
+      if (!r) return;
+      if (!(r._adiantado || r.frota || r.ocup || r.motorista || r.cavalinho)) return;
+      var geradoTxt = String(r.gerado || '').trim();
+      if (!geradoTxt) return;                               // sem data: _gvItensOutHoje já aceitou
+      var ger = (typeof parseDateTimeBR === 'function') ? parseDateTimeBR(geradoTxt) : null;
+      if (!ger && typeof _acompOutParseBRDate === 'function') ger = _acompOutParseBRDate(geradoTxt);
+      if (!ger || isNaN(ger.getTime())) ger = new Date(geradoTxt);
+      if (!ger || isNaN(ger.getTime())) return;             // data ilegível: já aceita lá
+      if (_gvDataDentroDaJanela(ger, janela)) return;       // gerada na janela: já contada lá
+      var rec = acomp[r._id] || {};
+      if (!(rec.horaFim && String(rec.horaFim).trim())) return;
+      var fim = _cxFimRealOut(r, rec);
+      if (!fim || !_gvDataDentroDaJanela(fim, janela)) return;
+      var t = (typeof _acompOutTurnoEfetivo === 'function') ? _acompOutTurnoEfetivo(rec, 'fim') : null;
+      if (!t) {
+        var hora = String(fim.getHours()).padStart(2, '0') + ':' + String(fim.getMinutes()).padStart(2, '0');
+        t = (typeof _gvTurnoCustomOut === 'function') ? _gvTurnoCustomOut(hora) : null;
+      }
+      if (t !== '3º Turno') return;
+      total += _acompOutPesoOficial(r, rec, mapaTms);
+    });
+    return Math.round(total);
+  } catch (e) { return 0; }
+}
+
 // Fotografia do dia operacional corrente, já em kg e arredondada.
 function _gvCapExecColeta() {
   var dataISO = _gvExtratoDataISO(0);
+  // O 3º Turno deste dia operacional começou na noite anterior — é sob essa data
+  // que o HC dele está lançado na Lista de Presença (V218).
+  var dataNoite3 = _gvExtratoDataISO(1);
   var fIn  = (typeof _gvFluxoFilaIN  === 'function') ? _gvFluxoFilaIN()  : null;
   var fOut = (typeof _gvFluxoFilaOUT === 'function') ? _gvFluxoFilaOUT() : null;
   // V192 — só entram os turnos já iniciados, igual aos painéis Descarga (IN) e
@@ -20601,11 +20694,17 @@ function _gvCapExecColeta() {
   var _cxDiaSemana = new Date().getDay();
   var _cxFimDeSemana = (_cxDiaSemana === 0 || _cxDiaSemana === 6);
   var turnos = {};
+  var janelaCx = (typeof _gvJanelaOperacionalAtual === 'function') ? _gvJanelaOperacionalAtual() : null;
   GV_CX_TURNOS.forEach(function(t) {
-    var capIn   = Math.round(_gvCapacidadeHCTurno(dataISO, t, 'inbound')  * 1000);
-    var capOut  = Math.round(_gvCapacidadeHCTurno(dataISO, t, 'outbound') * 1000);
+    // V218 — o 3º Turno lê a capacidade da data da NOITE (onde o HC é lançado) e
+    // o executado OUT pelo fechamento real, não pelo "Gerado em".
+    var ehTerceiro = (t === '3º Turno');
+    var dataCap = ehTerceiro ? dataNoite3 : dataISO;
+    var capIn   = Math.round(_gvCapacidadeHCTurno(dataCap, t, 'inbound')  * 1000);
+    var capOut  = Math.round(_gvCapacidadeHCTurno(dataCap, t, 'outbound') * 1000);
     var execIn  = Math.round(_gvCxExecDoTurno(fIn,  t));
     var execOut = Math.round(_gvCxExecDoTurno(fOut, t));
+    if (ehTerceiro) execOut += _cxExecOutNoturnoForaDaJanela(janelaCx);  // V219 — soma, nunca substitui
     var iniciado = (decorridos.indexOf(t) >= 0) ||
                    (_cxFimDeSemana && (capIn + capOut + execIn + execOut) > 0);
     turnos[t] = {
@@ -20706,7 +20805,28 @@ function _gvCapExecHistCarregarSupabase() {
 }
 
 // ── Navegação de dia / sub-visão ──
-function _gvCxDataAtual() { return _gvCxDataISO || _gvExtratoDataISO(0); }
+// V218 — "hoje" nesta tela é a data em que o turno VIGENTE começou. Entre 22:31
+// e 06:39 o turno em curso é o 3º, que começou na noite anterior ao dia
+// operacional: sem isto, quem trabalha de madrugada clicaria em "Hoje" e não
+// veria o próprio turno. Fora dessa faixa, o 1º e o 2º começam no próprio dia
+// operacional e nada muda.
+function _gvCxHojeISO() {
+  try {
+    var agora = new Date();
+    var min = agora.getHours() * 60 + agora.getMinutes();
+    if (min >= ROTA7_VIRADA_DIA_MIN || min <= 399) return _gvExtratoDataISO(1);
+    return _gvExtratoDataISO(0);
+  } catch (e) { return _gvExtratoDataISO(0); }
+}
+
+function _gvCxISOSomaDias(iso, n) {
+  var p = String(iso || '').split('-');
+  var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  d.setDate(d.getDate() + (n || 0));
+  return _gvDataISO(d);
+}
+
+function _gvCxDataAtual() { return _gvCxDataISO || _gvCxHojeISO(); }
 
 function _gvCxISOParaData(iso) {
   var p = String(iso || '').split('-');
@@ -20722,7 +20842,7 @@ function gvCapExecTrocarVisao(v) { _gvCxVisao = v; gvCapExecRenderizar(); }
 
 function gvCapExecIrParaData(iso) {
   if (!iso) return;
-  _gvCxDataISO = (iso === _gvExtratoDataISO(0)) ? null : iso;
+  _gvCxDataISO = (iso === _gvCxHojeISO()) ? null : iso;   // V218 — referência é a data da noite
   gvCapExecRenderizar();
 }
 
@@ -20730,7 +20850,7 @@ function gvCapExecDeslocarDia(delta) {
   var d = _gvCxISOParaData(_gvCxDataAtual());
   d.setDate(d.getDate() + delta);
   var iso = _gvDataISO(d);
-  if (iso > _gvExtratoDataISO(0)) return;   // não navega para o futuro
+  if (iso > _gvCxHojeISO()) return;   // não navega para o futuro
   gvCapExecIrParaData(iso);
 }
 
@@ -20875,7 +20995,7 @@ function _gvCxTabela(n) {
 
   return '<div style="background:#141414;border:1px solid #2b2b2b;border-radius:6px;padding:16px 18px;box-sizing:border-box">' +
     '<div style="font-size:12px;font-weight:800;color:#e5e5e5;margin-bottom:2px">Capacidade x Executado — por turno</div>' +
-    '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">KG · Capacidade: HC Ajudante + Terceiros (Lista de Presença) · Executado: Descarga IN + Carregamento OUT · Só turnos já iniciados (dia operacional 22:31→22:31, começa no 3º Turno)</div>' +
+    '<div style="font-size:10px;color:#8a8a8a;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px">KG · Capacidade: HC Ajudante + Terceiros (Lista de Presença) · Executado: Descarga IN + Carregamento OUT · Só turnos já iniciados · cada turno aparece na data em que COMEÇA — o 3º Turno (22:31→06:39) fica na noite anterior</div>' +
     '<div style="overflow-x:auto">' +
       '<table style="width:100%;border-collapse:collapse;min-width:760px">' +
         '<thead>' +
@@ -20959,6 +21079,42 @@ function _gvCxRegComCapacidadeViva(reg, dataISO) {
   } catch (e) { return reg; }
 }
 
+// V218 — monta o que a tela mostra na data X a partir de DOIS dias operacionais:
+//   1º e 2º Turno -> dia operacional X   (acontecem em X, entre 06:40 e 22:30)
+//   3º Turno      -> dia operacional X+1 (a noite de X: 22:31 de X até 06:39 de X+1)
+// O histórico segue gravado por dia operacional, sem migração nem reescrita: a
+// composição é só de leitura. Devolve null quando não há foto de nenhum dos dois.
+function _gvCxRegistroExibido(dataISO, diaOpCorrenteISO, dadosCorrentes) {
+  try {
+    var hist = _gvCapExecHistLer() || {};
+    function fonteDoDiaOp(iso) {
+      if (iso === diaOpCorrenteISO) return dadosCorrentes;
+      return hist[iso] || null;
+    }
+    var base  = fonteDoDiaOp(dataISO);
+    var noite = fonteDoDiaOp(_gvCxISOSomaDias(dataISO, 1));
+    if (!base && !noite) return null;
+    var novo = { data: dataISO, ts: new Date().toISOString(), turnos: {} };
+    GV_CX_TURNOS.forEach(function(t) {
+      var fonte = (t === '3º Turno') ? noite : base;
+      var r = (fonte && fonte.turnos) ? fonte.turnos[t] : null;
+      var alvo = {
+        capIn:   (r && r.capIn)   || 0,
+        capOut:  (r && r.capOut)  || 0,
+        execIn:  (r && r.execIn)  || 0,
+        execOut: (r && r.execOut) || 0
+      };
+      // Sem foto para este turno = não iniciado. Com foto mas sem o campo
+      // (registros anteriores à V192), o campo fica ausente de propósito:
+      // _gvCxNumerosDe trata ausência como iniciado, e essa regra é preservada.
+      if (!r) alvo.iniciado = false;
+      else if (r.iniciado !== undefined) alvo.iniciado = !!r.iniciado;
+      novo.turnos[t] = alvo;
+    });
+    return novo;
+  } catch (e) { return null; }
+}
+
 function gvCapExecRenderizar() {
   var navVisao = document.getElementById('cx-nav-visao');
   var navDia = document.getElementById('cx-nav-dia');
@@ -20968,12 +21124,13 @@ function gvCapExecRenderizar() {
 
   // Sempre arquiva o dia corrente, mesmo com a tela exibindo um dia anterior —
   // é isso que faz o histórico existir amanhã.
-  var hojeISO = _gvExtratoDataISO(0);
+  var diaOpISO = _gvExtratoDataISO(0);     // dia operacional corrente — índice do histórico
+  var hojeISO = _gvCxHojeISO();            // V218 — data da noite: é o que a tela chama de "hoje"
   var hojeDados = _gvCapExecColeta();
   _gvCapExecHistSalvar(hojeDados);
 
   var dataISO = _gvCxDataAtual();
-  var reg = (dataISO === hojeISO) ? hojeDados : _gvCapExecHistLer()[dataISO];
+  var reg = _gvCxRegistroExibido(dataISO, diaOpISO, hojeDados);  // V218
   if (reg && dataISO !== hojeISO) reg = _gvCxRegComCapacidadeViva(reg, dataISO); // V207
   var aviso = '';
   if (!reg) {
