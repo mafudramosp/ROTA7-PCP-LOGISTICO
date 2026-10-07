@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V219--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V222--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6365,7 +6365,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V219';
+var ROTA7_VERSAO = 'V222';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -6375,6 +6375,20 @@ var _verLoopDetectado = false;   // recarga anterior não trouxe o arquivo novo
 var _verAdiadoAte = 0;
 var _verUltimaInteracao = Date.now();
 var _verTimerContagem = null;
+// V222 — PRAZO MÁXIMO DE ESPERA. A recarga só acontecia com a tela 2 min parada,
+// sem campo em foco e sem texto selecionado. Máquina de operador quase nunca
+// fica assim (ou fica com o cursor parado num campo), então a tela seguia dias
+// na versão antiga — foi o que fez duas máquinas zerarem o Executado às 16:46
+// (versão de +1h) em 06/10. Passados 10 min da detecção, basta 1 min sem
+// interação: o campo em foco é encerrado (grava o valor) e a seleção é ignorada.
+// Modais abertos e gravações pendentes continuam bloqueando, como antes.
+var _VER_PRAZO_MS = 600000;            // 10 min após detectar a versão nova
+var _VER_OCIOSIDADE_PRAZO_MS = 60000;  // depois do prazo: 1 min sem interação
+var _verDetectadoEm = 0;
+var _verUltimaConsultaMs = 0;
+function _verPrazoVencido() {
+  return !!(_verDetectadoEm && (Date.now() - _verDetectadoEm) >= _VER_PRAZO_MS);
+}
 
 function _verAssinaturaDe(resp) {
   if (!resp) return null;
@@ -6452,7 +6466,8 @@ function _verVisivel(el) {
 // A tela só pode ser recarregada se não houver nada em andamento.
 function _verPodeRecarregar() {
   try {
-    if (Date.now() - _verUltimaInteracao < _VER_OCIOSIDADE_MS) return false;
+    var prazo = _verPrazoVencido(); // V222
+    if (Date.now() - _verUltimaInteracao < (prazo ? _VER_OCIOSIDADE_PRAZO_MS : _VER_OCIOSIDADE_MS)) return false;
 
     // Gravações que ainda não chegaram ao banco não podem ser perdidas
     if (typeof _syncPendentes !== 'undefined' && _syncPendentes && _syncPendentes.size) return false;
@@ -6471,10 +6486,10 @@ function _verPodeRecarregar() {
       var doLogin = noLogin && login.contains(ae);
       if (!doLogin) {
         var tag = (ae.tagName || '').toUpperCase();
-        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || ae.isContentEditable) return false;
+        if (!prazo && (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || ae.isContentEditable)) return false;
       }
     }
-    if (window.getSelection && String(window.getSelection()).length > 0) return false;
+    if (!prazo && window.getSelection && String(window.getSelection()).length > 0) return false;
 
     // Na tela de login não há operação em curso — pode atualizar.
     if (noLogin) return true;
@@ -6536,6 +6551,7 @@ function _verAtualizarAgora() {
 
 function _verAvaliar() {
   if (!_verNovaDetectada) return;
+  if (!_verDetectadoEm) _verDetectadoEm = Date.now(); // V222 — início do prazo
   _verMostrarAviso();
   var c = document.getElementById('ver-contagem');
   if (_verLoopDetectado) {
@@ -6543,8 +6559,17 @@ function _verAvaliar() {
     return;
   }
   if (!VER_AUTO_RELOAD) { if (c) c.textContent = 'Recarga automática desligada.'; return; }
-  if (Date.now() < _verAdiadoAte) { if (c) c.textContent = 'Adiado — atualize quando puder.'; return; }
+  if (!_verPrazoVencido() && Date.now() < _verAdiadoAte) { if (c) c.textContent = 'Adiado — atualize quando puder.'; return; }
   if (_verPodeRecarregar()) {
+    // V222 — vencido o prazo, encerra o campo em foco antes da recarga: o blur
+    // dispara o "change" e grava o valor digitado; os 10s abaixo dão tempo para
+    // a gravação sair (gravação pendente bloqueia a recarga na nova checagem).
+    if (_verPrazoVencido()) {
+      try {
+        var _aeV = document.activeElement;
+        if (_aeV && _aeV !== document.body && typeof _aeV.blur === 'function') _aeV.blur();
+      } catch (e) {}
+    }
     if (c) c.textContent = 'Tela ociosa — atualizando em 10s...';
     setTimeout(function(){ if (_verPodeRecarregar()) _verAtualizarAgora(); }, 10000);
   } else if (c) {
@@ -6593,17 +6618,42 @@ function _verIniciar() {
       } catch (e) {}
 
       console.log('[versao] rodando ' + ROTA7_VERSAO + ' | publicado: ' + a.slice(0, 40) + ' | modo: ' + _verModo);
+      // V222 — aba que abriu com arquivo antigo e ainda está no login, sem nada
+      // digitado: atualiza na hora, antes de alguém entrar e começar a operar.
+      if (divergeNoBoot && !_verLoopDetectado && VER_AUTO_RELOAD) {
+        try {
+          var _lgV = document.getElementById('r7lg-overlay');
+          var _usV = document.getElementById('r7lg-user'), _psV = document.getElementById('r7lg-pass');
+          if (_verVisivel(_lgV) && !(_usV && _usV.value) && !(_psV && _psV.value)) {
+            console.warn('[versao] Atualizando na tela de login.');
+            _verAtualizarAgora();
+            return;
+          }
+        } catch (e) {}
+      }
       if (_verNovaDetectada) _verAvaliar();
-      setInterval(function() {
+      _verUltimaConsultaMs = Date.now();
+      var _verChecar = function() {
         if (_verNovaDetectada) { _verAvaliar(); return; }
+        _verUltimaConsultaMs = Date.now();
         _verConsultar().then(function(atual) {
-          if (!_verDivergente(atual)) return;
+          if (!_verDivergente(atual) || _verNovaDetectada) return;
           _verNovaDetectada = true;
           console.warn('[versao] Versão nova publicada — esta tela está desatualizada.');
           if (typeof showToast === 'function') showToast('🔄 Nova versão do ROTA7 publicada.', 'info');
           _verAvaliar();
         });
-      }, _VER_INTERVALO_MS);
+      };
+      setInterval(_verChecar, _VER_INTERVALO_MS);
+      // V222 — também ao voltar para a aba ou acordar a máquina (no máx. 1x/min):
+      // o intervalo de 5 min fica parado enquanto o computador dorme.
+      var _verChecarAoVoltar = function() {
+        if (document.visibilityState === 'hidden') return;
+        if (!_verNovaDetectada && Date.now() - _verUltimaConsultaMs < 60000) return;
+        _verChecar();
+      };
+      document.addEventListener('visibilitychange', _verChecarAoVoltar);
+      window.addEventListener('focus', _verChecarAoVoltar);
       _verTimerContagem = setInterval(function(){ if (_verNovaDetectada) _verAvaliar(); }, 30000);
     });
   } catch (e) {}
@@ -16150,7 +16200,14 @@ function _descProgramacaoRegistrarLista(listaMacs, turno, dataISO) {
     // atual, a PRIMEIRA programação manda. Reimprimir a lista num turno seguinte
     // não move o peso de turno nem duplica o registro — era isso que zerava o
     // turno anterior quando a equipe reimprimia depois da virada.
-    if (anterior && anterior.programado === true &&
+    // V221 — a trava passa a valer só DENTRO do mesmo turno. Reimpresso por OUTRO
+    // turno do mesmo dia operacional (ex.: 3º programou, 1º reimprimiu), o registro
+    // é regravado com o horário de agora e o peso sai do turno anterior e entra no
+    // turno atual — um único registro por MAC/MEC, sem contar duas vezes.
+    var _turnoDoRegistro = (anterior && anterior.programado === true) ? _descProgramacaoTurnoDe(anterior) : '';
+    var _turnoDaImpressao = turno || _descProgramacaoTurnoDe({ dataISO: dataRegistro });
+    var _reimpressoOutroTurno = !!(_turnoDoRegistro && _turnoDaImpressao && _turnoDoRegistro !== _turnoDaImpressao);
+    if (anterior && anterior.programado === true && !_reimpressoOutroTurno &&
         _descProgramacaoNoDiaOperacional(anterior, false)) {
       // Se o registro anterior estiver sem turno, grava o turno deduzido do
       // horário original — sem mover a programação para o turno de agora.
@@ -21267,8 +21324,12 @@ function _gvPesoProgramadoTotalIN() {
 
 function _gvPesoProgramadoHistoricoIN(turnoAlvo) {
   if (typeof descargaPesoProgramadoPorTurno !== 'function') return null;
-  // Régua do Painel Executivo (V168), a mesma usada para escolher turnoAlvo.
-  var cards = descargaPesoProgramadoPorTurno(_gvTurnoDoHorario);
+  // V220 — o peso de cada programação fica no turno OFICIAL em que foi impressa
+  // (régua do Histórico de Relatório IN: 06:01 / 15:01 / 22:31), igual aos cards
+  // "Peso Nº Turno Programado" daquela tela. Com a régua do Painel (06:40/15:46),
+  // o que o 1º Turno imprimia entre 06:01–06:39 caía no 3º Turno e o card ficava 0.
+  // turnoAlvo continua vindo de _gvTurnoDoHorario (régua do Painel), sem mudança.
+  var cards = descargaPesoProgramadoPorTurno();
   if (!cards || typeof cards !== 'object') return null;
   var ordem = ['1º Turno', '2º Turno', '3º Turno'];
   if (turnoAlvo && Object.prototype.hasOwnProperty.call(cards, turnoAlvo)) {
@@ -23250,8 +23311,9 @@ function gestaoVistaRenderizar() {
     // Coluna "Programados": peso que a equipe marcou como Programado no Histórico
     // de Relatório IN, quebrado pelo turno em que a programação foi impressa.
     // Mesma fonte dos cards "Peso Nº Turno Programado" daquela tela.
+    // V220 — mesma régua dos cards do Histórico (ver _gvPesoProgramadoHistoricoIN).
     var progIN = (typeof descargaPesoProgramadoPorTurno === 'function')
-      ? descargaPesoProgramadoPorTurno(_gvTurnoDoHorario) : {'1º Turno':0,'2º Turno':0,'3º Turno':0};
+      ? descargaPesoProgramadoPorTurno() : {'1º Turno':0,'2º Turno':0,'3º Turno':0};
     var progINTotal = (progIN['1º Turno']||0) + (progIN['2º Turno']||0) + (progIN['3º Turno']||0);
     var thNum = 'padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:#b9b9b9;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2b2b2b;background:#000;white-space:nowrap';
     var tdNum = 'padding:9px 14px;text-align:right;font-size:12.5px;color:#e5e5e5;white-space:nowrap';
