@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V222--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V223--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6365,7 +6365,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V222';
+var ROTA7_VERSAO = 'V223';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -22430,8 +22430,11 @@ function _gvColetarDadosOUT() {
     // assim que houvesse qualquer linha na janela operacional.
     var t = _gvTurnoDoHorario(finalizado ? rec.horaFim : (temInicio ? rec.horaInicio : agoraHoraOut));
     if (!t) return;
-    // Turno que EXECUTOU: coluna Turno do Acompanhamento OUT; sem ela, a Hora Fim.
-    var tFeito = (typeof _acompOutTurnoEfetivo === 'function') ? _acompOutTurnoEfetivo(rec, 'fim') : t;
+    // Turno que EXECUTOU: relógio da Hora Fim — mesma regra da coluna Executado do
+    // Extrato do Dia (OUT) e do card Executado (V171, em _gvFluxoFilaOUT).
+    // V223 — antes respeitava a coluna Turno manual (_acompOutTurnoEfetivo) e os
+    // relógios divergiam da tabela quando um veículo era fixado em outro turno.
+    var tFeito = (typeof _acompOutTurnoAuto === 'function') ? _acompOutTurnoAuto(rec, 'fim') : t;
     if (!turnoFeitoPeso.hasOwnProperty(tFeito)) tFeito = t;
     turnoTotal[t]++;
     turnoTotalPeso[t] += peso;
