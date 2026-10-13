@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V223--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V224--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -3549,16 +3549,23 @@ function cgAtualizarCards(totalGeral, totalCrit, destinos) {
   // _relData, sem deduplicar por CTRC e sem descartar Ocor.Aberta, usando a
   // classificação r.disp, que já aplica os parâmetros das colunas AC/AE/AL/AM.
   if (typeof _relData !== 'undefined' && _relData && _relData.length) {
-    var pcTotal = 0, pcDesc = 0, pcPatio = 0;
+    var pcTotal = 0, pcDesc = 0, pcPatio = 0, pcDisp = 0;
     for (var iPc = 0; iPc < _relData.length; iPc++) {
       var rPc = _relData[iPc];
       pcTotal += rPc.peso || 0;
       var dPc = String(rPc.disp || '').trim().toLowerCase();
       if (dPc === 'em descarregamento') pcDesc += rPc.peso || 0;
       else if (dPc === 'patio') pcPatio += rPc.peso || 0;
+      else if (dPc === 'disponível') pcDisp += rPc.peso || 0; // V224
     }
     var fmtKgPc = function(v){ return v.toLocaleString('pt-BR',{maximumFractionDigits:0})+' kg'; };
     setEl('pc-kpi-total', fmtKgPc(pcTotal));
+    // V224 — card DISPONÍVEL = Posição "Disponível" do Planejamento OUT (linha a
+    // linha de _relData, Ocor.Aberta incluída, como aquela tela soma). Antes
+    // mostrava o total da tabela por destino (disponível + planejado, sem
+    // Ocor.Aberta) e não batia com o Planejamento OUT. A tabela e o rodapé
+    // "x t total" continuam como estavam.
+    setEl('pc-kpi-disp', fmtKgPc(pcDisp));
     // V187 — sem descarga ativa (pcDesc = 0), mostra a fila de descarga
     // (Patio) em vez de "0 kg". Ver mesma regra em hubRenderizar().
     if (pcDesc > 0) {
@@ -4015,7 +4022,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">DISPONÍVEL</div>
       <div class="hub-kpi-val" id="pc-kpi-disp">—</div>
-      <div style="font-size:10px;color:#ffffff" title="Linhas com Equipamento (coluna AC) preenchido, esteja a mercadoria já planejada ou não, excluindo Ocor.Aberta sem agendamento. No Resumo Operacional isto aparece dividido em duas etapas: Disponível (ainda não planejada) e Carregando (já planejada).">Disponível + planejado · sem Ocor.Aberta</div>
+      <div style="font-size:10px;color:#ffffff" title="Mesmo valor do Planejamento OUT com a coluna Posição filtrada em Disponível (Ocor.Aberta incluída).">Posição Disponível · = Planejamento OUT</div>
     </div>
     <div class="hub-kpi-card" style="">
       <div class="hub-kpi-label">EM DESCARREGAMENTO</div>
@@ -6365,7 +6372,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V223';
+var ROTA7_VERSAO = 'V224';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
