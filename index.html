@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V224--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V225--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6372,7 +6372,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V224';
+var ROTA7_VERSAO = 'V225';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -23234,10 +23234,12 @@ function gestaoVistaRenderizar() {
       // OUT: cada relógio usa o Total de Carga DA PRÓPRIA LINHA do Extrato do Dia
       // (Início de Turno + Entrou Depois). Antes os três dividiam pelo total do turno
       // vigente, então o percentual do relógio não batia com a tabela logo abaixo.
-      // IN: comportamento inalterado — segue usando o plano do dia.
+      // V225 — IN passa a usar a mesma regra (antes dividia pelo plano do dia
+      // inteiro e o % do relógio não batia com a coluna % Executado do Extrato IN).
       var pesoPlanoTotal = pesoTotalHoje;
-      if (fluxoOut && fluxoOut.linhas) {
-        var linhaTurnoGauge = fluxoOut.linhas.filter(function(l){ return l.turno === t; })[0];
+      var fluxoGauge = fluxoOut || fluxoIn;
+      if (fluxoGauge && fluxoGauge.linhas) {
+        var linhaTurnoGauge = fluxoGauge.linhas.filter(function(l){ return l.turno === t; })[0];
         if (linhaTurnoGauge) pesoPlanoTotal = linhaTurnoGauge.filaInicial + linhaTurnoGauge.entrouDepois;
       }
       var pct = pesoPlanoTotal ? Math.round((feitoPeso / pesoPlanoTotal) * 100) : 0;
