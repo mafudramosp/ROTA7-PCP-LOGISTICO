@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V227--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V229--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6372,7 +6372,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V227';
+var ROTA7_VERSAO = 'V229';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -7220,6 +7220,30 @@ function _sbResincronizarFontesPainel() {
     if (typeof _descProgCarregarLinhas === 'function') _descProgCarregarLinhas();
     // V207 — Lista de Presença (HC → Capacidade do Painel): só lia na abertura da página
     if (typeof lpCarregarSupabase === 'function') lpCarregarSupabase(true);
+    // V228 — chaves que só chegavam pelo Realtime (sem rede de segurança): se a
+    // mensagem se perdia, a máquina ficava com o dado antigo até recarregar.
+    // Planejamento já confere a versão antes de baixar; as outras duas só são
+    // baixadas quando o carimbo "atualizado_em" muda.
+    if (typeof sbCarregarPlanejamento === 'function') sbCarregarPlanejamento();
+    if (typeof _cargaCriticaHistoricoCarregarSupabase === 'function') _sbReforcoSeMudou('carga_critica_historico', _cargaCriticaHistoricoCarregarSupabase);
+    if (typeof _gvCapExecHistCarregarSupabase === 'function' && typeof GV_CAPEXEC_HIST_KEY !== 'undefined') _sbReforcoSeMudou(GV_CAPEXEC_HIST_KEY, _gvCapExecHistCarregarSupabase);
+  } catch (e) {}
+}
+
+// V228 — consulta só o carimbo (~80 bytes) e chama o carregador existente
+// quando ele muda. Na primeira volta carrega uma vez para alinhar.
+var _sbReforcoVersao = {};
+function _sbReforcoSeMudou(chave, carregar) {
+  try {
+    fetch(SB_URL + '/configuracoes?chave=eq.' + encodeURIComponent(chave) + '&select=atualizado_em', {
+      headers: _sbCabecalhoLeitura()
+    }).then(function(r) { return r.json(); }).then(function(rows) {
+      if (!Array.isArray(rows) || !rows.length) return;
+      var ts = rows[0].atualizado_em || '';
+      if (ts && _sbReforcoVersao[chave] === ts) return;
+      _sbReforcoVersao[chave] = ts;
+      carregar();
+    }).catch(function() {});
   } catch (e) {}
 }
 
@@ -7843,20 +7867,39 @@ var _sbPollTimer = null;
 var _sbPollRunning = false;
 var _sbPollPaused = false;
 
+var _sbPollDeNovo = false; // V228 — aviso que chegou durante uma leitura em curso
 function sbPollUmaVez() {
   // Bug fix 1: guard de concorrência — evita múltiplas chamadas simultâneas
-  if (_sbPollRunning || _sbPollPaused) return;
+  // V228 — o aviso não é mais descartado: a leitura em curso pode ter começado
+  // antes da gravação que gerou este aviso, então roda uma nova ao terminar.
+  if (_sbPollRunning || _sbPollPaused) { _sbPollDeNovo = true; return; }
+  _sbPollDeNovo = false;
   _sbPollRunning = true;
   fbGetAll().then(function(recs) {
     if (!recs || !recs.length) { _sbPollRunning = false; return; }
     var f = recs.filter(function(r){ return !_deletePendentes.has(String(r._id)); }); // V206
-    var hash = f.map(function(r){ return r._id+':'+r.gerado; }).join('|');
+    // V228 — compara o CONTEÚDO de cada registro. Antes era só id + "gerado":
+    // edição que não mexe em "gerado" (ex.: data crítica preenchida) era vista
+    // como "nada mudou" e nunca aparecia para os outros usuários.
+    var hash = JSON.stringify(f);
     if (hash === _sbLastHash) { _sbPollRunning = false; return; }
     _sbLastHash = hash;
     // Bug fix 2: MERGE ao invés de replace — preserva SÓ registros genuinamente
     // pendentes de envio (rastreados em _syncPendentes), nunca registros que
     // simplesmente sumiram do Supabase (esses foram excluídos por alguém — não devem voltar)
     var sbIds = new Set(f.map(function(r){ return String(r._id); }));
+    // V228 — edição local ainda não confirmada no servidor (fila _syncPendentes)
+    // de um registro que JÁ existe lá: mantém a versão local. Antes a cópia do
+    // servidor a substituía e o reenvio mandava o dado antigo — a alteração
+    // desse usuário sumia para todos.
+    var pendLocalPorId = {};
+    progData.forEach(function(r) {
+      var idL = String(r._id);
+      if (_syncPendentes.has(idL) && sbIds.has(idL)) pendLocalPorId[idL] = r;
+    });
+    if (Object.keys(pendLocalPorId).length) {
+      f = f.map(function(r) { return pendLocalPorId[String(r._id)] || r; });
+    }
     var localPendentes = progData.filter(function(r) {
       return (_syncPendentes.has(String(r._id)) || r._novo) && !sbIds.has(String(r._id)) && !_deletePendentes.has(String(r._id)); // V206
     });
@@ -7868,6 +7911,7 @@ function sbPollUmaVez() {
     showToast('🔄 Dados atualizados', 'info');
   }).catch(function(){}).finally(function(){
     _sbPollRunning = false;
+    if (_sbPollDeNovo) setTimeout(sbPollUmaVez, 300); // V228
   });
 }
 
@@ -8122,6 +8166,21 @@ function sbSalvarRelatorio() {
     });
 
     var totalChunks = chunks.length;
+    // V229 — só pula um bloco se o SERVIDOR ainda guarda exatamente o bloco que
+    // esta máquina gravou. Antes bastava ele ser igual ao que ESTA máquina gravou
+    // por último: se outra máquina tivesse importado no meio, o bloco dela ficava
+    // no banco e o relatório publicado virava uma mistura das duas importações.
+    // O metadado atual é lido aqui (poucos bytes); sem resposta, sobe tudo.
+    fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio_meta&select=valor', { headers: _sbCabecalhoLeitura() })
+      .then(function(r) { return r.json(); })
+      .then(function(rows) {
+        var bl = null;
+        try { if (Array.isArray(rows) && rows.length && rows[0].valor) bl = (JSON.parse(rows[0].valor) || {}).bl || null; } catch (e) {}
+        _relEnviarBlocos(bl);
+      })
+      .catch(function() { _relEnviarBlocos(null); });
+
+    function _relEnviarBlocos(blServidor) {
     var salvos = 0;
     var erros = 0;
     var ultimoErro = '';
@@ -8136,7 +8195,8 @@ function sbSalvarRelatorio() {
     chunks.forEach(function(conteudo, idx) {
       var nomeBloco = (totalChunks === 1) ? 'tms_relatorio' : ('tms_relatorio_' + idx);
       var anterior = _relBlocosEnviados[nomeBloco];
-      if (anterior && anterior.hash === _relHashBloco(conteudo)) {
+      if (anterior && anterior.hash === _relHashBloco(conteudo) &&
+          blServidor && blServidor[nomeBloco] === anterior.ts) {   // V229
         blocosCarimbo[nomeBloco] = anterior.ts;   // preserva o carimbo antigo
         pulados++;
       } else {
@@ -8152,19 +8212,38 @@ function sbSalvarRelatorio() {
         // já tem em mãos e baixa só os que avançaram. Metadados antigos (sem
         // "bl") continuam válidos: nesse caso a leitura baixa tudo, como antes.
         var meta = JSON.stringify({ total: totalChunks, ts: agora, n: _relData.length, bl: blocosCarimbo });
-        fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio_meta', {
-          method: 'PATCH', headers: SB_HEADERS,
-          body: JSON.stringify({ valor: meta, atualizado_em: agora })
-        }).then(function(r){ return r.text(); }).then(function(t){
-          if (t === '[]' || t === '') {
-            fetch(SB_URL + '/configuracoes', {
-              method: 'POST',
-              headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-              body: JSON.stringify({ chave: 'tms_relatorio_meta', valor: meta, atualizado_em: agora })
-            });
-          }
-        });
-        showToast('☁️ Relatório sincronizado (' + _relData.length + ' registros, ' + totalChunks + ' parte(s))!', 'success');
+        // V229 — o metadado é o que avisa as outras máquinas. Antes ele era gravado
+        // sem conferir a resposta e o "sincronizado" aparecia de qualquer jeito: se
+        // essa gravação falhasse, os blocos novos ficavam no banco mas ninguém os
+        // lia. Agora confere, tenta de novo e só confirma quando gravou de fato.
+        var _nRegs = _relData.length;
+        var _gravarMeta = function(tentativaMeta) {
+          fetch(SB_URL + '/configuracoes?chave=eq.tms_relatorio_meta', {
+            method: 'PATCH', headers: SB_HEADERS,
+            body: JSON.stringify({ valor: meta, atualizado_em: agora })
+          }).then(function(r){
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+          }).then(function(t){
+            if (t === '[]' || t === '') {
+              return fetch(SB_URL + '/configuracoes', {
+                method: 'POST',
+                headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+                body: JSON.stringify({ chave: 'tms_relatorio_meta', valor: meta, atualizado_em: agora })
+              }).then(function(r2){ if (!r2.ok) throw new Error('HTTP ' + r2.status); });
+            }
+          }).then(function(){
+            showToast('☁️ Relatório sincronizado (' + _nRegs + ' registros, ' + totalChunks + ' parte(s))!', 'success');
+          }).catch(function(err){
+            if (tentativaMeta < MAX_TENTATIVAS) {
+              setTimeout(function(){ _gravarMeta(tentativaMeta + 1); }, 1200 * tentativaMeta);
+              return;
+            }
+            showToast('⚠️ Relatório salvo neste aparelho, mas o aviso às outras máquinas falhou (' +
+              ((err && err.message) || 'sem resposta do servidor') + '). Importe de novo quando a conexão melhorar.', 'error');
+          });
+        };
+        _gravarMeta(1);
       } else if (salvos === 0) {
         showToast('⚠️ Erro na sincronização' + (ultimoErro ? ' (' + ultimoErro + ')' : '') + '. O relatório já está salvo neste aparelho, mas seus colegas ainda não vão vê-lo — tente sincronizar de novo quando a conexão melhorar.', 'error');
       } else {
@@ -8219,6 +8298,7 @@ function sbSalvarRelatorio() {
     }
 
     for (var ci = 0; ci < totalChunks; ci++) salvarChunk(ci, 1);
+    } // V229 — fim de _relEnviarBlocos
   } catch(e) { showToast('⚠️ Erro: ' + e.message, 'error'); }
 }
 
@@ -8244,7 +8324,13 @@ function _relChaveRegistroAplicado(r) {
   return k === '|' ? JSON.stringify(r) : k;
 }
 
-function _relAplicarDados(registros, ts, forcar) {
+function _relAplicarDados(registros, ts, forcar, completo) {
+  // V229 — "completo": carga com TODAS as partes e a contagem do metadado
+  // conferida. Nesse caso o relatório é SUBSTITUÍDO, exatamente como na máquina
+  // que importou (relProcessarRows zera _relData). Antes as outras máquinas
+  // sempre mesclavam: CTRC que saiu do relatório novo continuava nelas, e cada
+  // máquina ficava com um relatório diferente. A mescla (V178) segue valendo
+  // para carga incompleta, que é para o que ela foi criada.
   // V178 — MESCLA em vez de substituir.
   //
   // Antes era _relData = registros.map(...), uma substituição total. Se a carga
@@ -8262,7 +8348,9 @@ function _relAplicarDados(registros, ts, forcar) {
   if (!registros || !registros.length) return;
 
   var novos = registros.map(_relDescomprimir);
-  if (_relData && _relData.length) {
+  if (completo === true) {
+    _relData = novos;
+  } else if (_relData && _relData.length) {
     // V190 — a mescla agora substitui por GRUPO de chave, não linha a linha.
     //
     // Defeito corrigido: o TMS pode trazer o mesmo CTRC + Nota em mais de uma
@@ -8431,7 +8519,8 @@ function sbCarregarRelatorio(forcar) {
 
         if (parsed[0].dv !== undefined) {
           // Formato novo comprimido
-          _relAplicarDados(parsed, ts, forcar);
+          // V229 — parte única com a contagem do metadado conferida = carga completa
+          _relAplicarDados(parsed, ts, forcar, !!(meta && typeof meta.n === 'number' && parsed.length >= meta.n));
         } else {
           // Formato antigo — campos completos, aplicar direto
           _relData = parsed;
@@ -8468,10 +8557,12 @@ function sbCarregarRelatorio(forcar) {
         if (!chaves.length) {
           // Nada mudou de fato — remonta da memória, sem nenhuma requisição.
           var todosCache = [];
+          var cacheInteiro = true; // V229
           for (var j = 0; j < totalChunks; j++) {
-            try { todosCache = todosCache.concat(JSON.parse(_relBlocosCache['tms_relatorio_' + j].valor)); } catch(e){}
+            try { todosCache = todosCache.concat(JSON.parse(_relBlocosCache['tms_relatorio_' + j].valor)); } catch(e){ cacheInteiro = false; }
           }
-          if (todosCache.length) _relAplicarDados(todosCache, ts, forcar);
+          if (todosCache.length) _relAplicarDados(todosCache, ts, forcar,
+            cacheInteiro && !!(meta && typeof meta.n === 'number' && todosCache.length >= meta.n));
           return;
         }
         // Busca em lotes de 40 chaves: com blocos de 20 KB o relatório tem ~120
@@ -8512,7 +8603,8 @@ function sbCarregarRelatorio(forcar) {
             _relAvisoCarga('carga parcial (' + todos.length + ' de ' + meta.n + ' registros) — nova tentativa em 120s');
             return;
           }
-          _relAplicarDados(todos, ts, forcar);
+          // V229 — todas as partes presentes e contagem conferida (logo acima): completa.
+          _relAplicarDados(todos, ts, forcar, !!(meta && typeof meta.n === 'number'));
         }).catch(function(e){
           // V179 — falha de rede/franquia não pode passar em silêncio: sem isto a
           // tela ficava em branco sem ninguém saber por quê. Os dados em memória
@@ -15530,6 +15622,7 @@ var _SB_MAX_PAGINAS = 60; // trava de segurança: 60 mil registros
 function _sbLerCelulasPaginado(prefixo, aplicarLinha, incremental) {
   return new Promise(function(resolve) {
     var offset = 0, total = 0, pagina = 0, nulos = 0, maiorTs = '', menorTsIgnorado = '', ultimaChave = '';
+    var inicioLeituraMs = Date.now(); // V228 — teto da marca d'água (ver finalizar)
     // V198 — CAUSA DO EXECUTADO CURTO E TEIMOSO. A leitura era dada por concluída
     // mesmo quando uma página falhava (.catch chamava finalizar()) ou quando o
     // PostgREST devolvia um objeto de erro em vez de um array (rows.length ficava
@@ -15585,10 +15678,23 @@ function _sbLerCelulasPaginado(prefixo, aplicarLinha, incremental) {
         var ti = Date.parse(menorTsIgnorado);
         if (!isNaN(ti) && (!marca || menorTsIgnorado <= marca)) marca = new Date(ti - 1).toISOString();
       }
+      // V228 — TETO DE 2 MIN. "atualizado_em" é o instante em que a gravação
+      // COMEÇOU, não em que foi confirmada. Com várias máquinas gravando ao mesmo
+      // tempo, uma linha com horário anterior podia ser confirmada logo depois de
+      // outra mais nova já lida: a marca passava por cima dela e o "gt." nunca
+      // mais a pedia — a alteração daquele usuário não chegava nesta máquina se o
+      // Realtime perdesse a mensagem. A marca agora nunca passa de 2 min antes do
+      // início desta leitura: o que mudou nos últimos 2 min é relido no ciclo
+      // seguinte (aplicação idempotente) e nada fica para trás.
+      var tetoMs = inicioLeituraMs - 120000;
+      if (marca) {
+        var marcaMs = Date.parse(marca);
+        if (!isNaN(marcaMs) && marcaMs > tetoMs) marca = new Date(tetoMs).toISOString();
+      }
       if (marca) {
         _sbMarcaDagua[prefixo] = marca;
       } else if (!usarFiltro && _sbIncrementalOk[prefixo]) {
-        _sbMarcaDagua[prefixo] = new Date(Date.now()).toISOString();
+        _sbMarcaDagua[prefixo] = new Date(tetoMs).toISOString();
       }
       resolve(total);
     }
