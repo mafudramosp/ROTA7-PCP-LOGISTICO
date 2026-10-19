@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V229--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V230--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6372,7 +6372,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V229';
+var ROTA7_VERSAO = 'V230';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -24105,7 +24105,7 @@ var RO_POSICOES_SEM_EXCLUSAO_OCOR = {
 // Ocor.Aberta descartada em Disponível/Intermediário). Não é uma etapa
 // operacional: existe para o Total do Terminal fechar com o peso bruto do
 // armazém e para esse peso ficar auditável em vez de sumir da conta.
-var RO_RESIDUO_KEY = 'Não classificado';
+var RO_RESIDUO_KEY = 'Ocorrência em Aberto'; // V230 — antes "Não classificado" (só o rótulo)
 var RO_RESIDUO_COR = '#6b7280';
 
 // Volume — coluna I do TMS, guardada em r.vols como texto. Mesmo parse já
@@ -24335,7 +24335,7 @@ function resumoOperRenderizar() {
           '</table>' +
         '</div>' +
         '<div style="font-size:10px;color:#6b6b6b;margin-top:10px;padding-top:8px;border-top:1px solid #262626">' +
-          'Atrasado / Hoje / Prazo / Agend em CTRCs · Peso = coluna M · Volume = coluna I · Valor = coluna P · Ocor.Aberta sem agendamento excluída em Disponível e Intermediário; Carregando e Fila de Descarga somam a carga inteira · o que sai das etapas vai para "Não classificado", então o Total Geral fecha com o peso bruto do armazém' +
+          'Atrasado / Hoje / Prazo / Agend em CTRCs · Peso = coluna M · Volume = coluna I · Valor = coluna P · Ocor.Aberta sem agendamento excluída em Disponível e Intermediário; Carregando e Fila de Descarga somam a carga inteira · o que sai das etapas vai para "Ocorrência em Aberto", então o Total Geral fecha com o peso bruto do armazém' +
         '</div>' +
       '</div>';
   }
