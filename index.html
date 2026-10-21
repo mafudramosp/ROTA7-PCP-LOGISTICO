@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V230--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V231--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6372,7 +6372,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V230';
+var ROTA7_VERSAO = 'V231';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -20787,7 +20787,15 @@ function _cxFimRealOut(r, rec) {
     if (!ger || isNaN(ger.getTime())) ger = new Date(geradoTxt);
     if (!ger || isNaN(ger.getTime())) return null;
     var d = new Date(ger.getFullYear(), ger.getMonth(), ger.getDate(), hh, mm, 0, 0);
-    if (d.getTime() < ger.getTime()) d.setDate(d.getDate() + 1); // fechou depois da meia-noite
+    // V231 — só vira o dia quando o fim fica MAIS DE 12 h antes do "Gerado em"
+    // (programado às 20:00, fechado às 02:00 — o caso da V218/V219). Fim pouco
+    // antes da geração é linha lançada DEPOIS do fechamento (gerada 04:19, fim
+    // 03:00): o fechamento foi no mesmo dia. Antes ela era jogada para a noite
+    // seguinte e o mesmo carregamento contava em duas noites no 3º Turno da
+    // Capacidade × Executado.
+    if (d.getTime() < ger.getTime() && (ger.getTime() - d.getTime()) > 12 * 3600000) {
+      d.setDate(d.getDate() + 1); // fechou depois da meia-noite
+    }
     return d;
   } catch (e) { return null; }
 }
