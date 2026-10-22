@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!--ROTA7_BUILD:V231--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
+<!--ROTA7_BUILD:V232--><!-- marca de build lida pela verificação de versão; precisa ficar nos primeiros bytes do arquivo -->
 <!-- PWA Meta Tags -->
 <meta name="application-name" content="ROTA7 - PCP Logistico">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6372,7 +6372,7 @@ var _sbLeiturasEvitadas = 0;
 // se atualizam sozinhas — exatamente o caso que motivou tudo isto.
 // ══════════════════════════════════════════════════════════════════════
 
-var ROTA7_VERSAO = 'V231';
+var ROTA7_VERSAO = 'V232';
 var VER_AUTO_RELOAD = true;          // false = só avisa, nunca recarrega sozinho
 var _VER_INTERVALO_MS = 300000;      // consulta a cada 5 min
 var _VER_OCIOSIDADE_MS = 120000;     // 2 min sem interação = tela ociosa
@@ -20657,7 +20657,7 @@ function gvExtratoRenderizar() {
   if (_gvExtratoDia === 'ontem') {
     var ontem = _gvExtratoHistLer()[_gvExtratoDataISO(1)];
     if (ontem) {
-      e = ontem;
+      e = _gvExtratoComCapacidadeViva(ontem, _gvExtratoDataISO(1)); // V232
     } else {
       aviso = 'Sem histórico salvo para ontem — exibindo os dados de hoje.';
     }
@@ -20696,6 +20696,75 @@ function gvExtratoRenderizar() {
     _gvExtratoProcesso('Carregamento (OUT)', e.out, kg, e.pctCapacidadeOut, e.capacidadeOutKg) +
     _gvExtratoProcesso('Programação de Frotas', e.fp, qtd);
 }
+
+// V232 — "Ontem" com a CAPACIDADE da Lista de Presença, que é a fonte e não é
+// apagada — mesma regra que a Capacidade X Executado já usa para dia passado
+// (_gvCxRegComCapacidadeViva, V207). A foto guardava a capacidade do instante em
+// que foi salva: HC lançado ou corrigido depois nunca chegava ao "Ontem". O
+// executado continua vindo da foto. Sem HC na Lista para a data, vale a foto.
+function _gvExtratoComCapacidadeViva(reg, dataISO) {
+  try {
+    if (!reg || typeof _gvCapacidadeHC !== 'function') return reg;
+    var capInKg  = _gvCapacidadeHC(dataISO, 'inbound')  * 1000;
+    var capOutKg = _gvCapacidadeHC(dataISO, 'outbound') * 1000;
+    if (!(capInKg + capOutKg > 0)) return reg;
+    var novo = Object.assign({}, reg);
+    novo.capacidadeInKg  = capInKg;
+    novo.capacidadeOutKg = capOutKg;
+    novo.capacidadeKg    = capInKg + capOutKg;
+    novo.capacidadeTon   = novo.capacidadeKg / 1000;
+    novo.pctEficienciaCapacidade = novo.capacidadeKg ? ((reg.movimentado || 0) / novo.capacidadeKg * 100) : 0;
+    novo.pctCapacidadeTotal = novo.pctEficienciaCapacidade;
+    novo.pctCapacidadeIn  = capInKg  ? (((reg.in  || {}).plano || 0) / capInKg  * 100) : 0;
+    novo.pctCapacidadeOut = capOutKg ? (((reg.out || {}).plano || 0) / capOutKg * 100) : 0;
+    return novo;
+  } catch (e) { return reg; }
+}
+
+// V232 — ARQUIVAMENTO PERIÓDICO do Extrato do Dia. A foto do dia só era gravada
+// quando alguém abria esta aba: se ninguém abrisse depois das 15h, o "Ontem"
+// ficava com o executado até as 15h. Agora, como a Capacidade X Executado já
+// faz, o dia corrente é arquivado a cada 2 min mesmo com a aba fechada. Só grava
+// quando o número mudou e mescla com o que está no servidor antes de enviar
+// (outros dias de outras máquinas não são sobrescritos).
+var _gvExtratoUltimoArquivado = '';
+function _gvExtratoArquivarDiaCorrente() {
+  try {
+    if (typeof _gvExtratoColeta !== 'function') return;
+    var d = _gvExtratoColeta();
+    if (!d || !d.data) return;
+    if (!((d.movimentado || 0) > 0 || (d.planoTotal || 0) > 0)) return; // dados ainda não carregaram
+    var assinatura = JSON.stringify(d);
+    if (assinatura === _gvExtratoUltimoArquivado) return;
+    _gvExtratoUltimoArquivado = assinatura;
+    var aparar = function(h) {
+      var ch = Object.keys(h).sort();
+      while (ch.length > 60) { delete h[ch.shift()]; }
+      return h;
+    };
+    var local = _gvExtratoHistLer();
+    local[d.data] = d;
+    localStorage.setItem(GV_EXTRATO_HIST_KEY, JSON.stringify(aparar(local)));
+    fetch(SB_URL + '/configuracoes?chave=eq.' + GV_EXTRATO_HIST_KEY + '&select=valor', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    }).then(function(r) { return r.json(); }).then(function(rows) {
+      var remoto = {};
+      if (rows && rows.length && rows[0].valor) { try { remoto = JSON.parse(rows[0].valor) || {}; } catch (e) { remoto = {}; } }
+      var loc = _gvExtratoHistLer();
+      var h = Object.assign({}, remoto);
+      Object.keys(loc).forEach(function(k) { if (!h[k]) h[k] = loc[k]; });
+      h[d.data] = d;                                   // o dia corrente é o que esta máquina calculou
+      h = aparar(h);
+      localStorage.setItem(GV_EXTRATO_HIST_KEY, JSON.stringify(h));
+      return fetch(SB_URL + '/configuracoes', {
+        method: 'POST',
+        headers: Object.assign({}, SB_HEADERS, {'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+        body: JSON.stringify({ chave: GV_EXTRATO_HIST_KEY, valor: JSON.stringify(h) })
+      });
+    }).catch(function(){});
+  } catch (e) {}
+}
+setInterval(_gvExtratoArquivarDiaCorrente, 120000);
 
 // ═══════════ CAPACIDADE X EXECUTADO — por turno e consolidado ═══════════
 // Tela nova, isolada. Não altera nenhuma função existente: só LÊ as fontes que
